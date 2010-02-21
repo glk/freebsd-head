@@ -196,6 +196,7 @@ linux_proc_exit(void *arg __unused, struct proc *p)
 	if (em->shared->refs == 0) {
 		EMUL_SHARED_WUNLOCK(&emul_shared_lock);
 		free(em->shared, M_LINUX);
+		em->shared = NULL;
 	} else	
 		EMUL_SHARED_WUNLOCK(&emul_shared_lock);
 
@@ -209,6 +210,7 @@ linux_proc_exit(void *arg __unused, struct proc *p)
 		error = copyout(&null, child_clear_tid, sizeof(null));
 		if (error) {
 			free(em, M_LINUX);
+			p->p_emuldata = NULL;
 			return;
 		}
 
@@ -230,6 +232,7 @@ linux_proc_exit(void *arg __unused, struct proc *p)
 
 	/* clean the stuff up */
 	free(em, M_LINUX);
+	p->p_emuldata = NULL;
 
 	/* this is a little weird but rewritten from exit1() */
 	sx_xlock(&proctree_lock);
@@ -292,10 +295,12 @@ linux_proc_exec(void *arg __unused, struct proc *p, struct image_params *imgp)
 		if (em->shared->refs == 0) {
 			EMUL_SHARED_WUNLOCK(&emul_shared_lock);
 			free(em->shared, M_LINUX);
+			em->shared = NULL;
 		} else
 			EMUL_SHARED_WUNLOCK(&emul_shared_lock);
 
 		free(em, M_LINUX);
+		p->p_emuldata = NULL;
 	}
 }
 
