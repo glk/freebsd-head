@@ -508,7 +508,8 @@ eli_genkey_passphrase(struct gctl_req *req, struct g_eli_metadata *md, bool new,
 		assert(new);
 		if (verbose)
 			printf("Calculating number of iterations...\n");
-		md->md_iterations = pkcs5v2_calculate(2000000);
+		md->md_iterations = pkcs5v2_calculate(2000000,
+		    G_ELI_USERKEYLEN, G_ELI_SALTLEN);
 		assert(md->md_iterations > 0);
 		if (verbose) {
 			printf("Done, using %d iterations.\n",

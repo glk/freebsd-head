@@ -34,11 +34,14 @@ __FBSDID("$FreeBSD$");
 #else
 #include <sys/resource.h>
 #include <stdint.h>
+#include <string.h>
 #include <strings.h>
 #endif
 
-#include <geom/eli/g_eli.h>
+#include <crypto/hmac/hmac_sha512.h>
 #include <geom/eli/pkcs5v2.h>
+
+#define SHA512_MDLEN		SHA512_DIGEST_LENGTH
 
 static __inline void
 xor(uint8_t *dst, const uint8_t *src, size_t size)
@@ -49,7 +52,7 @@ xor(uint8_t *dst, const uint8_t *src, size_t size)
 }
 
 void
-pkcs5v2_genkey(uint8_t *key, unsigned keylen, const uint8_t *salt,
+pkcs5v2_genkey(uint8_t *key, size_t keylen, const uint8_t *salt,
     size_t saltsize, const char *passphrase, u_int iterations)
 {
 	uint8_t md[SHA512_MDLEN], saltcount[saltsize + sizeof(uint32_t)];
@@ -70,12 +73,12 @@ pkcs5v2_genkey(uint8_t *key, unsigned keylen, const uint8_t *salt,
 		counter[1] = (count >> 16) & 0xff;
 		counter[2] = (count >> 8) & 0xff;
 		counter[3] = count & 0xff;
-		g_eli_crypto_hmac(passphrase, passlen, saltcount,
+		hmac_sha512(passphrase, passlen, saltcount,
 		    sizeof(saltcount), md, 0);
 		xor(keyp, md, bsize);
 
 		for(i = 1; i < iterations; i++) {
-			g_eli_crypto_hmac(passphrase, passlen, md, sizeof(md),
+			hmac_sha512(passphrase, passlen, md, sizeof(md),
 			    md, 0);
 			xor(keyp, md, bsize);
 		}
@@ -87,15 +90,15 @@ pkcs5v2_genkey(uint8_t *key, unsigned keylen, const uint8_t *salt,
  * Return the number of microseconds needed for 'interations' iterations.
  */
 static int
-pkcs5v2_probe(int iterations)
+pkcs5v2_probe(int iterations, size_t keylen, size_t saltlen)
 {
-	uint8_t	key[G_ELI_USERKEYLEN], salt[G_ELI_SALTLEN];
+	uint8_t	key[keylen], salt[saltlen];
 	uint8_t passphrase[] = "passphrase";
 	struct rusage start, end;
 	int usecs;
 
 	getrusage(RUSAGE_SELF, &start);
-	pkcs5v2_genkey(key, sizeof(key), salt, sizeof(salt), passphrase,
+	pkcs5v2_genkey(key, keylen, salt, saltlen, passphrase,
 	    iterations);
 	getrusage(RUSAGE_SELF, &end);
 
@@ -109,12 +112,12 @@ pkcs5v2_probe(int iterations)
  * Return the number of iterations which takes 'usecs' microseconds.
  */
 int
-pkcs5v2_calculate(int usecs)
+pkcs5v2_calculate(int usecs, size_t keylen, size_t saltlen)
 {
 	int iterations, v;
 
 	for (iterations = 1; ; iterations <<= 1) {
-		v = pkcs5v2_probe(iterations);
+		v = pkcs5v2_probe(iterations, keylen, saltlen);
 		if (v > 2000000)
 			break;
 	}
