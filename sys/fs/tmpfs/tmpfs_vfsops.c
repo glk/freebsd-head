@@ -90,6 +90,8 @@ tmpfs_node_ctor(void *mem, int size, void *arg, int flags)
 	struct tmpfs_node *node = (struct tmpfs_node *)mem;
 
 	node->tn_gen++;
+	if (node->tn_gen == 0)
+		node->tn_gen = (arc4random() / 2) + 1;
 	node->tn_size = 0;
 	node->tn_status = 0;
 	node->tn_flags = 0;
@@ -114,7 +116,7 @@ tmpfs_node_init(void *mem, int size, int flags)
 	node->tn_id = 0;
 
 	mtx_init(&node->tn_interlock, "tmpfs node interlock", NULL, MTX_DEF);
-	node->tn_gen = arc4random();
+	node->tn_gen = (arc4random() / 2) + 1;
 
 	return (0);
 }
@@ -356,16 +358,16 @@ tmpfs_fhtovp(struct mount *mp, struct fid *fhp, int flags,
 	if (tfhp->tf_len != sizeof(struct tmpfs_fid))
 		return EINVAL;
 
-	if (tfhp->tf_id >= tmp->tm_nodes_max)
+	if (tfhp->tf_id > INT_MAX || tfhp->tf_id <= 0)
 		return EINVAL;
 
 	found = FALSE;
 
 	TMPFS_LOCK(tmp);
 	LIST_FOREACH(node, &tmp->tm_nodes_used, tn_entries) {
-		if (node->tn_id == tfhp->tf_id &&
-		    node->tn_gen == tfhp->tf_gen) {
-			found = TRUE;
+		if (node->tn_id == tfhp->tf_id) {
+			if (node->tn_gen == tfhp->tf_gen)
+				found = TRUE;
 			break;
 		}
 	}
@@ -374,7 +376,7 @@ tmpfs_fhtovp(struct mount *mp, struct fid *fhp, int flags,
 	if (found)
 		return (tmpfs_alloc_vp(mp, node, LK_EXCLUSIVE, vpp));
 
-	return (EINVAL);
+	return (ESTALE);
 }
 
 /* --------------------------------------------------------------------- */
