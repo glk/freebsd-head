@@ -99,13 +99,11 @@ the file system size, which can be limited with the
 .Cm size
 option.
 .It Cm size
-Specifies the total file system size in bytes.
-If zero (the default) or a value larger than SIZE_MAX - PAGE_SIZE
-is given, the available amount of memory (including
-main memory and swap space) will be used.
+Specifies the total file system size.
+By default half of the main memory will be used.
 .It Cm maxfilesize
 Specifies the maximum file size in bytes.
-Defaults to the maximum possible value.
+Defaults to total file system size.
 .El
 .Sh EXAMPLES
 To mount a
