@@ -207,13 +207,13 @@ tmpfs_mount(struct mount *mp)
 		size_max = SIZE_MAX;
 
 	if (nodes_max <= 3) {
-		if (pages < UINT32_MAX / nodes_per_page)
+		if (pages < INT_MAX / nodes_per_page)
 			nodes_max = pages * nodes_per_page;
 		else
-			nodes_max = UINT32_MAX;
+			nodes_max = INT_MAX;
 	}
-	if (nodes_max > UINT32_MAX)
-		nodes_max = UINT32_MAX;
+	if (nodes_max > INT_MAX)
+		nodes_max = INT_MAX;
 	MPASS(nodes_max >= 3);
 
 	if (maxfilesize < PAGE_SIZE || maxfilesize > size_max)
