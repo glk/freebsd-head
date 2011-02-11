@@ -129,6 +129,48 @@ tmpfs_node_fini(void *mem, int size)
 	mtx_destroy(&node->tn_interlock);
 }
 
+/*
+ * XXX Rename to vfs_getopt_size()
+ */
+static int
+tmpfs_getopt_size(struct vfsoptlist *opts, const char *name, u_quad_t *data)
+{
+	char *opt_value, *vtp;
+	quad_t	iv;
+	int error, opt_len;
+
+	error = vfs_getopt(opts, name, (void **)&opt_value, &opt_len);
+	if (error != 0)
+		return (error);
+	if (opt_len == 0 || opt_value == NULL)
+		return (EINVAL);
+	if (opt_value[0] == '\0' || opt_value[opt_len - 1] != '\0')
+		return (EINVAL);
+
+	iv = strtoq(opt_value, &vtp, 0);
+	if (vtp == opt_value || (vtp[0] != '\0' && vtp[1] != '\0'))
+		return (EINVAL);
+	if (iv < 0)
+		return (EINVAL);
+	switch (vtp[0]) {
+	case 't': case 'T':
+		iv *= 1024;
+	case 'g': case 'G':
+		iv *= 1024;
+	case 'm': case 'M':
+		iv *= 1024;
+	case 'k': case 'K':
+		iv *= 1024;
+	case '\0':
+		break;
+	default:
+		return (EINVAL);
+	}
+	*data = iv;
+
+	return (0);
+}
+
 static int
 tmpfs_mount(struct mount *mp)
 {
@@ -176,12 +218,11 @@ tmpfs_mount(struct mount *mp)
 	if (mp->mnt_cred->cr_ruid != 0 ||
 	    vfs_scanopt(mp->mnt_optnew, "mode", "%ho", &root_mode) != 1)
 		root_mode = va.va_mode;
-	if (vfs_scanopt(mp->mnt_optnew, "inodes", "%qu", &nodes_max) != 1)
+	if (tmpfs_getopt_size(mp->mnt_optnew, "inodes", &nodes_max) != 0)
 		nodes_max = 0;
-	if (vfs_scanopt(mp->mnt_optnew, "size", "%qu", &size_max) != 1)
+	if (tmpfs_getopt_size(mp->mnt_optnew, "size", &size_max) != 0)
 		size_max = 0;
-	if (vfs_scanopt(mp->mnt_optnew, "maxfilesize", "%qu",
-	    &maxfilesize) != 1)
+	if (tmpfs_getopt_size(mp->mnt_optnew, "maxfilesize", &maxfilesize) != 0)
 		maxfilesize = 0;
 
 	/*
