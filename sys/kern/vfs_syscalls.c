@@ -4079,7 +4079,85 @@ out:
 	return (error);
 }
 
+#if defined(COMPAT_43) || defined(COMPAT_FREEBSD4) || \
+    defined(COMPAT_FREEBSD5) || defined(COMPAT_FREEBSD6) || \
+    defined(COMPAT_FREEBSD7) || defined(COMPAT_FREEBSD9)
+int
+freebsd9_kern_getdirentries(struct thread *td, int fd, char *ubuf, u_int count,
+    long *basep, void (*func)(struct freebsd9_dirent *))
+{
+	struct freebsd9_dirent dstdp;
+	struct dirent *dp, *edp;
+	char *dirbuf;
+	ssize_t resid, ucount;
+	int error;
+
+	/* XXX arbitrary sanity limit on `count'. */
+	count = min(count, 64 * 1024);
+
+	dirbuf = malloc(count, M_TEMP, M_WAITOK);
+
+	error = kern_getdirentries(td, fd, dirbuf, count, basep, &resid,
+	    UIO_SYSSPACE);
+	if (error != 0)
+		goto done;
+
+	ucount = 0;
+	for (dp = (struct dirent *)dirbuf,
+	    edp = (struct dirent *)&dirbuf[count - resid];
+	    ucount < count && dp < edp; ) {
+		if (dp->d_reclen == 0)
+			break;
+		if (dp->d_namlen > sizeof(dstdp.d_name) - 1)
+			continue;
+		dstdp.d_type = dp->d_type;
+		dstdp.d_namlen = dp->d_namlen;
+		dstdp.d_fileno = dp->d_fileno;		/* truncate */
+		dstdp.d_reclen = sizeof(dstdp) - sizeof(dstdp.d_name) +
+		    ((dp->d_namlen + 1 + 3) &~ 3);
+		bcopy(dp->d_name, dstdp.d_name, dstdp.d_namlen);
+		bzero(dstdp.d_name + dstdp.d_namlen,
+		    dstdp.d_reclen - offsetof(struct freebsd9_dirent, d_name) -
+		    dstdp.d_namlen);
+		MPASS(dstdp.d_reclen <= dp->d_reclen);
+		MPASS(ucount + dstdp.d_reclen <= count);
+		if (func != NULL)
+			func(&dstdp);
+		error = copyout(&dstdp, ubuf + ucount, dstdp.d_reclen);
+		if (error != 0)
+			break;
+		dp = (struct dirent *)((char *)dp + dp->d_reclen);
+		ucount += dstdp.d_reclen;
+	}
+
+done:
+	free(dirbuf, M_TEMP);
+	if (error == 0)
+		td->td_retval[0] = ucount;
+	return (error);
+}
+#endif /* COMPAT */
+
 #ifdef COMPAT_43
+static void
+ogetdirentries_cvt(struct freebsd9_dirent *dp)
+{
+#if (BYTE_ORDER == LITTLE_ENDIAN)
+	/*
+	 * The expected low byte of dp->d_namlen is our dp->d_type.
+	 * The high MBZ byte of dp->d_namlen is our dp->d_namlen.
+	 */
+	dp->d_type = dp->d_namlen;
+	dp->d_namlen = 0;
+#else
+	/*
+	 * The dp->d_type is the high byte of the expected dp->d_namlen,
+	 * so must be zero'ed.
+	 */
+	dp->d_type = 0;
+#endif
+}
+
 /*
  * Read a block of directory entries in a filesystem independent format.
  */
@@ -4107,131 +4185,68 @@ int
 kern_ogetdirentries(struct thread *td, struct ogetdirentries_args *uap,
     long *ploff)
 {
-	struct vnode *vp;
-	struct file *fp;
-	struct uio auio, kuio;
-	struct iovec aiov, kiov;
-	struct dirent *dp, *edp;
-	caddr_t dirbuf;
-	int error, eofflag, readcnt, vfslocked;
-	long loff;
+	long base;
+	int error;
 
 	/* XXX arbitrary sanity limit on `count'. */
 	if (uap->count > 64 * 1024)
 		return (EINVAL);
-	if ((error = getvnode(td->td_proc->p_fd, uap->fd, CAP_READ,
-	    &fp)) != 0)
-		return (error);
-	if ((fp->f_flag & FREAD) == 0) {
-		fdrop(fp, td);
-		return (EBADF);
-	}
-	vp = fp->f_vnode;
-unionread:
-	vfslocked = VFS_LOCK_GIANT(vp->v_mount);
-	if (vp->v_type != VDIR) {
-		VFS_UNLOCK_GIANT(vfslocked);
-		fdrop(fp, td);
-		return (EINVAL);
-	}
-	aiov.iov_base = uap->buf;
-	aiov.iov_len = uap->count;
-	auio.uio_iov = &aiov;
-	auio.uio_iovcnt = 1;
-	auio.uio_rw = UIO_READ;
-	auio.uio_segflg = UIO_USERSPACE;
-	auio.uio_td = td;
-	auio.uio_resid = uap->count;
-	vn_lock(vp, LK_SHARED | LK_RETRY);
-	loff = auio.uio_offset = fp->f_offset;
-#ifdef MAC
-	error = mac_vnode_check_readdir(td->td_ucred, vp);
-	if (error) {
-		VOP_UNLOCK(vp, 0);
-		VFS_UNLOCK_GIANT(vfslocked);
-		fdrop(fp, td);
-		return (error);
-	}
-#endif
-#	if (BYTE_ORDER != LITTLE_ENDIAN)
-		if (vp->v_mount->mnt_maxsymlinklen <= 0) {
-			error = VOP_READDIR(vp, &auio, fp->f_cred, &eofflag,
-			    NULL, NULL);
-			fp->f_offset = auio.uio_offset;
-		} else
-#	endif
-	{
-		kuio = auio;
-		kuio.uio_iov = &kiov;
-		kuio.uio_segflg = UIO_SYSSPACE;
-		kiov.iov_len = uap->count;
-		dirbuf = malloc(uap->count, M_TEMP, M_WAITOK);
-		kiov.iov_base = dirbuf;
-		error = VOP_READDIR(vp, &kuio, fp->f_cred, &eofflag,
-			    NULL, NULL);
-		fp->f_offset = kuio.uio_offset;
-		if (error == 0) {
-			readcnt = uap->count - kuio.uio_resid;
-			edp = (struct dirent *)&dirbuf[readcnt];
-			for (dp = (struct dirent *)dirbuf; dp < edp; ) {
-#				if (BYTE_ORDER == LITTLE_ENDIAN)
-					/*
-					 * The expected low byte of
-					 * dp->d_namlen is our dp->d_type.
-					 * The high MBZ byte of dp->d_namlen
-					 * is our dp->d_namlen.
-					 */
-					dp->d_type = dp->d_namlen;
-					dp->d_namlen = 0;
-#				else
-					/*
-					 * The dp->d_type is the high byte
-					 * of the expected dp->d_namlen,
-					 * so must be zero'ed.
-					 */
-					dp->d_type = 0;
-#				endif
-				if (dp->d_reclen > 0) {
-					dp = (struct dirent *)
-					    ((char *)dp + dp->d_reclen);
-				} else {
-					error = EIO;
-					break;
-				}
-			}
-			if (dp >= edp)
-				error = uiomove(dirbuf, readcnt, &auio);
-		}
-		free(dirbuf, M_TEMP);
-	}
-	if (error) {
-		VOP_UNLOCK(vp, 0);
-		VFS_UNLOCK_GIANT(vfslocked);
-		fdrop(fp, td);
-		return (error);
-	}
-	if (uap->count == auio.uio_resid &&
-	    (vp->v_vflag & VV_ROOT) &&
-	    (vp->v_mount->mnt_flag & MNT_UNION)) {
-		struct vnode *tvp = vp;
-		vp = vp->v_mount->mnt_vnodecovered;
-		VREF(vp);
-		fp->f_vnode = vp;
-		fp->f_data = vp;
-		fp->f_offset = 0;
-		vput(tvp);
-		VFS_UNLOCK_GIANT(vfslocked);
-		goto unionread;
-	}
-	VOP_UNLOCK(vp, 0);
-	VFS_UNLOCK_GIANT(vfslocked);
-	fdrop(fp, td);
-	td->td_retval[0] = uap->count - auio.uio_resid;
-	if (error == 0)
-		*ploff = loff;
+
+	error = freebsd9_kern_getdirentries(td, uap->fd, uap->buf, uap->count,
+	    &base, ogetdirentries_cvt);
+
+	if (error == 0 && uap->basep != NULL)
+		error = copyout(&base, uap->basep, sizeof(long));
+
 	return (error);
 }
 #endif /* COMPAT_43 */
+
+#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
+    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
+    defined(COMPAT_FREEBSD9)
+#ifndef _SYS_SYSPROTO_H_
+struct freebsd9_getdirentries_args {
+	int	fd;
+	char	*buf;
+	u_int	count;
+	long	*basep;
+};
+#endif
+int
+freebsd9_getdirentries(struct thread *td,
+    struct freebsd9_getdirentries_args *uap)
+{
+	long base;
+	int error;
+
+	error = freebsd9_kern_getdirentries(td, uap->fd, uap->buf, uap->count,
+	    &base, NULL);
+
+	if (error == 0 && uap->basep != NULL)
+		error = copyout(&base, uap->basep, sizeof(long));
+	return (error);
+}
+
+#ifndef _SYS_SYSPROTO_H_
+struct freebsd9_getdents_args {
+	int fd;
+	char *buf;
+	size_t count;
+};
+#endif
+int
+freebsd9_getdents(struct thread *td, struct freebsd9_getdents_args *uap)
+{
+	struct freebsd9_getdirentries_args ap;
+
+	ap.fd = uap->fd;
+	ap.buf = uap->buf;
+	ap.count = uap->count;
+	ap.basep = NULL;
+	return (freebsd9_getdirentries(td, &ap));
+}
+#endif /* COMPAT_FREEBSD9 */
 
 /*
  * Read a block of directory entries in a filesystem independent format.

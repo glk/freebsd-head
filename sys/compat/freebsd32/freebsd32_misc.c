@@ -1521,6 +1521,42 @@ ofreebsd32_getdirentries(struct thread *td,
 }
 #endif
 
+#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
+    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
+    defined(COMPAT_FREEBSD9)
+int
+freebsd9_freebsd32_getdirentries(struct thread *td,
+    struct freebsd9_freebsd32_getdirentries_args *uap)
+{
+	long base;
+	int32_t base32;
+	int error;
+
+	error = freebsd9_kern_getdirentries(td, uap->fd, uap->buf, uap->count,
+	    &base, NULL);
+	if (error)
+		return (error);
+	if (uap->basep != NULL) {
+		base32 = base;
+		error = copyout(&base32, uap->basep, sizeof(int32_t));
+	}
+	return (error);
+}
+
+int
+freebsd9_freebsd32_getdents(struct thread *td,
+    struct freebsd9_freebsd32_getdents_args *uap)
+{
+	struct freebsd9_freebsd32_getdirentries_args ap;
+
+	ap.fd = uap->fd;
+	ap.buf = uap->buf;
+	ap.count = uap->count;
+	ap.basep = NULL;
+	return (freebsd9_freebsd32_getdirentries(td, &ap));
+}
+#endif /* COMPAT_FREEBSD9 */
+
 int
 freebsd32_getdirentries(struct thread *td,
     struct freebsd32_getdirentries_args *uap)

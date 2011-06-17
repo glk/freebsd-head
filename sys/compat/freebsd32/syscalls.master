@@ -359,7 +359,7 @@
 195	AUE_SETRLIMIT	NOPROTO	{ int setrlimit(u_int which, \
 				    struct rlimit *rlp); } setrlimit \
 				    __setrlimit_args int
-196	AUE_GETDIRENTRIES	STD	{ int freebsd32_getdirentries(int fd, \
+196	AUE_GETDIRENTRIES	COMPAT9	{ int freebsd32_getdirentries(int fd, \
 				    char *buf, u_int count, int32_t *basep); }
 197	AUE_MMAP	COMPAT6	{ caddr_t freebsd32_mmap(caddr_t addr, \
 				    size_t len, int prot, int flags, int fd, \
@@ -487,7 +487,7 @@
 269	AUE_NULL	UNIMPL	nosys
 270	AUE_NULL	UNIMPL	nosys
 271	AUE_NULL	UNIMPL	nosys
-272	AUE_O_GETDENTS	NOPROTO	{ int getdents(int fd, char *buf, \
+272	AUE_O_GETDENTS	COMPAT9	{ int freebsd32_getdents(int fd, char *buf, \
 				    size_t count); }
 273	AUE_NULL	UNIMPL	nosys
 274	AUE_LCHMOD	NOPROTO	{ int lchmod(char *path, mode_t mode); }
@@ -1008,3 +1008,7 @@
 				    struct stat32 *sb); }
 536	AUE_FSTATAT	STD	{ int freebsd32_fstatat(int fd, char *path, \
 				    struct stat32 *buf, int flag); }
+537	AUE_O_GETDENTS	NOPROTO	{ int getdents(int fd, char *buf, \
+				    size_t count); }
+538	AUE_GETDIRENTRIES	STD	{ int freebsd32_getdirentries(int fd, \
+				    char *buf, u_int count, int32_t *basep); }

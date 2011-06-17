@@ -242,4 +242,9 @@ int	kern_socketpair(struct thread *td, int domain, int type, int protocol,
 #define	KSA_OSIGSET	0x0001	/* uses osigact_t */
 #define	KSA_FREEBSD4	0x0002	/* uses ucontext4 */
 
+struct freebsd9_dirent;
+
+int	freebsd9_kern_getdirentries(struct thread *td, int fd, char *ubuf, u_int
+	    count, long *basep, void (*func)(struct freebsd9_dirent *));
+
 #endif /* !_SYS_SYSCALLSUBR_H_ */
