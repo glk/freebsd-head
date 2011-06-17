@@ -88,12 +88,10 @@ FBSD_1.0 {
 	fchown;
 	fcntl;
 	fhopen;
-	fhstat;
 	fhstatfs;
 	flock;
 	fork;
 	fpathconf;
-	fstat;
 	fstatfs;
 	fsync;
 	futimes;
@@ -166,7 +164,6 @@ FBSD_1.0 {
 	link;
 	lio_listio;
 	listen;
-	lstat;
 	lutimes;
 	mac_syscall;
 	madvise;
@@ -281,7 +278,6 @@ FBSD_1.0 {
 	socketpair;
 	__stack_chk_fail;
 	__stack_chk_guard;
-	stat;
 	statfs;
 	swapcontext;
 	swapoff;
@@ -337,7 +333,6 @@ FBSD_1.1 {
 	fchmodat;
 	fchownat;
 	fexecve;
-	fstatat;
 	futimesat;
 	jail_get;
 	jail_set;
@@ -379,7 +374,12 @@ FBSD_1.2 {
 };
 
 FBSD_1.3 {
+	fhstat;
+	fstat;
+	fstatat;
+	lstat;
 	posix_fadvise;
+	stat;
 };
 
 FBSDprivate_1.0 {

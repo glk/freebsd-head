@@ -46,6 +46,12 @@ __sym_compat(nfstat, freebsd9_nfstat, FBSD_1.0);
 __sym_compat(nlstat, freebsd9_nlstat, FBSD_1.0);
 __sym_compat(nstat, freebsd9_nstat, FBSD_1.0);
 
+__sym_compat(fhstat, freebsd9_fhstat, FBSD_1.0);
+__sym_compat(fstat, freebsd9_fstat, FBSD_1.0);
+__sym_compat(fstatat, freebsd9_fstatat, FBSD_1.1);
+__sym_compat(lstat, freebsd9_lstat, FBSD_1.0);
+__sym_compat(stat, freebsd9_stat, FBSD_1.0);
+
 #undef __sym_compat
 
 #endif	/* __LIBC_COMPAT_H__ */
