@@ -1310,6 +1310,31 @@ ofstat(struct thread *td, struct ofstat_args *uap)
 }
 #endif /* COMPAT_43 */
 
+#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
+    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
+    defined(COMPAT_FREEBSD9)
+#ifndef _SYS_SYSPROTO_H_
+struct freebsd9_fstat_args {
+	int	fd;
+	struct	freebsd9_stat *sb;
+};
+#endif
+int
+freebsd9_fstat(struct thread *td, struct freebsd9_fstat_args *uap)
+{
+	struct stat sb;
+	struct freebsd9_stat osb;
+	int error;
+
+	error = kern_fstat(td, uap->fd, &sb);
+	if (error != 0)
+		return (error);
+	freebsd9_cvtstat(&sb, &osb);
+	error = copyout(&osb, uap->sb, sizeof(osb));
+	return (error);
+}
+#endif	/* COMPAT_FREEBSD9 */
+
 /*
  * Return status information about a file descriptor.
  */

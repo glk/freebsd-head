@@ -118,7 +118,8 @@ CTASSERT(sizeof(struct kevent32) == 20);
 CTASSERT(sizeof(struct iovec32) == 8);
 CTASSERT(sizeof(struct msghdr32) == 28);
 #ifndef __mips__
-CTASSERT(sizeof(struct stat32) == 96);
+CTASSERT(sizeof(struct stat32) == 104);
+CTASSERT(sizeof(struct freebsd9_stat32) == 96);
 #endif
 CTASSERT(sizeof(struct sigaction32) == 24);
 
@@ -1835,6 +1836,133 @@ ofreebsd32_lstat(struct thread *td, struct ofreebsd32_lstat_args *uap)
 		return (error);
 	copy_ostat(&sb, &sb32);
 	error = copyout(&sb32, uap->ub, sizeof (sb32));
+	return (error);
+}
+#endif
+
+int
+freebsd32_fhstat(struct thread *td, struct freebsd32_fhstat_args *uap)
+{
+	struct stat sb;
+	struct stat32 sb32;
+	struct fhandle fh;
+	int error;
+
+	error = copyin(uap->u_fhp, &fh, sizeof(fhandle_t));
+        if (error != 0)
+                return (error);
+	error = kern_fhstat(td, fh, &sb);
+	if (error != 0)
+		return (error);
+	copy_stat(&sb, &sb32);
+	error = copyout(&sb32, uap->sb, sizeof (sb32));
+	return (error);
+}
+
+#ifdef COMPAT_FREEBSD9
+static void
+freebsd9_cvtstat32(struct stat *in, struct freebsd9_stat32 *out)
+{
+	CP(*in, *out, st_ino);
+	CP(*in, *out, st_nlink);
+	CP(*in, *out, st_dev);
+	CP(*in, *out, st_mode);
+	CP(*in, *out, st_uid);
+	CP(*in, *out, st_gid);
+	CP(*in, *out, st_rdev);
+	TS_CP(*in, *out, st_atim);
+	TS_CP(*in, *out, st_mtim);
+	TS_CP(*in, *out, st_ctim);
+	CP(*in, *out, st_size);
+	CP(*in, *out, st_blocks);
+	CP(*in, *out, st_blksize);
+	CP(*in, *out, st_flags);
+	CP(*in, *out, st_gen);
+	TS_CP(*in, *out, st_birthtim);
+}
+
+int
+freebsd9_freebsd32_stat(struct thread *td,
+    struct freebsd9_freebsd32_stat_args *uap)
+{
+	struct stat sb;
+	struct freebsd9_stat32 sb32;
+	int error;
+
+	error = kern_stat(td, uap->path, UIO_USERSPACE, &sb);
+	if (error != 0)
+		return (error);
+	freebsd9_cvtstat32(&sb, &sb32);
+	error = copyout(&sb32, uap->ub, sizeof (sb32));
+	return (error);
+}
+
+int
+freebsd9_freebsd32_fstat(struct thread *td,
+    struct freebsd9_freebsd32_fstat_args *uap)
+{
+	struct stat sb;
+	struct freebsd9_stat32 sb32;
+	int error;
+
+	error = kern_fstat(td, uap->fd, &sb);
+	if (error != 0)
+		return (error);
+	freebsd9_cvtstat32(&sb, &sb32);
+	error = copyout(&sb32, uap->ub, sizeof (sb32));
+	return (error);
+}
+
+int
+freebsd9_freebsd32_fstatat(struct thread *td,
+    struct freebsd9_freebsd32_fstatat_args *uap)
+{
+	struct stat sb;
+	struct freebsd9_stat32 sb32;
+	int error;
+
+	error = kern_statat(td, uap->flag, uap->fd, uap->path, UIO_USERSPACE,
+	    &sb);
+	if (error != 0)
+		return (error);
+	freebsd9_cvtstat32(&sb, &sb32);
+	error = copyout(&sb32, uap->buf, sizeof (sb32));
+	return (error);
+}
+
+int
+freebsd9_freebsd32_lstat(struct thread *td,
+    struct freebsd9_freebsd32_lstat_args *uap)
+{
+	struct stat sb;
+	struct freebsd9_stat32 sb32;
+	int error;
+
+	error = kern_lstat(td, uap->path, UIO_USERSPACE, &sb);
+	if (error != 0)
+		return (error);
+	freebsd9_cvtstat32(&sb, &sb32);
+	error = copyout(&sb32, uap->ub, sizeof (sb32));
+	return (error);
+}
+
+int
+freebsd9_freebsd32_fhstat(struct thread *td,
+    struct freebsd9_freebsd32_fhstat_args *uap)
+{
+	struct stat sb;
+	struct freebsd9_stat32 sb32;
+	struct fhandle fh;
+	int error;
+
+	error = copyin(uap->u_fhp, &fh, sizeof(fhandle_t));
+        if (error != 0)
+                return (error);
+	error = kern_fhstat(td, fh, &sb);
+	if (error != 0)
+		return (error);
+	freebsd9_cvtstat32(&sb, &sb32);
+	error = copyout(&sb32, uap->sb, sizeof (sb32));
 	return (error);
 }
 #endif

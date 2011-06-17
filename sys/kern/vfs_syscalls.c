@@ -2352,6 +2352,123 @@ cvtstat(st, ost)
 }
 #endif /* COMPAT_43 */
 
+#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
+    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
+    defined(COMPAT_FREEBSD9)
+void
+freebsd9_cvtstat(struct stat *st, struct freebsd9_stat *ost)
+{
+	ost->st_dev = st->st_dev;
+	ost->st_ino = st->st_ino;		/* truncate */
+	ost->st_mode = st->st_mode;
+	ost->st_nlink = st->st_nlink;		/* truncate */
+	ost->st_uid = st->st_uid;
+	ost->st_gid = st->st_gid;
+	ost->st_rdev = st->st_rdev;
+	ost->st_atim = st->st_atim;
+	ost->st_mtim = st->st_mtim;
+	ost->st_ctim = st->st_ctim;
+	ost->st_size = st->st_size;
+	ost->st_blocks = st->st_blocks;
+	ost->st_blksize = st->st_blksize;
+	ost->st_flags = st->st_flags;
+	ost->st_gen = st->st_gen;
+	ost->st_lspare = st->st_lspare;
+	ost->st_birthtim = st->st_birthtim;
+}
+
+#ifndef _SYS_SYSPROTO_H_
+struct freebsd9_stat_args {
+	char	*path;
+	struct freebsd9_stat *ub;
+};
+#endif
+int
+freebsd9_stat(struct thread *td, struct freebsd9_stat_args* uap)
+{
+	struct stat sb;
+	struct freebsd9_stat osb;
+	int error;
+
+	error = kern_stat(td, uap->path, UIO_USERSPACE, &sb);
+	if (error != 0)
+		return (error);
+	freebsd9_cvtstat(&sb, &osb);
+	error = copyout(&osb, uap->ub, sizeof(osb));
+	return (error);
+}
+
+#ifndef _SYS_SYSPROTO_H_
+struct freebsd9_lstat_args {
+	char	*path;
+	struct freebsd9_stat *ub;
+};
+#endif
+int
+freebsd9_lstat(struct thread *td, register struct freebsd9_lstat_args* uap)
+{
+	struct stat sb;
+	struct freebsd9_stat osb;
+	int error;
+
+	error = kern_lstat(td, uap->path, UIO_USERSPACE, &sb);
+	if (error != 0)
+		return (error);
+	freebsd9_cvtstat(&sb, &osb);
+	error = copyout(&osb, uap->ub, sizeof(osb));
+	return (error);
+}
+
+#ifndef _SYS_SYSPROTO_H_
+struct freebsd9_fhstat_args {
+	struct fhandle *u_fhp;
+	struct freebsd9_stat *sb;
+};
+#endif
+int
+freebsd9_fhstat(struct thread *td, struct freebsd9_fhstat_args* uap)
+{
+	struct fhandle fh;
+	struct stat sb;
+	struct freebsd9_stat osb;
+	int error;
+
+	error = copyin(uap->u_fhp, &fh, sizeof(fhandle_t));
+	if (error != 0)
+		return (error);
+	error = kern_fhstat(td, fh, &sb);
+	if (error != 0)
+		return (error);
+	freebsd9_cvtstat(&sb, &osb);
+	error = copyout(&osb, uap->sb, sizeof(osb));
+	return (error);
+}
+
+#ifndef _SYS_SYSPROTO_H_
+struct freebsd9_fstatat_args {
+	int	fd;
+	char	*path;
+	struct freebsd9_stat *buf;
+	int	flag;
+};
+#endif
+int
+freebsd9_fstatat(struct thread *td, struct freebsd9_fstatat_args* uap)
+{
+	struct stat sb;
+	struct freebsd9_stat osb;
+	int error;
+
+	error = kern_statat(td, uap->flag, uap->fd, uap->path,
+	    UIO_USERSPACE, &sb);
+	if (error != 0)
+		return (error);
+	freebsd9_cvtstat(&sb, &osb);
+	error = copyout(&osb, uap->buf, sizeof(osb));
+	return (error);
+}
+#endif	/* COMPAT_FREEBSD9 */
+
 /*
  * Get file status; this version follows links.
  */

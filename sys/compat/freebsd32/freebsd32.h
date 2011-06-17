@@ -146,10 +146,31 @@ struct msghdr32 {
 };
 
 struct stat32 {
-	dev_t	st_dev;
 	ino_t	st_ino;
-	mode_t	st_mode;
 	nlink_t	st_nlink;
+	dev_t	st_dev;
+	mode_t	st_mode;
+	u_int16_t st_padding0;
+	uid_t	st_uid;
+	gid_t	st_gid;
+	dev_t	st_rdev;
+	struct timespec32 st_atim;
+	struct timespec32 st_mtim;
+	struct timespec32 st_ctim;
+	off_t	st_size;
+	int64_t	st_blocks;
+	u_int32_t st_blksize;
+	u_int32_t st_flags;
+	u_int32_t st_gen;
+	struct timespec32 st_birthtim;
+	unsigned int :(8 / 2) * (16 - (int)sizeof(struct timespec32));
+	unsigned int :(8 / 2) * (16 - (int)sizeof(struct timespec32));
+};
+struct freebsd9_stat32 {
+	dev_t	st_dev;
+	u_int32_t st_ino;
+	mode_t	st_mode;
+	u_int16_t st_nlink;
 	uid_t	st_uid;
 	gid_t	st_gid;
 	dev_t	st_rdev;
@@ -168,9 +189,9 @@ struct stat32 {
 
 struct ostat32 {
 	__uint16_t st_dev;
-	ino_t	st_ino;
+	__uint32_t st_ino;
 	mode_t	st_mode;
-	nlink_t	st_nlink;
+	__uint16_t st_nlink;
 	__uint16_t st_uid;
 	__uint16_t st_gid;
 	__uint16_t st_rdev;
