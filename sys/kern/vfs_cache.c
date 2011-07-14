@@ -40,7 +40,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/filedesc.h>
-#include <sys/fnv_hash.h>
+#include <sys/hash_sfh.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
@@ -455,8 +455,8 @@ retry_wlocked:
 		}
 	}
 
-	hash = fnv_32_buf(cnp->cn_nameptr, cnp->cn_namelen, FNV1_32_INIT);
-	hash = fnv_32_buf(&dvp, sizeof(dvp), hash);
+	hash = hash_sfh_buf(cnp->cn_nameptr, cnp->cn_namelen, cnp->cn_namelen);
+	hash = hash_sfh_buf(&dvp, sizeof(dvp), hash);
 	LIST_FOREACH(ncp, (NCHHASH(hash)), nc_hash) {
 		numchecks++;
 		if (ncp->nc_dvp == dvp && ncp->nc_nlen == cnp->cn_namelen &&
@@ -691,9 +691,9 @@ cache_enter(dvp, vp, cnp)
 	ncp->nc_dvp = dvp;
 	ncp->nc_flag = flag;
 	len = ncp->nc_nlen = cnp->cn_namelen;
-	hash = fnv_32_buf(cnp->cn_nameptr, len, FNV1_32_INIT);
+	hash = hash_sfh_buf(cnp->cn_nameptr, len, len);
 	strlcpy(ncp->nc_name, cnp->cn_nameptr, len + 1);
-	hash = fnv_32_buf(&dvp, sizeof(dvp), hash);
+	hash = hash_sfh_buf(&dvp, sizeof(dvp), hash);
 	CACHE_WLOCK();
 
 	/*

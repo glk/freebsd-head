@@ -34,7 +34,7 @@
 #define _NETINET_IN_VAR_H_
 
 #include <sys/queue.h>
-#include <sys/fnv_hash.h>
+#include <sys/hash_sfh.h>
 #include <sys/tree.h>
 
 struct igmp_ifinfo;
@@ -113,7 +113,7 @@ VNET_DECLARE(u_long, in_ifaddrhmask);		/* mask for hash table */
 
 #define INADDR_NHASH_LOG2       9
 #define INADDR_NHASH		(1 << INADDR_NHASH_LOG2)
-#define INADDR_HASHVAL(x)	fnv_32_buf((&(x)), sizeof(x), FNV1_32_INIT)
+#define INADDR_HASHVAL(x)	hash_sfh_buf((&(x)), sizeof(x), sizeof(x))
 #define INADDR_HASH(x) \
 	(&V_in_ifaddrhashtbl[INADDR_HASHVAL(x) & V_in_ifaddrhmask])
 

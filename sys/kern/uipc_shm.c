@@ -62,7 +62,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/fcntl.h>
 #include <sys/file.h>
 #include <sys/filedesc.h>
-#include <sys/fnv_hash.h>
+#include <sys/hash_sfh.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
@@ -92,7 +92,7 @@ __FBSDID("$FreeBSD$");
 
 struct shm_mapping {
 	char		*sm_path;
-	Fnv32_t		sm_fnv;
+	uint32_t	sm_hash;
 	struct shmfd	*sm_shmfd;
 	LIST_ENTRY(shm_mapping) sm_link;
 };
@@ -103,16 +103,16 @@ static struct sx shm_dict_lock;
 static struct mtx shm_timestamp_lock;
 static u_long shm_hash;
 
-#define	SHM_HASH(fnv)	(&shm_dictionary[(fnv) & shm_hash])
+#define	SHM_HASH(h)	(&shm_dictionary[(h) & shm_hash])
 
 static int	shm_access(struct shmfd *shmfd, struct ucred *ucred, int flags);
 static struct shmfd *shm_alloc(struct ucred *ucred, mode_t mode);
 static void	shm_dict_init(void *arg);
 static void	shm_drop(struct shmfd *shmfd);
 static struct shmfd *shm_hold(struct shmfd *shmfd);
-static void	shm_insert(char *path, Fnv32_t fnv, struct shmfd *shmfd);
-static struct shmfd *shm_lookup(char *path, Fnv32_t fnv);
-static int	shm_remove(char *path, Fnv32_t fnv, struct ucred *ucred);
+static void	shm_insert(char *path, uint32_t hash, struct shmfd *shmfd);
+static struct shmfd *shm_lookup(char *path, uint32_t hash);
+static int	shm_remove(char *path, uint32_t hash, struct ucred *ucred);
 static int	shm_dotruncate(struct shmfd *shmfd, off_t length);
 
 static fo_rdwr_t	shm_read;
@@ -407,7 +407,7 @@ shm_access(struct shmfd *shmfd, struct ucred *ucred, int flags)
 
 /*
  * Dictionary management.  We maintain an in-kernel dictionary to map
- * paths to shmfd objects.  We use the FNV hash on the path to store
+ * paths to shmfd objects.  We use the hash on the path to store
  * the mappings in a hash table.
  */
 static void
@@ -421,12 +421,12 @@ shm_dict_init(void *arg)
 SYSINIT(shm_dict_init, SI_SUB_SYSV_SHM, SI_ORDER_ANY, shm_dict_init, NULL);
 
 static struct shmfd *
-shm_lookup(char *path, Fnv32_t fnv)
+shm_lookup(char *path, uint32_t hash)
 {
 	struct shm_mapping *map;
 
-	LIST_FOREACH(map, SHM_HASH(fnv), sm_link) {
-		if (map->sm_fnv != fnv)
+	LIST_FOREACH(map, SHM_HASH(hash), sm_link) {
+		if (map->sm_hash != hash)
 			continue;
 		if (strcmp(map->sm_path, path) == 0)
 			return (map->sm_shmfd);
@@ -436,25 +436,25 @@ shm_lookup(char *path, Fnv32_t fnv)
 }
 
 static void
-shm_insert(char *path, Fnv32_t fnv, struct shmfd *shmfd)
+shm_insert(char *path, uint32_t hash, struct shmfd *shmfd)
 {
 	struct shm_mapping *map;
 
 	map = malloc(sizeof(struct shm_mapping), M_SHMFD, M_WAITOK);
 	map->sm_path = path;
-	map->sm_fnv = fnv;
+	map->sm_hash = hash;
 	map->sm_shmfd = shm_hold(shmfd);
-	LIST_INSERT_HEAD(SHM_HASH(fnv), map, sm_link);
+	LIST_INSERT_HEAD(SHM_HASH(hash), map, sm_link);
 }
 
 static int
-shm_remove(char *path, Fnv32_t fnv, struct ucred *ucred)
+shm_remove(char *path, uint32_t hash, struct ucred *ucred)
 {
 	struct shm_mapping *map;
 	int error;
 
-	LIST_FOREACH(map, SHM_HASH(fnv), sm_link) {
-		if (map->sm_fnv != fnv)
+	LIST_FOREACH(map, SHM_HASH(hash), sm_link) {
+		if (map->sm_hash != hash)
 			continue;
 		if (strcmp(map->sm_path, path) == 0) {
 #ifdef MAC
@@ -485,7 +485,8 @@ shm_open(struct thread *td, struct shm_open_args *uap)
 	struct shmfd *shmfd;
 	struct file *fp;
 	char *path;
-	Fnv32_t fnv;
+	size_t pathlen;
+	uint32_t hash;
 	mode_t cmode;
 	int fd, error;
 
@@ -522,7 +523,7 @@ shm_open(struct thread *td, struct shm_open_args *uap)
 		shmfd = shm_alloc(td->td_ucred, cmode);
 	} else {
 		path = malloc(MAXPATHLEN, M_SHMFD, M_WAITOK);
-		error = copyinstr(uap->path, path, MAXPATHLEN, NULL);
+		error = copyinstr(uap->path, path, MAXPATHLEN, &pathlen);
 
 		/* Require paths to start with a '/' character. */
 		if (error == 0 && path[0] != '/')
@@ -534,14 +535,14 @@ shm_open(struct thread *td, struct shm_open_args *uap)
 			return (error);
 		}
 
-		fnv = fnv_32_str(path, FNV1_32_INIT);
+		hash = hash_sfh_buf(path, pathlen, pathlen);
 		sx_xlock(&shm_dict_lock);
-		shmfd = shm_lookup(path, fnv);
+		shmfd = shm_lookup(path, hash);
 		if (shmfd == NULL) {
 			/* Object does not yet exist, create it if requested. */
 			if (uap->flags & O_CREAT) {
 				shmfd = shm_alloc(td->td_ucred, cmode);
-				shm_insert(path, fnv, shmfd);
+				shm_insert(path, hash, shmfd);
 			} else {
 				free(path, M_SHMFD);
 				error = ENOENT;
@@ -608,19 +609,20 @@ int
 shm_unlink(struct thread *td, struct shm_unlink_args *uap)
 {
 	char *path;
-	Fnv32_t fnv;
+	size_t pathlen;
+	uint32_t hash;
 	int error;
 
 	path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
-	error = copyinstr(uap->path, path, MAXPATHLEN, NULL);
+	error = copyinstr(uap->path, path, MAXPATHLEN, &pathlen);
 	if (error) {
 		free(path, M_TEMP);
 		return (error);
 	}
 
-	fnv = fnv_32_str(path, FNV1_32_INIT);
+	hash = hash_sfh_buf(path, pathlen, pathlen);
 	sx_xlock(&shm_dict_lock);
-	error = shm_remove(path, fnv, td->td_ucred);
+	error = shm_remove(path, hash, td->td_ucred);
 	sx_xunlock(&shm_dict_lock);
 	free(path, M_TEMP);
 
