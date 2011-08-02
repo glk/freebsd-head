@@ -1045,6 +1045,7 @@ product ASIX AX88172		0x1720	10/100 Ethernet
 product ASIX AX88178		0x1780	AX88178
 product ASIX AX88772		0x7720	AX88772
 product ASIX AX88772A		0x772a	AX88772A USB 2.0 10/100 Ethernet
+product ASIX AX88772B		0x772b	AX88772B USB 2.0 10/100 Ethernet
 
 /* ASUS products */
 product ASUS2 USBN11		0x0b05	USB-N11
@@ -2109,6 +2110,7 @@ product LOGITEC RT2870_3	0x0164	RT2870
 product LONGCHEER WM66		0x6061	Longcheer WM66 HSDPA
 product LONGCHEER W14		0x9603	Mobilcom W14
 product LONGCHEER DISK		0xf000	Driver disk
+product LONGCHEER XSSTICK	0x9605	4G Systems XSStick P14
 
 
 /* Lucent products */

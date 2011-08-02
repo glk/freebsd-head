@@ -718,17 +718,18 @@ typedef struct {
 	u_int32_t	pe_relpwr;	/* Relative power threshold in 0.5dB steps */
 	u_int32_t	pe_relstep;	/* Pulse Relative step threshold in 0.5dB steps */
 	u_int32_t	pe_maxlen;	/* Max length of radar sign in 0.8us units */
-	HAL_BOOL	pe_usefir128;	/* Use the average in-band power measured over 128 cycles */
-	HAL_BOOL	pe_blockradar;	/*
+	int32_t		pe_usefir128;	/* Use the average in-band power measured over 128 cycles */
+	int32_t		pe_blockradar;	/*
 					 * Enable to block radar check if pkt detect is done via OFDM
 					 * weak signal detect or pkt is detected immediately after tx
 					 * to rx transition
 					 */
-	HAL_BOOL	pe_enmaxrssi;	/*
+	int32_t		pe_enmaxrssi;	/*
 					 * Enable to use the max rssi instead of the last rssi during
 					 * fine gain changes for radar detection
 					 */
-	HAL_BOOL	pe_extchannel;	/* Enable DFS on ext channel */
+	int32_t		pe_extchannel;	/* Enable DFS on ext channel */
+	int32_t		pe_enabled;	/* Whether radar detection is enabled */
 } HAL_PHYERR_PARAM;
 
 #define	HAL_PHYERR_PARAM_NOVAL	65535
@@ -746,6 +747,9 @@ typedef enum {
 } HAL_QUIET_FLAG;
 
 #define	HAL_DFS_EVENT_PRICH		0x0000001
+#define	HAL_DFS_EVENT_EXTCH		0x0000002
+#define	HAL_DFS_EVENT_EXTEARLY		0x0000004
+#define	HAL_DFS_EVENT_ISDC		0x0000008
 
 struct dfs_event {
 	uint64_t	re_full_ts;	/* 64-bit full timestamp from interrupt time */

@@ -789,10 +789,13 @@ GLOBAL(kernload)
 	.long	0
 GLOBAL(intrnames)
 	.space	INTRCNT_COUNT * (MAXCOMLEN + 1) * 2
-GLOBAL(eintrnames)
+GLOBAL(sintrnames)
+	.long	INTRCNT_COUNT * (MAXCOMLEN + 1) * 2
+
 	.align 4
 GLOBAL(intrcnt)
 	.space	INTRCNT_COUNT * 4 * 2
-GLOBAL(eintrcnt)
+GLOBAL(sintrcnt)
+	.long	INTRCNT_COUNT * 4 * 2
 
 #include <powerpc/booke/trap_subr.S>
