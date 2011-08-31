@@ -31,6 +31,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/capability.h>
 #include <sys/consio.h>
 #include <sys/fcntl.h>
 #include <sys/file.h>
@@ -333,7 +334,7 @@ ibcs2_ioctl(td, uap)
 	struct file *fp;
 	int error;
 
-	if ((error = fget(td, uap->fd, &fp)) != 0) {
+	if ((error = fget(td, uap->fd, CAP_IOCTL, &fp)) != 0) {
 		DPRINTF(("ibcs2_ioctl(%d): bad fd %d ", p->p_pid,
 			 uap->fd));
 		return EBADF;
@@ -654,12 +655,12 @@ ibcs2_ioctl(td, uap)
 		break;
 
 	case IBCS2_GIO_KEYMAP:      /* Get keyboard map table */
-	        uap->cmd = GIO_KEYMAP;
+	        uap->cmd = OGIO_KEYMAP;
 	        error = ioctl(td, (struct ioctl_args *)uap);
 		break;
 
 	case IBCS2_PIO_KEYMAP:      /* Set keyboard map table */
-	        uap->cmd = PIO_KEYMAP;
+	        uap->cmd = OPIO_KEYMAP;
 	        error = ioctl(td, (struct ioctl_args *)uap);
 		break;
 

@@ -66,6 +66,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/uma.h>
 
 #include <machine/bootinfo.h>
+#include <machine/efi.h>
 #include <machine/md_var.h>
 #include <machine/pal.h>
 
@@ -1216,43 +1217,54 @@ pmap_kextract(vm_offset_t va)
 {
 	struct ia64_lpte *pte;
 	uint64_t *pbvm_pgtbl;
+	vm_paddr_t pa;
 	u_int idx;
 
 	KASSERT(va >= VM_MAXUSER_ADDRESS, ("Must be kernel VA"));
 
 	/* Regions 6 and 7 are direct mapped. */
-	if (va >= IA64_RR_BASE(6))
-		return (IA64_RR_MASK(va));
-
-	/* Bail out if the virtual address is beyond our limits. */
-	if (va >= kernel_vm_end)
-		return (0);
-
-	if (va >= VM_MIN_KERNEL_ADDRESS) {
-		pte = pmap_find_kpte(va);
-		return (pmap_present(pte) ? pmap_ppn(pte)|(va&PAGE_MASK) : 0);
+	if (va >= IA64_RR_BASE(6)) {
+		pa = IA64_RR_MASK(va);
+		goto out;
 	}
 
-	/* PBVM page table. */
-	if (va >= IA64_PBVM_PGTBL + bootinfo->bi_pbvm_pgtblsz);
-		return (0);
-	if (va >= IA64_PBVM_PGTBL)
-		return (va - IA64_PBVM_PGTBL) + bootinfo->bi_pbvm_pgtbl;
+	/* Region 5 is our KVA. Bail out if the VA is beyond our limits. */
+	if (va >= kernel_vm_end)
+		goto err_out;
+	if (va >= VM_MIN_KERNEL_ADDRESS) {
+		pte = pmap_find_kpte(va);
+		pa = pmap_present(pte) ? pmap_ppn(pte) | (va & PAGE_MASK) : 0;
+		goto out;
+	}
 
-	/* PBVM. */
+	/* The PBVM page table. */
+	if (va >= IA64_PBVM_PGTBL + bootinfo->bi_pbvm_pgtblsz)
+		goto err_out;
+	if (va >= IA64_PBVM_PGTBL) {
+		pa = (va - IA64_PBVM_PGTBL) + bootinfo->bi_pbvm_pgtbl;
+		goto out;
+	}
+
+	/* The PBVM itself. */
 	if (va >= IA64_PBVM_BASE) {
 		pbvm_pgtbl = (void *)IA64_PBVM_PGTBL;
 		idx = (va - IA64_PBVM_BASE) >> IA64_PBVM_PAGE_SHIFT;
 		if (idx >= (bootinfo->bi_pbvm_pgtblsz >> 3))
-			return (0);
+			goto err_out;
 		if ((pbvm_pgtbl[idx] & PTE_PRESENT) == 0)
-			return (0);
-		return ((pbvm_pgtbl[idx] & PTE_PPN_MASK) +
-		    (va & IA64_PBVM_PAGE_MASK));
+			goto err_out;
+		pa = (pbvm_pgtbl[idx] & PTE_PPN_MASK) +
+		    (va & IA64_PBVM_PAGE_MASK);
+		goto out;
 	}
 
-	printf("XXX: %s: va=%#lx\n", __func__, va);
-	return (0);
+ err_out:
+	printf("XXX: %s: va=%#lx is invalid\n", __func__, va);
+	pa = 0;
+	/* FALLTHROUGH */
+
+ out:
+	return (pa);
 }
 
 /*
@@ -1430,7 +1442,7 @@ pmap_remove_all(vm_page_t m)
 	pmap_t oldpmap;
 	pv_entry_t pv;
 
-	KASSERT((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) == 0,
+	KASSERT((m->oflags & VPO_UNMANAGED) == 0,
 	    ("pmap_remove_all: page %p is not managed", m));
 	vm_page_lock_queues();
 	while ((pv = TAILQ_FIRST(&m->md.pv_list)) != NULL) {
@@ -1536,8 +1548,7 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_prot_t access, vm_page_t m,
 
 	va &= ~PAGE_MASK;
  	KASSERT(va <= VM_MAX_KERNEL_ADDRESS, ("pmap_enter: toobig"));
-	KASSERT((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) != 0 ||
-	    (m->oflags & VPO_BUSY) != 0,
+	KASSERT((m->oflags & (VPO_UNMANAGED | VPO_BUSY)) != 0,
 	    ("pmap_enter: page %p is not busy", m));
 
 	/*
@@ -1607,7 +1618,7 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_prot_t access, vm_page_t m,
 	/*
 	 * Enter on the PV list if part of our managed memory.
 	 */
-	if ((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) == 0) {
+	if ((m->oflags & VPO_UNMANAGED) == 0) {
 		KASSERT(va < kmi.clean_sva || va >= kmi.clean_eva,
 		    ("pmap_enter: managed mapping within the clean submap"));
 		pmap_insert_entry(pmap, va, m);
@@ -1708,7 +1719,7 @@ pmap_enter_quick_locked(pmap_t pmap, vm_offset_t va, vm_page_t m,
 	boolean_t managed;
 
 	KASSERT(va < kmi.clean_sva || va >= kmi.clean_eva ||
-	    (m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) != 0,
+	    (m->oflags & VPO_UNMANAGED) != 0,
 	    ("pmap_enter_quick_locked: managed mapping within the clean submap"));
 	mtx_assert(&vm_page_queue_mtx, MA_OWNED);
 	PMAP_LOCK_ASSERT(pmap, MA_OWNED);
@@ -1718,7 +1729,7 @@ pmap_enter_quick_locked(pmap_t pmap, vm_offset_t va, vm_page_t m,
 
 	if (!pmap_present(pte)) {
 		/* Enter on the PV list if the page is managed. */
-		if ((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) == 0) {
+		if ((m->oflags & VPO_UNMANAGED) == 0) {
 			if (!pmap_try_insert_pv_entry(pmap, va, m)) {
 				pmap_free_pte(pte, va);
 				return;
@@ -1888,7 +1899,7 @@ pmap_page_exists_quick(pmap_t pmap, vm_page_t m)
 	int loops = 0;
 	boolean_t rv;
 
-	KASSERT((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) == 0,
+	KASSERT((m->oflags & VPO_UNMANAGED) == 0,
 	    ("pmap_page_exists_quick: page %p is not managed", m));
 	rv = FALSE;
 	vm_page_lock_queues();
@@ -1920,7 +1931,7 @@ pmap_page_wired_mappings(vm_page_t m)
 	int count;
 
 	count = 0;
-	if ((m->flags & PG_FICTITIOUS) != 0)
+	if ((m->oflags & VPO_UNMANAGED) != 0)
 		return (count);
 	vm_page_lock_queues();
 	TAILQ_FOREACH(pv, &m->md.pv_list, pv_list) {
@@ -1998,7 +2009,7 @@ pmap_ts_referenced(vm_page_t m)
 	pv_entry_t pv;
 	int count = 0;
 
-	KASSERT((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) == 0,
+	KASSERT((m->oflags & VPO_UNMANAGED) == 0,
 	    ("pmap_ts_referenced: page %p is not managed", m));
 	vm_page_lock_queues();
 	TAILQ_FOREACH(pv, &m->md.pv_list, pv_list) {
@@ -2032,7 +2043,7 @@ pmap_is_modified(vm_page_t m)
 	pv_entry_t pv;
 	boolean_t rv;
 
-	KASSERT((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) == 0,
+	KASSERT((m->oflags & VPO_UNMANAGED) == 0,
 	    ("pmap_is_modified: page %p is not managed", m));
 	rv = FALSE;
 
@@ -2092,7 +2103,7 @@ pmap_is_referenced(vm_page_t m)
 	pv_entry_t pv;
 	boolean_t rv;
 
-	KASSERT((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) == 0,
+	KASSERT((m->oflags & VPO_UNMANAGED) == 0,
 	    ("pmap_is_referenced: page %p is not managed", m));
 	rv = FALSE;
 	vm_page_lock_queues();
@@ -2121,7 +2132,7 @@ pmap_clear_modify(vm_page_t m)
 	pmap_t oldpmap;
 	pv_entry_t pv;
 
-	KASSERT((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) == 0,
+	KASSERT((m->oflags & VPO_UNMANAGED) == 0,
 	    ("pmap_clear_modify: page %p is not managed", m));
 	VM_OBJECT_LOCK_ASSERT(m->object, MA_OWNED);
 	KASSERT((m->oflags & VPO_BUSY) == 0,
@@ -2162,7 +2173,7 @@ pmap_clear_reference(vm_page_t m)
 	pmap_t oldpmap;
 	pv_entry_t pv;
 
-	KASSERT((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) == 0,
+	KASSERT((m->oflags & VPO_UNMANAGED) == 0,
 	    ("pmap_clear_reference: page %p is not managed", m));
 	vm_page_lock_queues();
 	TAILQ_FOREACH(pv, &m->md.pv_list, pv_list) {
@@ -2191,7 +2202,7 @@ pmap_remove_write(vm_page_t m)
 	pv_entry_t pv;
 	vm_prot_t prot;
 
-	KASSERT((m->flags & (PG_FICTITIOUS | PG_UNMANAGED)) == 0,
+	KASSERT((m->oflags & VPO_UNMANAGED) == 0,
 	    ("pmap_remove_write: page %p is not managed", m));
 
 	/*
@@ -2235,12 +2246,37 @@ pmap_remove_write(vm_page_t m)
  * NOT real memory.
  */
 void *
-pmap_mapdev(vm_paddr_t pa, vm_size_t size)
+pmap_mapdev(vm_paddr_t pa, vm_size_t sz)
 {
+	static void *last_va = NULL;
+	static vm_paddr_t last_pa = 0;
+	static vm_size_t last_sz = 0;
+	struct efi_md *md;
 	vm_offset_t va;
 
-	va = pa | IA64_RR_BASE(6);
-	return ((void *)va);
+	if (pa == last_pa && sz == last_sz)
+		return (last_va);
+
+	md = efi_md_find(pa);
+	if (md == NULL) {
+		printf("%s: [%#lx..%#lx] not covered by memory descriptor\n",
+		    __func__, pa, pa + sz - 1);
+		return (NULL);
+	}
+
+	if (md->md_type == EFI_MD_TYPE_FREE) {
+		printf("%s: [%#lx..%#lx] is in DRAM\n", __func__, pa,
+		    pa + sz - 1);
+                return (NULL);
+	}
+
+	va = (md->md_attr & EFI_MD_ATTR_WB) ? IA64_PHYS_TO_RR7(pa) :
+	    IA64_PHYS_TO_RR6(pa);
+
+	last_va = (void *)va;
+	last_pa = pa;
+	last_sz = sz;
+	return (last_va);
 }
 
 /*
