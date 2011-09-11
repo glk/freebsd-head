@@ -103,7 +103,7 @@ SDT_PROBE_DEFINE2(racct, kernel, racct, leave, leave, "struct racct *",
 
 int racct_types[] = {
 	[RACCT_CPU] =
-		RACCT_IN_THOUSANDS,
+		RACCT_IN_MILLIONS,
 	[RACCT_DATA] =
 		RACCT_RECLAIMABLE | RACCT_INHERITABLE | RACCT_DENIABLE,
 	[RACCT_STACK] =
@@ -141,7 +141,7 @@ int racct_types[] = {
 	[RACCT_SHMSIZE] =
 		RACCT_RECLAIMABLE | RACCT_DENIABLE | RACCT_SLOPPY,
 	[RACCT_WALLCLOCK] =
-		RACCT_IN_THOUSANDS };
+		RACCT_IN_MILLIONS };
 
 static void
 racct_add_racct(struct racct *dest, const struct racct *src)
@@ -605,6 +605,7 @@ out:
 void
 racct_proc_exit(struct proc *p)
 {
+	int i;
 	uint64_t runtime;
 
 	PROC_LOCK(p);
@@ -618,14 +619,18 @@ racct_proc_exit(struct proc *p)
 	if (runtime < p->p_prev_runtime)
 		runtime = p->p_prev_runtime;
 #endif
-	racct_set(p, RACCT_CPU, runtime);
+	mtx_lock(&racct_lock);
+	racct_set_locked(p, RACCT_CPU, runtime);
 
-	/*
-	 * XXX: Free this some other way.
-	 */
-	racct_set(p, RACCT_NPTS, 0);
-	racct_set(p, RACCT_NTHR, 0);
-	racct_set(p, RACCT_RSS, 0);
+	for (i = 0; i <= RACCT_MAX; i++) {
+		if (p->p_racct->r_resources[i] == 0)
+			continue;
+	    	if (!RACCT_IS_RECLAIMABLE(i))
+			continue;
+		racct_set_locked(p, i, 0);
+	}
+
+	mtx_unlock(&racct_lock);
 	PROC_UNLOCK(p);
 
 #ifdef RCTL
