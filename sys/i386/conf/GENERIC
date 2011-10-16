@@ -147,6 +147,7 @@ device		iir		# Intel Integrated RAID
 device		ips		# IBM (Adaptec) ServeRAID
 device		mly		# Mylex AcceleRAID/eXtremeRAID
 device		twa		# 3ware 9000 series PATA/SATA RAID
+device		tws		# LSI 3ware 9750 SATA+SAS 6Gb/s RAID controller
 
 # RAID controllers
 device		aac		# Adaptec FSA RAID
@@ -339,7 +340,7 @@ device		uath		# Atheros AR5523 wireless NICs
 device		upgt		# Conexant/Intersil PrismGT wireless NICs.
 device		ural		# Ralink Technology RT2500USB wireless NICs
 device		urtw		# Realtek RTL8187B/L wireless NICs
-device		zyd		# ZyDAS zb1211/zb1211b wireless NICs
+device		zyd		# ZyDAS zd1211/zd1211b wireless NICs
 
 # FireWire support
 device		firewire	# FireWire bus code

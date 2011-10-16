@@ -43,7 +43,6 @@ MAN=	accept_filter.9 \
 	BUS_SETUP_INTR.9 \
 	bus_space.9 \
 	byteorder.9 \
-	cc.9 \
 	cd.9 \
 	condvar.9 \
 	config_intrhook.9 \
@@ -169,6 +168,7 @@ MAN=	accept_filter.9 \
 	microtime.9 \
 	microuptime.9 \
 	mi_switch.9 \
+	mod_cc.9 \
 	module.9 \
 	MODULE_DEPEND.9 \
 	MODULE_VERSION.9 \
@@ -972,7 +972,8 @@ MLINKS+=printf.9 log.9 \
 MLINKS+=priv.9 priv_check.9 \
 	priv.9 priv_check_cred.9
 MLINKS+=psignal.9 gsignal.9 \
-	psignal.9 pgsignal.9
+	psignal.9 pgsignal.9 \
+	psignal.9 tdsignal.9
 MLINKS+=random.9 arc4rand.9 \
 	random.9 arc4random.9 \
 	random.9 read_random.9 \
