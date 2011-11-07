@@ -36,21 +36,18 @@
 
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/hash_sfh.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
 #include <sys/malloc.h>
 #include <sys/mount.h>
 #include <sys/proc.h>
-#include <sys/sysctl.h>
 #include <sys/vnode.h>
 
 #include <fs/nullfs/null.h>
 
-#define	NULL_BUCKETS_MIN		16
-#define	NULL_BUCKETS_DEFAULT		32
-#define	NULL_BUCKETS_TUNABLE		"vfs.nullfs.buckets"
+#define LOG2_SIZEVNODE 8		/* log2(sizeof struct vnode) */
+#define	NNULLNODECACHE 16
 
 /*
  * Null layer cache:
@@ -61,7 +58,7 @@
  */
 
 #define	NULL_NHASH(vp) \
-	(&null_node_hashtbl[null_hash_mixptr(vp) & null_node_hash])
+	(&null_node_hashtbl[(((uintptr_t)vp)>>LOG2_SIZEVNODE) & null_node_hash])
 
 static LIST_HEAD(null_node_hashhead, null_node) *null_node_hashtbl;
 static u_long null_node_hash;
@@ -73,15 +70,6 @@ MALLOC_DEFINE(M_NULLFSNODE, "nullfs_node", "NULLFS vnode private part");
 static struct vnode * null_hashget(struct mount *, struct vnode *);
 static struct vnode * null_hashins(struct mount *, struct null_node *);
 
-static u_long null_nodes;
-static u_long null_buckets = NULL_BUCKETS_DEFAULT;
-
-SYSCTL_NODE(_vfs, OID_AUTO, nullfs, CTLFLAG_RW, 0, "null file system");
-SYSCTL_ULONG(_vfs_nullfs, OID_AUTO, nodes, CTLFLAG_RD, &null_nodes, 0,
-    "Allocated nodes");
-SYSCTL_ULONG(_vfs_nullfs, OID_AUTO, buckets, CTLFLAG_RD, &null_buckets, 0,
-    "Allocated node hash table buckets");
-
 /*
  * Initialise cache headers
  */
@@ -89,15 +77,10 @@ int
 nullfs_init(vfsp)
 	struct vfsconf *vfsp;
 {
+
 	NULLFSDEBUG("nullfs_init\n");		/* printed during system boot */
-	TUNABLE_ULONG_FETCH(NULL_BUCKETS_TUNABLE, &null_buckets);
-	if (null_buckets < NULL_BUCKETS_MIN)
-		null_buckets = NULL_BUCKETS_MIN;
-	else if (null_buckets > desiredvnodes)
-		null_buckets = NULL_BUCKETS_DEFAULT;
-	null_node_hashtbl = hashinit(null_buckets, M_NULLFSHASH, &null_node_hash);
+	null_node_hashtbl = hashinit(NNULLNODECACHE, M_NULLFSHASH, &null_node_hash);
 	mtx_init(&null_hashmtx, "nullhs", NULL, MTX_DEF);
-	null_nodes = 0;
 	return (0);
 }
 
@@ -109,12 +92,6 @@ nullfs_uninit(vfsp)
 	mtx_destroy(&null_hashmtx);
 	free(null_node_hashtbl, M_NULLFSHASH);
 	return (0);
-}
-
-static __inline uint32_t
-null_hash_mixptr(void *ptr)
-{
-	return (hash_sfh_buf(&ptr, sizeof(ptr), 33554467UL));
 }
 
 /*
@@ -187,7 +164,6 @@ null_hashins(mp, xp)
 		}
 	}
 	LIST_INSERT_HEAD(hd, xp, null_hash);
-	null_nodes++;
 	mtx_unlock(&null_hashmtx);
 	return (NULLVP);
 }
@@ -288,7 +264,6 @@ null_hashrem(xp)
 
 	mtx_lock(&null_hashmtx);
 	LIST_REMOVE(xp, null_hash);
-	null_nodes--;
 	mtx_unlock(&null_hashmtx);
 }
 
