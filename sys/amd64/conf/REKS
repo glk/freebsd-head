@@ -106,12 +106,19 @@ device 		cpufreq
 device 		crypto
 device 		aesni
 
+device		coretemp
+
 device          acpi
-device          acpi_ibm
 device          acpi_video
 
 # Bus support.  Do not remove isa, even if you have no isa slots
 device		pci
+
+device iicbus
+device iicbb
+device iic
+device ic
+device iicsmb
 
 # Floppy drives
 device		fdc
@@ -147,7 +154,7 @@ device		splash		# Splash screen and screen saver support
 device		sc
 options         SC_ALT_MOUSE_IMAGE      # simplified mouse cursor in text mode
 
-device		agp		# support several AGP chipsets
+#device		agp		# support several AGP chipsets
 
 # Power management support (see NOTES for more options)
 #device		apm
@@ -166,9 +173,9 @@ device		uart		# Generic UART driver
 #device		vpo		# Requires scbus and da
 
 device		mii		# MII bus support
-device		rlphy		# MII bus support
-device		rl		# RealTek 8129/8139
-device		re		# RealTek 8139C+/8169/8169S/8110S
+#device		rlphy		# MII bus support
+#device		rl		# RealTek 8129/8139
+#device		re		# RealTek 8139C+/8169/8169S/8110S
 device		em
 device		fxp
 device		msk
