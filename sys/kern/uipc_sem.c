@@ -43,7 +43,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/fcntl.h>
 #include <sys/file.h>
 #include <sys/filedesc.h>
-#include <sys/hash_sfh.h>
+#include <sys/fnv_hash.h>
 #include <sys/kernel.h>
 #include <sys/ksem.h>
 #include <sys/lock.h>
@@ -88,7 +88,7 @@ FEATURE(p1003_1b_semaphores, "POSIX P1003.1B semaphores support");
 
 struct ksem_mapping {
 	char		*km_path;
-	uint32_t	km_hash;
+	Fnv32_t		km_fnv;
 	struct ksem	*km_ksem;
 	LIST_ENTRY(ksem_mapping) km_link;
 };
@@ -101,7 +101,7 @@ static struct mtx sem_lock;
 static u_long ksem_hash;
 static int ksem_dead;
 
-#define	KSEM_HASH(h)	(&ksem_dictionary[(h) & ksem_hash])
+#define	KSEM_HASH(fnv)	(&ksem_dictionary[(fnv) & ksem_hash])
 
 static int nsems = 0;
 SYSCTL_DECL(_p1003_1b);
@@ -120,11 +120,11 @@ static void	ksem_drop(struct ksem *ks);
 static int	ksem_get(struct thread *td, semid_t id, cap_rights_t rights,
     struct file **fpp);
 static struct ksem *ksem_hold(struct ksem *ks);
-static void	ksem_insert(char *path, uint32_t hash, struct ksem *ks);
-static struct ksem *ksem_lookup(char *path, uint32_t hash);
+static void	ksem_insert(char *path, Fnv32_t fnv, struct ksem *ks);
+static struct ksem *ksem_lookup(char *path, Fnv32_t fnv);
 static void	ksem_module_destroy(void);
 static int	ksem_module_init(void);
-static int	ksem_remove(char *path, uint32_t hash, struct ucred *ucred);
+static int	ksem_remove(char *path, Fnv32_t fnv, struct ucred *ucred);
 static int	sem_modload(struct module *module, int cmd, void *arg);
 
 static fo_rdwr_t	ksem_read;
@@ -380,16 +380,16 @@ ksem_access(struct ksem *ks, struct ucred *ucred)
 
 /*
  * Dictionary management.  We maintain an in-kernel dictionary to map
- * paths to semaphore objects.  We use the hash on the path to
+ * paths to semaphore objects.  We use the FNV hash on the path to
  * store the mappings in a hash table.
  */
 static struct ksem *
-ksem_lookup(char *path, uint32_t hash)
+ksem_lookup(char *path, Fnv32_t fnv)
 {
 	struct ksem_mapping *map;
 
-	LIST_FOREACH(map, KSEM_HASH(hash), km_link) {
-		if (map->km_hash != hash)
+	LIST_FOREACH(map, KSEM_HASH(fnv), km_link) {
+		if (map->km_fnv != fnv)
 			continue;
 		if (strcmp(map->km_path, path) == 0)
 			return (map->km_ksem);
@@ -399,25 +399,25 @@ ksem_lookup(char *path, uint32_t hash)
 }
 
 static void
-ksem_insert(char *path, uint32_t hash, struct ksem *ks)
+ksem_insert(char *path, Fnv32_t fnv, struct ksem *ks)
 {
 	struct ksem_mapping *map;
 
 	map = malloc(sizeof(struct ksem_mapping), M_KSEM, M_WAITOK);
 	map->km_path = path;
-	map->km_hash = hash;
+	map->km_fnv = fnv;
 	map->km_ksem = ksem_hold(ks);
-	LIST_INSERT_HEAD(KSEM_HASH(hash), map, km_link);
+	LIST_INSERT_HEAD(KSEM_HASH(fnv), map, km_link);
 }
 
 static int
-ksem_remove(char *path, uint32_t hash, struct ucred *ucred)
+ksem_remove(char *path, Fnv32_t fnv, struct ucred *ucred)
 {
 	struct ksem_mapping *map;
 	int error;
 
-	LIST_FOREACH(map, KSEM_HASH(hash), km_link) {
-		if (map->km_hash != hash)
+	LIST_FOREACH(map, KSEM_HASH(fnv), km_link) {
+		if (map->km_fnv != fnv)
 			continue;
 		if (strcmp(map->km_path, path) == 0) {
 #ifdef MAC
@@ -477,8 +477,7 @@ ksem_create(struct thread *td, const char *name, semid_t *semidp, mode_t mode,
 	struct ksem *ks;
 	struct file *fp;
 	char *path;
-	size_t pathlen;
-	uint32_t hash;
+	Fnv32_t fnv;
 	int error, fd;
 
 	if (value > SEM_VALUE_MAX)
@@ -514,7 +513,7 @@ ksem_create(struct thread *td, const char *name, semid_t *semidp, mode_t mode,
 			ks->ks_flags |= KS_ANONYMOUS;
 	} else {
 		path = malloc(MAXPATHLEN, M_KSEM, M_WAITOK);
-		error = copyinstr(name, path, MAXPATHLEN, &pathlen);
+		error = copyinstr(name, path, MAXPATHLEN, NULL);
 
 		/* Require paths to start with a '/' character. */
 		if (error == 0 && path[0] != '/')
@@ -526,9 +525,9 @@ ksem_create(struct thread *td, const char *name, semid_t *semidp, mode_t mode,
 			return (error);
 		}
 
-		hash = hash_sfh_buf(path, pathlen, pathlen);
+		fnv = fnv_32_str(path, FNV1_32_INIT);
 		sx_xlock(&ksem_dict_lock);
-		ks = ksem_lookup(path, hash);
+		ks = ksem_lookup(path, fnv);
 		if (ks == NULL) {
 			/* Object does not exist, create it if requested. */
 			if (flags & O_CREAT) {
@@ -536,7 +535,7 @@ ksem_create(struct thread *td, const char *name, semid_t *semidp, mode_t mode,
 				if (ks == NULL)
 					error = ENFILE;
 				else {
-					ksem_insert(path, hash, ks);
+					ksem_insert(path, fnv, ks);
 					path = NULL;
 				}
 			} else
@@ -656,20 +655,19 @@ int
 sys_ksem_unlink(struct thread *td, struct ksem_unlink_args *uap)
 {
 	char *path;
-	size_t pathlen;
-	uint32_t hash;
+	Fnv32_t fnv;
 	int error;
 
 	path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
-	error = copyinstr(uap->name, path, MAXPATHLEN, &pathlen);
+	error = copyinstr(uap->name, path, MAXPATHLEN, NULL);
 	if (error) {
 		free(path, M_TEMP);
 		return (error);
 	}
 
-	hash = hash_sfh_buf(path, pathlen, pathlen);
+	fnv = fnv_32_str(path, FNV1_32_INIT);
 	sx_xlock(&ksem_dict_lock);
-	error = ksem_remove(path, hash, td->td_ucred);
+	error = ksem_remove(path, fnv, td->td_ucred);
 	sx_xunlock(&ksem_dict_lock);
 	free(path, M_TEMP);
 

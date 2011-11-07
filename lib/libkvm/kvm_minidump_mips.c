@@ -39,7 +39,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/proc.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-#include <sys/hash_sfh.h>
+#include <sys/fnv_hash.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -78,26 +78,26 @@ static void
 hpt_insert(kvm_t *kd, uint64_t pa, int64_t off)
 {
 	struct hpte *hpte;
-	uint32_t hash;
+	uint32_t fnv = FNV1_32_INIT;
 
-	hash = hash_sfh_buf(&pa, sizeof(pa), sizeof(pa));
-	hash &= (HPT_SIZE - 1);
+	fnv = fnv_32_buf(&pa, sizeof(pa), fnv);
+	fnv &= (HPT_SIZE - 1);
 	hpte = malloc(sizeof(*hpte));
 	hpte->pa = pa;
 	hpte->off = off;
-	hpte->next = kd->vmst->hpt_head[hash];
-	kd->vmst->hpt_head[hash] = hpte;
+	hpte->next = kd->vmst->hpt_head[fnv];
+	kd->vmst->hpt_head[fnv] = hpte;
 }
 
 static int64_t
 hpt_find(kvm_t *kd, uint64_t pa)
 {
 	struct hpte *hpte;
-	uint32_t hash;
+	uint32_t fnv = FNV1_32_INIT;
 
-	hash = hash_sfh_buf(&pa, sizeof(pa), sizeof(pa));
-	hash &= (HPT_SIZE - 1);
-	for (hpte = kd->vmst->hpt_head[hash]; hpte != NULL; hpte = hpte->next)
+	fnv = fnv_32_buf(&pa, sizeof(pa), fnv);
+	fnv &= (HPT_SIZE - 1);
+	for (hpte = kd->vmst->hpt_head[fnv]; hpte != NULL; hpte = hpte->next)
 		if (pa == hpte->pa)
 			return (hpte->off);
 

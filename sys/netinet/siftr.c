@@ -64,7 +64,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/alq.h>
 #include <sys/errno.h>
-#include <sys/hash_sfh.h>
+#include <sys/hash.h>
 #include <sys/kernel.h>
 #include <sys/kthread.h>
 #include <sys/lock.h>
@@ -351,7 +351,7 @@ siftr_process_pkt(struct pkt_node * pkt_node)
 	    sizeof(pkt_node->tcp_foreignport));
 
 	counter_list = counter_hash +
-	    (hash_sfh_buf(key, sizeof(key), sizeof(key)) & siftr_hashmask);
+	    (hash32_buf(key, sizeof(key), 0) & siftr_hashmask);
 
 	/*
 	 * If the list is not empty i.e. the hash index has
@@ -362,7 +362,7 @@ siftr_process_pkt(struct pkt_node * pkt_node)
 		 * Loop through the hash nodes in the list.
 		 * There should normally only be 1 hash node in the list,
 		 * except if there have been collisions at the hash index
-		 * computed by hash_sfh_buf().
+		 * computed by hash32_buf().
 		 */
 		LIST_FOREACH(hash_node, counter_list, nodes) {
 			/*
@@ -638,7 +638,7 @@ hash_pkt(struct mbuf *m, uint32_t offset)
 	while (m != NULL) {
 		/* Ensure there is data in the mbuf */
 		if ((m->m_len - offset) > 0)
-			hash = hash_sfh_buf(m->m_data + offset,
+			hash = hash32_buf(m->m_data + offset,
 			    m->m_len - offset, hash);
 
 		m = m->m_next;

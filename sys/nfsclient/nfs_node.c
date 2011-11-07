@@ -38,7 +38,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/fcntl.h>
-#include <sys/hash_sfh.h>
+#include <sys/fnv_hash.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
 #include <sys/mbuf.h>
@@ -116,7 +116,7 @@ nfs_nget(struct mount *mntp, nfsfh_t *fhp, int fhsize, struct nfsnode **npp, int
 	nmp = VFSTONFS(mntp);
 	*npp = NULL;
 
-	hash = hash_sfh_buf(fhp->fh_bytes, fhsize, fhsize);
+	hash = fnv_32_buf(fhp->fh_bytes, fhsize, FNV1_32_INIT);
 	ncmp.fhsize = fhsize;
 	ncmp.fh = fhp;
 

@@ -35,7 +35,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/priv.h>
 #include <sys/systm.h>
 #include <sys/proc.h>
-#include <sys/hash_sfh.h>
+#include <sys/hash.h>
 #include <sys/lock.h>
 #include <sys/rwlock.h>
 #include <sys/taskqueue.h>
@@ -1420,19 +1420,19 @@ lagg_hashmbuf(struct mbuf *m, uint32_t key)
 		goto out;
 	eh = mtod(m, struct ether_header *);
 	etype = ntohs(eh->ether_type);
-	p = hash_sfh_buf(&eh->ether_shost, ETHER_ADDR_LEN, key);
-	p = hash_sfh_buf(&eh->ether_dhost, ETHER_ADDR_LEN, p);
+	p = hash32_buf(&eh->ether_shost, ETHER_ADDR_LEN, key);
+	p = hash32_buf(&eh->ether_dhost, ETHER_ADDR_LEN, p);
 
 	/* Special handling for encapsulating VLAN frames */
 	if (m->m_flags & M_VLANTAG) {
-		p = hash_sfh_buf(&m->m_pkthdr.ether_vtag,
+		p = hash32_buf(&m->m_pkthdr.ether_vtag,
 		    sizeof(m->m_pkthdr.ether_vtag), p);
 	} else if (etype == ETHERTYPE_VLAN) {
 		vlan = lagg_gethdr(m, off,  sizeof(*vlan), &vlanbuf);
 		if (vlan == NULL)
 			goto out;
 
-		p = hash_sfh_buf(&vlan->evl_tag, sizeof(vlan->evl_tag), p);
+		p = hash32_buf(&vlan->evl_tag, sizeof(vlan->evl_tag), p);
 		etype = ntohs(vlan->evl_proto);
 		off += sizeof(*vlan) - sizeof(*eh);
 	}
@@ -1444,8 +1444,8 @@ lagg_hashmbuf(struct mbuf *m, uint32_t key)
 		if (ip == NULL)
 			goto out;
 
-		p = hash_sfh_buf(&ip->ip_src, sizeof(struct in_addr), p);
-		p = hash_sfh_buf(&ip->ip_dst, sizeof(struct in_addr), p);
+		p = hash32_buf(&ip->ip_src, sizeof(struct in_addr), p);
+		p = hash32_buf(&ip->ip_dst, sizeof(struct in_addr), p);
 		break;
 #endif
 #ifdef INET6
@@ -1454,10 +1454,10 @@ lagg_hashmbuf(struct mbuf *m, uint32_t key)
 		if (ip6 == NULL)
 			goto out;
 
-		p = hash_sfh_buf(&ip6->ip6_src, sizeof(struct in6_addr), p);
-		p = hash_sfh_buf(&ip6->ip6_dst, sizeof(struct in6_addr), p);
+		p = hash32_buf(&ip6->ip6_src, sizeof(struct in6_addr), p);
+		p = hash32_buf(&ip6->ip6_dst, sizeof(struct in6_addr), p);
 		flow = ip6->ip6_flow & IPV6_FLOWLABEL_MASK;
-		p = hash_sfh_buf(&flow, sizeof(flow), p); /* IPv6 flow label */
+		p = hash32_buf(&flow, sizeof(flow), p);	/* IPv6 flow label */
 		break;
 #endif
 	}

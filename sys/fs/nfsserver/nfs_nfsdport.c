@@ -3209,8 +3209,7 @@ nfsrv_hashfh(fhandle_t *fhp)
 {
 	uint32_t hashval;
 
-	hashval = hash_sfh_buf(&fhp->fh_fid, sizeof(struct fid),
-	    sizeof(struct fid));
+	hashval = hash32_buf(&fhp->fh_fid, sizeof(struct fid), 0);
 	return (hashval);
 }
 
