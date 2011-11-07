@@ -39,16 +39,13 @@ static bool i915_pipe_enabled(struct drm_device *dev, enum pipe pipe)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
-	if (pipe == PIPE_A)
-		return (I915_READ(DPLL_A) & DPLL_VCO_ENABLE);
-	else
-		return (I915_READ(DPLL_B) & DPLL_VCO_ENABLE);
+	return (I915_READ(DPLL(pipe)) & DPLL_VCO_ENABLE);
 }
 
 static void i915_save_palette(struct drm_device *dev, enum pipe pipe)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
-	unsigned long reg = (pipe == PIPE_A ? PALETTE_A : PALETTE_B);
+	unsigned long reg = PALETTE(pipe);
 	u32 *array;
 	int i;
 
@@ -67,7 +64,7 @@ static void i915_save_palette(struct drm_device *dev, enum pipe pipe)
 static void i915_restore_palette(struct drm_device *dev, enum pipe pipe)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
-	unsigned long reg = (pipe == PIPE_A ? PALETTE_A : PALETTE_B);
+	unsigned long reg = PALETTE(pipe);
 	u32 *array;
 	int i;
 
@@ -241,7 +238,7 @@ int i915_save_state(struct drm_device *dev)
 
 	/* Render Standby */
 	if (IS_I965G(dev) && IS_MOBILE(dev))
-		dev_priv->saveRENDERSTANDBY = I915_READ(MCHBAR_RENDER_STANDBY);
+		dev_priv->saveRENDERSTANDBY = I915_READ(RSTDBYCTL);
 
 	/* Hardware status page */
 	dev_priv->saveHWS = I915_READ(HWS_PGA);
@@ -250,60 +247,60 @@ int i915_save_state(struct drm_device *dev)
 	dev_priv->saveDSPARB = I915_READ(DSPARB);
 
 	/* Pipe & plane A info */
-	dev_priv->savePIPEACONF = I915_READ(PIPEACONF);
-	dev_priv->savePIPEASRC = I915_READ(PIPEASRC);
-	dev_priv->saveFPA0 = I915_READ(FPA0);
-	dev_priv->saveFPA1 = I915_READ(FPA1);
-	dev_priv->saveDPLL_A = I915_READ(DPLL_A);
+	dev_priv->savePIPEACONF = I915_READ(_PIPEACONF);
+	dev_priv->savePIPEASRC = I915_READ(_PIPEASRC);
+	dev_priv->saveFPA0 = I915_READ(_FPA0);
+	dev_priv->saveFPA1 = I915_READ(_FPA1);
+	dev_priv->saveDPLL_A = I915_READ(_DPLL_A);
 	if (IS_I965G(dev))
-		dev_priv->saveDPLL_A_MD = I915_READ(DPLL_A_MD);
-	dev_priv->saveHTOTAL_A = I915_READ(HTOTAL_A);
-	dev_priv->saveHBLANK_A = I915_READ(HBLANK_A);
-	dev_priv->saveHSYNC_A = I915_READ(HSYNC_A);
-	dev_priv->saveVTOTAL_A = I915_READ(VTOTAL_A);
-	dev_priv->saveVBLANK_A = I915_READ(VBLANK_A);
-	dev_priv->saveVSYNC_A = I915_READ(VSYNC_A);
-	dev_priv->saveBCLRPAT_A = I915_READ(BCLRPAT_A);
+		dev_priv->saveDPLL_A_MD = I915_READ(_DPLL_A_MD);
+	dev_priv->saveHTOTAL_A = I915_READ(_HTOTAL_A);
+	dev_priv->saveHBLANK_A = I915_READ(_HBLANK_A);
+	dev_priv->saveHSYNC_A = I915_READ(_HSYNC_A);
+	dev_priv->saveVTOTAL_A = I915_READ(_VTOTAL_A);
+	dev_priv->saveVBLANK_A = I915_READ(_VBLANK_A);
+	dev_priv->saveVSYNC_A = I915_READ(_VSYNC_A);
+	dev_priv->saveBCLRPAT_A = I915_READ(_BCLRPAT_A);
 
-	dev_priv->saveDSPACNTR = I915_READ(DSPACNTR);
-	dev_priv->saveDSPASTRIDE = I915_READ(DSPASTRIDE);
-	dev_priv->saveDSPASIZE = I915_READ(DSPASIZE);
-	dev_priv->saveDSPAPOS = I915_READ(DSPAPOS);
-	dev_priv->saveDSPAADDR = I915_READ(DSPAADDR);
+	dev_priv->saveDSPACNTR = I915_READ(_DSPACNTR);
+	dev_priv->saveDSPASTRIDE = I915_READ(_DSPASTRIDE);
+	dev_priv->saveDSPASIZE = I915_READ(_DSPASIZE);
+	dev_priv->saveDSPAPOS = I915_READ(_DSPAPOS);
+	dev_priv->saveDSPAADDR = I915_READ(_DSPAADDR);
 	if (IS_I965G(dev)) {
-		dev_priv->saveDSPASURF = I915_READ(DSPASURF);
-		dev_priv->saveDSPATILEOFF = I915_READ(DSPATILEOFF);
+		dev_priv->saveDSPASURF = I915_READ(_DSPASURF);
+		dev_priv->saveDSPATILEOFF = I915_READ(_DSPATILEOFF);
 	}
 	i915_save_palette(dev, PIPE_A);
-	dev_priv->savePIPEASTAT = I915_READ(PIPEASTAT);
+	dev_priv->savePIPEASTAT = I915_READ(_PIPEASTAT);
 
 	/* Pipe & plane B info */
-	dev_priv->savePIPEBCONF = I915_READ(PIPEBCONF);
-	dev_priv->savePIPEBSRC = I915_READ(PIPEBSRC);
-	dev_priv->saveFPB0 = I915_READ(FPB0);
-	dev_priv->saveFPB1 = I915_READ(FPB1);
-	dev_priv->saveDPLL_B = I915_READ(DPLL_B);
+	dev_priv->savePIPEBCONF = I915_READ(_PIPEBCONF);
+	dev_priv->savePIPEBSRC = I915_READ(_PIPEBSRC);
+	dev_priv->saveFPB0 = I915_READ(_FPB0);
+	dev_priv->saveFPB1 = I915_READ(_FPB1);
+	dev_priv->saveDPLL_B = I915_READ(_DPLL_B);
 	if (IS_I965G(dev))
-		dev_priv->saveDPLL_B_MD = I915_READ(DPLL_B_MD);
-	dev_priv->saveHTOTAL_B = I915_READ(HTOTAL_B);
-	dev_priv->saveHBLANK_B = I915_READ(HBLANK_B);
-	dev_priv->saveHSYNC_B = I915_READ(HSYNC_B);
-	dev_priv->saveVTOTAL_B = I915_READ(VTOTAL_B);
-	dev_priv->saveVBLANK_B = I915_READ(VBLANK_B);
-	dev_priv->saveVSYNC_B = I915_READ(VSYNC_B);
-	dev_priv->saveBCLRPAT_A = I915_READ(BCLRPAT_A);
+		dev_priv->saveDPLL_B_MD = I915_READ(_DPLL_B_MD);
+	dev_priv->saveHTOTAL_B = I915_READ(_HTOTAL_B);
+	dev_priv->saveHBLANK_B = I915_READ(_HBLANK_B);
+	dev_priv->saveHSYNC_B = I915_READ(_HSYNC_B);
+	dev_priv->saveVTOTAL_B = I915_READ(_VTOTAL_B);
+	dev_priv->saveVBLANK_B = I915_READ(_VBLANK_B);
+	dev_priv->saveVSYNC_B = I915_READ(_VSYNC_B);
+	dev_priv->saveBCLRPAT_A = I915_READ(_BCLRPAT_A);
 
-	dev_priv->saveDSPBCNTR = I915_READ(DSPBCNTR);
-	dev_priv->saveDSPBSTRIDE = I915_READ(DSPBSTRIDE);
-	dev_priv->saveDSPBSIZE = I915_READ(DSPBSIZE);
-	dev_priv->saveDSPBPOS = I915_READ(DSPBPOS);
-	dev_priv->saveDSPBADDR = I915_READ(DSPBADDR);
+	dev_priv->saveDSPBCNTR = I915_READ(_DSPBCNTR);
+	dev_priv->saveDSPBSTRIDE = I915_READ(_DSPBSTRIDE);
+	dev_priv->saveDSPBSIZE = I915_READ(_DSPBSIZE);
+	dev_priv->saveDSPBPOS = I915_READ(_DSPBPOS);
+	dev_priv->saveDSPBADDR = I915_READ(_DSPBADDR);
 	if (IS_I965GM(dev) || IS_GM45(dev)) {
-		dev_priv->saveDSPBSURF = I915_READ(DSPBSURF);
-		dev_priv->saveDSPBTILEOFF = I915_READ(DSPBTILEOFF);
+		dev_priv->saveDSPBSURF = I915_READ(_DSPBSURF);
+		dev_priv->saveDSPBTILEOFF = I915_READ(_DSPBTILEOFF);
 	}
 	i915_save_palette(dev, PIPE_B);
-	dev_priv->savePIPEBSTAT = I915_READ(PIPEBSTAT);
+	dev_priv->savePIPEBSTAT = I915_READ(_PIPEBSTAT);
 
 	/* CRT state */
 	dev_priv->saveADPA = I915_READ(ADPA);
@@ -343,7 +340,7 @@ int i915_save_state(struct drm_device *dev)
 
 	/* Clock gating state */
 	dev_priv->saveD_STATE = I915_READ(D_STATE);
-	dev_priv->saveCG_2D_DIS = I915_READ(CG_2D_DIS);
+	dev_priv->saveCG_2D_DIS = I915_READ(DSPCLK_GATE_D);
 
 	/* Cache mode state */
 	dev_priv->saveCACHE_MODE_0 = I915_READ(CACHE_MODE_0);
@@ -377,7 +374,7 @@ int i915_restore_state(struct drm_device *dev)
 
 	/* Render Standby */
 	if (IS_I965G(dev) && IS_MOBILE(dev))
-		I915_WRITE(MCHBAR_RENDER_STANDBY, dev_priv->saveRENDERSTANDBY);
+		I915_WRITE(RSTDBYCTL, dev_priv->saveRENDERSTANDBY);
 
 	/* Hardware status page */
 	I915_WRITE(HWS_PGA, dev_priv->saveHWS);
@@ -388,87 +385,87 @@ int i915_restore_state(struct drm_device *dev)
 	/* Pipe & plane A info */
 	/* Prime the clock */
 	if (dev_priv->saveDPLL_A & DPLL_VCO_ENABLE) {
-		I915_WRITE(DPLL_A, dev_priv->saveDPLL_A &
+		I915_WRITE(_DPLL_A, dev_priv->saveDPLL_A &
 			   ~DPLL_VCO_ENABLE);
 		DRM_UDELAY(150);
 	}
-	I915_WRITE(FPA0, dev_priv->saveFPA0);
-	I915_WRITE(FPA1, dev_priv->saveFPA1);
+	I915_WRITE(_FPA0, dev_priv->saveFPA0);
+	I915_WRITE(_FPA1, dev_priv->saveFPA1);
 	/* Actually enable it */
-	I915_WRITE(DPLL_A, dev_priv->saveDPLL_A);
+	I915_WRITE(_DPLL_A, dev_priv->saveDPLL_A);
 	DRM_UDELAY(150);
 	if (IS_I965G(dev))
-		I915_WRITE(DPLL_A_MD, dev_priv->saveDPLL_A_MD);
+		I915_WRITE(_DPLL_A_MD, dev_priv->saveDPLL_A_MD);
 	DRM_UDELAY(150);
 
 	/* Restore mode */
-	I915_WRITE(HTOTAL_A, dev_priv->saveHTOTAL_A);
-	I915_WRITE(HBLANK_A, dev_priv->saveHBLANK_A);
-	I915_WRITE(HSYNC_A, dev_priv->saveHSYNC_A);
-	I915_WRITE(VTOTAL_A, dev_priv->saveVTOTAL_A);
-	I915_WRITE(VBLANK_A, dev_priv->saveVBLANK_A);
-	I915_WRITE(VSYNC_A, dev_priv->saveVSYNC_A);
-	I915_WRITE(BCLRPAT_A, dev_priv->saveBCLRPAT_A);
+	I915_WRITE(_HTOTAL_A, dev_priv->saveHTOTAL_A);
+	I915_WRITE(_HBLANK_A, dev_priv->saveHBLANK_A);
+	I915_WRITE(_HSYNC_A, dev_priv->saveHSYNC_A);
+	I915_WRITE(_VTOTAL_A, dev_priv->saveVTOTAL_A);
+	I915_WRITE(_VBLANK_A, dev_priv->saveVBLANK_A);
+	I915_WRITE(_VSYNC_A, dev_priv->saveVSYNC_A);
+	I915_WRITE(_BCLRPAT_A, dev_priv->saveBCLRPAT_A);
 
 	/* Restore plane info */
-	I915_WRITE(DSPASIZE, dev_priv->saveDSPASIZE);
-	I915_WRITE(DSPAPOS, dev_priv->saveDSPAPOS);
-	I915_WRITE(PIPEASRC, dev_priv->savePIPEASRC);
-	I915_WRITE(DSPAADDR, dev_priv->saveDSPAADDR);
-	I915_WRITE(DSPASTRIDE, dev_priv->saveDSPASTRIDE);
+	I915_WRITE(_DSPASIZE, dev_priv->saveDSPASIZE);
+	I915_WRITE(_DSPAPOS, dev_priv->saveDSPAPOS);
+	I915_WRITE(_PIPEASRC, dev_priv->savePIPEASRC);
+	I915_WRITE(_DSPAADDR, dev_priv->saveDSPAADDR);
+	I915_WRITE(_DSPASTRIDE, dev_priv->saveDSPASTRIDE);
 	if (IS_I965G(dev)) {
-		I915_WRITE(DSPASURF, dev_priv->saveDSPASURF);
-		I915_WRITE(DSPATILEOFF, dev_priv->saveDSPATILEOFF);
+		I915_WRITE(_DSPASURF, dev_priv->saveDSPASURF);
+		I915_WRITE(_DSPATILEOFF, dev_priv->saveDSPATILEOFF);
 	}
 
-	I915_WRITE(PIPEACONF, dev_priv->savePIPEACONF);
+	I915_WRITE(_PIPEACONF, dev_priv->savePIPEACONF);
 
 	i915_restore_palette(dev, PIPE_A);
 	/* Enable the plane */
-	I915_WRITE(DSPACNTR, dev_priv->saveDSPACNTR);
-	I915_WRITE(DSPAADDR, I915_READ(DSPAADDR));
+	I915_WRITE(_DSPACNTR, dev_priv->saveDSPACNTR);
+	I915_WRITE(_DSPAADDR, I915_READ(_DSPAADDR));
 
 	/* Pipe & plane B info */
 	if (dev_priv->saveDPLL_B & DPLL_VCO_ENABLE) {
-		I915_WRITE(DPLL_B, dev_priv->saveDPLL_B &
+		I915_WRITE(_DPLL_B, dev_priv->saveDPLL_B &
 			   ~DPLL_VCO_ENABLE);
 		DRM_UDELAY(150);
 	}
-	I915_WRITE(FPB0, dev_priv->saveFPB0);
-	I915_WRITE(FPB1, dev_priv->saveFPB1);
+	I915_WRITE(_FPB0, dev_priv->saveFPB0);
+	I915_WRITE(_FPB1, dev_priv->saveFPB1);
 	/* Actually enable it */
-	I915_WRITE(DPLL_B, dev_priv->saveDPLL_B);
+	I915_WRITE(_DPLL_B, dev_priv->saveDPLL_B);
 	DRM_UDELAY(150);
 	if (IS_I965G(dev))
-		I915_WRITE(DPLL_B_MD, dev_priv->saveDPLL_B_MD);
+		I915_WRITE(_DPLL_B_MD, dev_priv->saveDPLL_B_MD);
 	DRM_UDELAY(150);
 
 	/* Restore mode */
-	I915_WRITE(HTOTAL_B, dev_priv->saveHTOTAL_B);
-	I915_WRITE(HBLANK_B, dev_priv->saveHBLANK_B);
-	I915_WRITE(HSYNC_B, dev_priv->saveHSYNC_B);
-	I915_WRITE(VTOTAL_B, dev_priv->saveVTOTAL_B);
-	I915_WRITE(VBLANK_B, dev_priv->saveVBLANK_B);
-	I915_WRITE(VSYNC_B, dev_priv->saveVSYNC_B);
-	I915_WRITE(BCLRPAT_B, dev_priv->saveBCLRPAT_B);
+	I915_WRITE(_HTOTAL_B, dev_priv->saveHTOTAL_B);
+	I915_WRITE(_HBLANK_B, dev_priv->saveHBLANK_B);
+	I915_WRITE(_HSYNC_B, dev_priv->saveHSYNC_B);
+	I915_WRITE(_VTOTAL_B, dev_priv->saveVTOTAL_B);
+	I915_WRITE(_VBLANK_B, dev_priv->saveVBLANK_B);
+	I915_WRITE(_VSYNC_B, dev_priv->saveVSYNC_B);
+	I915_WRITE(_BCLRPAT_B, dev_priv->saveBCLRPAT_B);
 
 	/* Restore plane info */
-	I915_WRITE(DSPBSIZE, dev_priv->saveDSPBSIZE);
-	I915_WRITE(DSPBPOS, dev_priv->saveDSPBPOS);
-	I915_WRITE(PIPEBSRC, dev_priv->savePIPEBSRC);
-	I915_WRITE(DSPBADDR, dev_priv->saveDSPBADDR);
-	I915_WRITE(DSPBSTRIDE, dev_priv->saveDSPBSTRIDE);
+	I915_WRITE(_DSPBSIZE, dev_priv->saveDSPBSIZE);
+	I915_WRITE(_DSPBPOS, dev_priv->saveDSPBPOS);
+	I915_WRITE(_PIPEBSRC, dev_priv->savePIPEBSRC);
+	I915_WRITE(_DSPBADDR, dev_priv->saveDSPBADDR);
+	I915_WRITE(_DSPBSTRIDE, dev_priv->saveDSPBSTRIDE);
 	if (IS_I965G(dev)) {
-		I915_WRITE(DSPBSURF, dev_priv->saveDSPBSURF);
-		I915_WRITE(DSPBTILEOFF, dev_priv->saveDSPBTILEOFF);
+		I915_WRITE(_DSPBSURF, dev_priv->saveDSPBSURF);
+		I915_WRITE(_DSPBTILEOFF, dev_priv->saveDSPBTILEOFF);
 	}
 
-	I915_WRITE(PIPEBCONF, dev_priv->savePIPEBCONF);
+	I915_WRITE(_PIPEBCONF, dev_priv->savePIPEBCONF);
 
 	i915_restore_palette(dev, PIPE_B);
 	/* Enable the plane */
-	I915_WRITE(DSPBCNTR, dev_priv->saveDSPBCNTR);
-	I915_WRITE(DSPBADDR, I915_READ(DSPBADDR));
+	I915_WRITE(_DSPBCNTR, dev_priv->saveDSPBCNTR);
+	I915_WRITE(_DSPBADDR, I915_READ(_DSPBADDR));
 
 	/* CRT state */
 	I915_WRITE(ADPA, dev_priv->saveADPA);
@@ -505,7 +502,7 @@ int i915_restore_state(struct drm_device *dev)
 
 	/* Clock gating state */
 	I915_WRITE (D_STATE, dev_priv->saveD_STATE);
-	I915_WRITE (CG_2D_DIS, dev_priv->saveCG_2D_DIS);
+	I915_WRITE (DSPCLK_GATE_D, dev_priv->saveCG_2D_DIS);
 
 	/* Cache mode state */
 	I915_WRITE (CACHE_MODE_0, dev_priv->saveCACHE_MODE_0 | 0xffff0000);

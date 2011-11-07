@@ -4230,7 +4230,7 @@ xpt_done(union ccb *done_ccb)
 			TAILQ_INSERT_TAIL(&cam_simq, sim, links);
 			mtx_unlock(&cam_simq_lock);
 			sim->flags |= CAM_SIM_ON_DONEQ;
-			if (first)
+			if (first && panicstr == NULL)
 				swi_sched(cambio_ih, 0);
 		}
 	}
