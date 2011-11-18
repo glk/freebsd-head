@@ -400,6 +400,8 @@
 #define TI_RETURN_RING_CNT	2048
 
 #define TI_MAXTXSEGS		32
+#define TI_RING_ALIGN		32
+#define TI_JUMBO_RING_ALIGN	64
 
 /*
  * Possible TX ring sizes.
@@ -602,6 +604,10 @@ struct ti_rx_desc {
 	uint32_t		ti_opaque;
 };
 
+#define	TI_STD_RX_RING_SZ	(sizeof(struct ti_rx_desc) * TI_STD_RX_RING_CNT)
+#define	TI_MINI_RX_RING_SZ	(sizeof(struct ti_rx_desc) * TI_MINI_RX_RING_CNT)
+#define	TI_RX_RETURN_RING_SZ	(sizeof(struct ti_rx_desc) * TI_RETURN_RING_CNT)
+
 struct ti_rx_desc_ext {
 	ti_hostaddr		ti_addr1;
 	ti_hostaddr		ti_addr2;
@@ -653,6 +659,14 @@ struct ti_rx_desc_ext {
 	uint32_t		ti_opaque;
 };
 
+#ifdef TI_SF_BUF_JUMBO
+#define	TI_JUMBO_RX_RING_SZ	\
+	(sizeof(struct ti_rx_desc_ext) * TI_JUMBO_RX_RING_CNT)
+#else
+#define	TI_JUMBO_RX_RING_SZ	\
+	(sizeof(struct ti_rx_desc) * TI_JUMBO_RX_RING_CNT)
+#endif
+
 /*
  * Transmit descriptors are, mercifully, very small.
  */
@@ -673,6 +687,8 @@ struct ti_tx_desc {
 	uint16_t		ti_rsvd;
 #endif
 };
+
+#define	TI_TX_RING_SZ		(sizeof(struct ti_tx_desc) * TI_TX_RING_CNT)
 
 /*
  * NOTE!  On the Alpha, we have an alignment constraint.
@@ -845,6 +861,7 @@ struct ti_event_desc {
 	uint32_t		ti_eventx;
 	uint32_t		ti_rsvd;
 };
+#define	TI_EVENT_RING_SZ	(sizeof(struct ti_event_desc) * TI_EVENT_RING_CNT)
 
 #define TI_EVENT_EVENT(e)	(((((e)->ti_eventx)) >> 24) & 0xff)
 #define TI_EVENT_CODE(e)	(((((e)->ti_eventx)) >> 12) & 0xfff)
@@ -887,23 +904,6 @@ struct ti_event_desc {
 #define TI_CLRBIT(sc, reg, x)	\
 	CSR_WRITE_4((sc), (reg), (CSR_READ_4((sc), (reg)) & ~(x)))
 
-/*
- * Memory management stuff. Note: the SSLOTS, MSLOTS and JSLOTS
- * values are tuneable. They control the actual amount of buffers
- * allocated for the standard, mini and jumbo receive rings.
- */
-
-#define TI_SSLOTS	256
-#define TI_MSLOTS	256
-#define TI_JSLOTS	256
-
-#define TI_JRAWLEN (TI_JUMBO_FRAMELEN + ETHER_ALIGN)
-#define TI_JLEN (TI_JRAWLEN + (sizeof(uint64_t) - \
-	(TI_JRAWLEN % sizeof(uint64_t))))
-#define TI_JPAGESZ PAGE_SIZE
-#define TI_RESID (TI_JPAGESZ - (TI_JLEN * TI_JSLOTS) % TI_JPAGESZ)
-#define TI_JMEM ((TI_JLEN * TI_JSLOTS) + TI_RESID)
-
 struct ti_txdesc {
 	struct mbuf	*tx_m;
 	bus_dmamap_t	tx_dmamap;
@@ -912,26 +912,12 @@ struct ti_txdesc {
 
 STAILQ_HEAD(ti_txdq, ti_txdesc);
 
-/*
- * Ring structures. Most of these reside in host memory and we tell
- * the NIC where they are via the ring control blocks. The exceptions
- * are the tx and command rings, which live in NIC memory and which
- * we access via the shared memory window.
- */
-struct ti_ring_data {
-	struct ti_rx_desc	ti_rx_std_ring[TI_STD_RX_RING_CNT];
-#ifdef TI_PRIVATE_JUMBOS
-	struct ti_rx_desc	ti_rx_jumbo_ring[TI_JUMBO_RX_RING_CNT];
-#else
-	struct ti_rx_desc_ext	ti_rx_jumbo_ring[TI_JUMBO_RX_RING_CNT];
-#endif
-	struct ti_rx_desc	ti_rx_mini_ring[TI_MINI_RX_RING_CNT];
-	struct ti_rx_desc	ti_rx_return_ring[TI_RETURN_RING_CNT];
-	struct ti_event_desc	ti_event_ring[TI_EVENT_RING_CNT];
-	struct ti_tx_desc	ti_tx_ring[TI_TX_RING_CNT];
+struct ti_status {
 	/*
 	 * Make sure producer structures are aligned on 32-byte cache
-	 * line boundaries.
+	 * line boundaries.  We can create separate DMA area for each
+	 * producer/consumer area but it wouldn't get much benefit
+	 * since driver use a global driver lock.
 	 */
 	struct ti_producer	ti_ev_prodidx_r;
 	uint32_t		ti_pad0[6];
@@ -939,10 +925,36 @@ struct ti_ring_data {
 	uint32_t		ti_pad1[6];
 	struct ti_producer	ti_tx_considx_r;
 	uint32_t		ti_pad2[6];
-	struct ti_gib		ti_info;
 };
 
-#define TI_RD_OFF(x)	offsetof(struct ti_ring_data, x)
+/*
+ * Ring structures. Most of these reside in host memory and we tell
+ * the NIC where they are via the ring control blocks. The exceptions
+ * are the tx and command rings, which live in NIC memory and which
+ * we access via the shared memory window.
+ */
+struct ti_ring_data {
+	struct ti_gib		*ti_info;
+	bus_addr_t		ti_info_paddr;
+	struct ti_status	*ti_status;
+	bus_addr_t		ti_status_paddr;
+	struct ti_rx_desc	*ti_rx_std_ring;
+	bus_addr_t		ti_rx_std_ring_paddr;
+#ifdef TI_SF_BUF_JUMBO
+	struct ti_rx_desc_ext	*ti_rx_jumbo_ring;
+#else
+	struct ti_rx_desc	*ti_rx_jumbo_ring;
+#endif
+	bus_addr_t		ti_rx_jumbo_ring_paddr;
+	struct ti_rx_desc	*ti_rx_mini_ring;
+	bus_addr_t		ti_rx_mini_ring_paddr;
+	struct ti_rx_desc	*ti_rx_return_ring;
+	bus_addr_t		ti_rx_return_ring_paddr;
+	struct ti_event_desc	*ti_event_ring;
+	bus_addr_t		ti_event_ring_paddr;
+	struct ti_tx_desc	*ti_tx_ring;
+	bus_addr_t		ti_tx_ring_paddr;
+};
 
 /*
  * Mbuf pointers. We need these to keep track of the virtual addresses
@@ -950,18 +962,39 @@ struct ti_ring_data {
  * not the other way around.
  */
 struct ti_chain_data {
+	bus_dma_tag_t		ti_parent_tag;
+	bus_dma_tag_t		ti_gib_tag;
+	bus_dmamap_t		ti_gib_map;
+	bus_dma_tag_t		ti_event_ring_tag;
+	bus_dmamap_t		ti_event_ring_map;
+	bus_dma_tag_t		ti_status_tag;
+	bus_dmamap_t		ti_status_map;
+	bus_dma_tag_t		ti_tx_ring_tag;
+	bus_dmamap_t		ti_tx_ring_map;
+	bus_dma_tag_t		ti_tx_tag;
 	struct ti_txdesc	ti_txdesc[TI_TX_RING_CNT];
 	struct ti_txdq		ti_txfreeq;
 	struct ti_txdq		ti_txbusyq;
+	bus_dma_tag_t		ti_rx_return_ring_tag;
+	bus_dmamap_t		ti_rx_return_ring_map;
+	bus_dma_tag_t		ti_rx_std_ring_tag;
+	bus_dmamap_t		ti_rx_std_ring_map;
+	bus_dma_tag_t		ti_rx_std_tag;
 	struct mbuf		*ti_rx_std_chain[TI_STD_RX_RING_CNT];
 	bus_dmamap_t		ti_rx_std_maps[TI_STD_RX_RING_CNT];
+	bus_dmamap_t		ti_rx_std_sparemap;
+	bus_dma_tag_t		ti_rx_jumbo_ring_tag;
+	bus_dmamap_t		ti_rx_jumbo_ring_map;
+	bus_dma_tag_t		ti_rx_jumbo_tag;
 	struct mbuf		*ti_rx_jumbo_chain[TI_JUMBO_RX_RING_CNT];
 	bus_dmamap_t		ti_rx_jumbo_maps[TI_JUMBO_RX_RING_CNT];
+	bus_dmamap_t		ti_rx_jumbo_sparemap;
+	bus_dma_tag_t		ti_rx_mini_ring_tag;
+	bus_dmamap_t		ti_rx_mini_ring_map;
+	bus_dma_tag_t		ti_rx_mini_tag;
 	struct mbuf		*ti_rx_mini_chain[TI_MINI_RX_RING_CNT];
 	bus_dmamap_t		ti_rx_mini_maps[TI_MINI_RX_RING_CNT];
-	/* Stick the jumbo mem management stuff here too. */
-	caddr_t			ti_jslots[TI_JSLOTS];
-	void			*ti_jumbo_buf;
+	bus_dmamap_t		ti_rx_mini_sparemap;
 };
 
 struct ti_type {
@@ -980,11 +1013,6 @@ struct ti_mc_entry {
 	SLIST_ENTRY(ti_mc_entry)	mc_entries;
 };
 
-struct ti_jpool_entry {
-	int                             slot;
-	SLIST_ENTRY(ti_jpool_entry)	jpool_entries;
-};
-
 typedef enum {
 	TI_FLAG_NONE		= 0x00,
 	TI_FLAG_DEBUGING	= 0x01,
@@ -1000,24 +1028,16 @@ struct ti_softc {
 	struct resource		*ti_irq;
 	struct resource		*ti_res;
 	struct ifmedia		ifmedia;	/* media info */
-	uint8_t			ti_unit;	/* interface number */
 	uint8_t			ti_hwrev;	/* Tigon rev (1 or 2) */
 	uint8_t			ti_copper;	/* 1000baseTX card */
 	uint8_t			ti_linkstat;	/* Link state */
 	int			ti_hdrsplit;	/* enable header splitting */
-	bus_dma_tag_t		ti_parent_dmat;
-	bus_dma_tag_t		ti_jumbo_dmat;
-	bus_dmamap_t		ti_jumbo_dmamap;
-	bus_dma_tag_t		ti_mbuftx_dmat;
-	bus_dma_tag_t		ti_mbufrx_dmat;
-	bus_dma_tag_t		ti_rdata_dmat;
-	bus_dmamap_t		ti_rdata_dmamap;
-	bus_addr_t		ti_rdata_phys;
-	struct ti_ring_data	*ti_rdata;	/* rings */
+	int			ti_dac;
+	struct ti_ring_data	ti_rdata;	/* rings */
 	struct ti_chain_data	ti_cdata;	/* mbufs */
-#define ti_ev_prodidx		ti_rdata->ti_ev_prodidx_r
-#define ti_return_prodidx	ti_rdata->ti_return_prodidx_r
-#define ti_tx_considx		ti_rdata->ti_tx_considx_r
+#define ti_ev_prodidx		ti_rdata.ti_status->ti_ev_prodidx_r
+#define ti_return_prodidx	ti_rdata.ti_status->ti_return_prodidx_r
+#define ti_tx_considx		ti_rdata.ti_status->ti_tx_considx_r
 	int			ti_tx_saved_prodidx;
 	int			ti_tx_saved_considx;
 	int			ti_rx_saved_considx;
@@ -1027,8 +1047,6 @@ struct ti_softc {
 	int			ti_mini;	/* current mini ring head */
 	int			ti_jumbo;	/* current jumo ring head */
 	SLIST_HEAD(__ti_mchead, ti_mc_entry)	ti_mc_listhead;
-	SLIST_HEAD(__ti_jfreehead, ti_jpool_entry)	ti_jfree_listhead;
-	SLIST_HEAD(__ti_jinusehead, ti_jpool_entry)	ti_jinuse_listhead;
 	uint32_t		ti_stat_ticks;
 	uint32_t		ti_rx_coal_ticks;
 	uint32_t		ti_tx_coal_ticks;
@@ -1041,6 +1059,8 @@ struct ti_softc {
 	struct callout		ti_watchdog;
 	int			ti_timer;
 	ti_flag_vals		ti_flags;
+	uint8_t			*ti_membuf;
+	uint8_t			*ti_membuf2;
 	struct cdev		 *dev;
 };
 
