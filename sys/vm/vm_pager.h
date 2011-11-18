@@ -71,7 +71,6 @@ extern struct pagerops vnodepagerops;
 extern struct pagerops devicepagerops;
 extern struct pagerops physpagerops;
 extern struct pagerops sgpagerops;
-extern struct pagerops mgtdevicepagerops;
 
 /*
  * get/put return values
@@ -192,20 +191,6 @@ vm_pager_page_unswapped(vm_page_t m)
 	if (pagertab[m->object->type]->pgo_pageunswapped)
 		(*pagertab[m->object->type]->pgo_pageunswapped)(m);
 }
-
-struct cdev_pager_ops {
-	int (*cdev_pg_fault)(vm_object_t vm_obj, vm_ooffset_t offset,
-	    int prot, vm_page_t *mres);
-	int (*cdev_pg_ctr)(void *handle, vm_ooffset_t size, vm_prot_t prot,
-	    vm_ooffset_t foff, struct ucred *cred, u_short *color);
-	void (*cdev_pg_dtr)(void *handle);
-};
-
-vm_object_t cdev_pager_allocate(void *handle, enum obj_type tp,
-    struct cdev_pager_ops *ops, vm_ooffset_t size, vm_prot_t prot,
-    vm_ooffset_t foff, struct ucred *cred);
-vm_object_t cdev_pager_lookup(void *handle);
-void cdev_pager_remove_page(vm_object_t object, vm_page_t m);
 
 #endif				/* _KERNEL */
 #endif				/* _VM_PAGER_ */
