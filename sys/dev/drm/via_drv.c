@@ -69,6 +69,8 @@ static void via_configure(struct drm_device *dev)
 	dev->driver->major		= DRIVER_MAJOR;
 	dev->driver->minor		= DRIVER_MINOR;
 	dev->driver->patchlevel		= DRIVER_PATCHLEVEL;
+
+	drm_compat_locking_init(dev);
 }
 
 static int
