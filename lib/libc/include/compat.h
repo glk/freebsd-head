@@ -42,6 +42,10 @@ __sym_compat(__semctl, freebsd7___semctl, FBSD_1.0);
 __sym_compat(msgctl, freebsd7_msgctl, FBSD_1.0);
 __sym_compat(shmctl, freebsd7_shmctl, FBSD_1.0);
 
+__sym_compat(nfstat, freebsd9_nfstat, FBSD_1.0);
+__sym_compat(nlstat, freebsd9_nlstat, FBSD_1.0);
+__sym_compat(nstat, freebsd9_nstat, FBSD_1.0);
+
 #undef __sym_compat
 
 #endif	/* __LIBC_COMPAT_H__ */

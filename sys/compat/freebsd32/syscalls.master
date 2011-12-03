@@ -498,9 +498,9 @@
 				    struct timeval32 *tptr); }
 277	AUE_MSYNC	NOPROTO	{ int msync(void *addr, size_t len, \
 				    int flags); } netbsd_msync msync_args int
-278	AUE_STAT	NOPROTO	{ int nstat(char *path, struct nstat *ub); }
-279	AUE_FSTAT	NOPROTO	{ int nfstat(int fd, struct nstat *sb); }
-280	AUE_LSTAT	NOPROTO	{ int nlstat(char *path, struct nstat *ub); }
+278	AUE_STAT	OBSOL	nstat
+279	AUE_FSTAT	OBSOL	nfstat
+280	AUE_LSTAT	OBSOL	nlstat
 281	AUE_NULL	UNIMPL	nosys
 282	AUE_NULL	UNIMPL	nosys
 283	AUE_NULL	UNIMPL	nosys

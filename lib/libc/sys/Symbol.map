@@ -195,10 +195,7 @@ FBSD_1.0 {
 	netbsd_lchown;
 	netbsd_msync;
 	nfssvc;
-	nfstat;
-	nlstat;
 	nmount;
-	nstat;
 	ntp_adjtime;
 	ntp_gettime;
 	oaio_read;
@@ -775,14 +772,8 @@ FBSDprivate_1.0 {
 	__sys_netbsd_msync;
 	_nfssvc;
 	__sys_nfssvc;
-	_nfstat;
-	__sys_nfstat;
-	_nlstat;
-	__sys_nlstat;
 	_nmount;
 	__sys_nmount;
-	_nstat;
-	__sys_nstat;
 	_ntp_adjtime;
 	__sys_ntp_adjtime;
 	_ntp_gettime;

@@ -1354,18 +1354,21 @@ kern_fstat(struct thread *td, int fd, struct stat *sbp)
 	return (error);
 }
 
+#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
+    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
+    defined(COMPAT_FREEBSD9)
 /*
  * Return status information about a file descriptor.
  */
 #ifndef _SYS_SYSPROTO_H_
-struct nfstat_args {
+struct freebsd9_nfstat_args {
 	int	fd;
 	struct	nstat *sb;
 };
 #endif
 /* ARGSUSED */
 int
-sys_nfstat(struct thread *td, struct nfstat_args *uap)
+freebsd9_nfstat(struct thread *td, struct freebsd9_nfstat_args *uap)
 {
 	struct nstat nub;
 	struct stat ub;
@@ -1373,11 +1376,12 @@ sys_nfstat(struct thread *td, struct nfstat_args *uap)
 
 	error = kern_fstat(td, uap->fd, &ub);
 	if (error == 0) {
-		cvtnstat(&ub, &nub);
+		freebsd9_cvtnstat(&ub, &nub);
 		error = copyout(&nub, uap->sb, sizeof(nub));
 	}
 	return (error);
 }
+#endif /* COMPAT_FREEBSD9 */
 
 /*
  * Return pathconf information about a file descriptor.
