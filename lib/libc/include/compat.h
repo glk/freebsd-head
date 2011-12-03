@@ -52,6 +52,9 @@ __sym_compat(fstatat, freebsd9_fstatat, FBSD_1.1);
 __sym_compat(lstat, freebsd9_lstat, FBSD_1.0);
 __sym_compat(stat, freebsd9_stat, FBSD_1.0);
 
+__sym_compat(getdents, freebsd9_getdents, FBSD_1.0);
+__sym_compat(getdirentries, freebsd9_getdirentries, FBSD_1.0);
+
 #undef __sym_compat
 
 #endif	/* __LIBC_COMPAT_H__ */

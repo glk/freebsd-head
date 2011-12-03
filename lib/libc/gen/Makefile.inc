@@ -25,8 +25,8 @@ SRCS+=  __getosreldate.c __xuname.c \
 	nlist.c nrand48.c opendir.c \
 	pause.c pmadvise.c popen.c posix_spawn.c \
 	psignal.c pututxline.c pw_scan.c pwcache.c \
-	raise.c readdir.c readpassphrase.c rewinddir.c \
-	scandir.c seed48.c seekdir.c semctl.c \
+	raise.c readdir.c readdir-compat9.c readpassphrase.c rewinddir.c \
+	scandir.c scandir-compat9.c seed48.c seekdir.c semctl.c \
 	setdomainname.c sethostname.c setjmperr.c setmode.c \
 	setproctitle.c setprogname.c siginterrupt.c siglist.c signal.c \
 	sigsetops.c sleep.c srand48.c statvfs.c stringlist.c strtofflags.c \

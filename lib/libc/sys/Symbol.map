@@ -99,8 +99,6 @@ FBSD_1.0 {
 	getaudit_addr;
 	getauid;
 	getcontext;
-	getdents;
-	getdirentries;
 	getdtablesize;
 	getegid;
 	geteuid;
@@ -377,6 +375,8 @@ FBSD_1.3 {
 	fhstat;
 	fstat;
 	fstatat;
+	getdents;
+	getdirentries;
 	lstat;
 	posix_fadvise;
 	stat;
