@@ -18,7 +18,7 @@ SRCS+=  __getosreldate.c __xuname.c \
 	gethostname.c getloadavg.c getlogin.c getmntinfo.c getnetgrent.c \
 	getosreldate.c getpagesize.c getpagesizes.c \
 	getpeereid.c getprogname.c getpwent.c getttyent.c \
-	getusershell.c getutxent.c getvfsbyname.c glob.c \
+	getusershell.c getutxent.c getvfsbyname.c glob.c glob-compat9.c \
 	initgroups.c isatty.c isinf.c isnan.c jrand48.c lcong48.c \
 	libc_dlopen.c \
 	lockf.c lrand48.c mrand48.c nftw.c nice.c \
