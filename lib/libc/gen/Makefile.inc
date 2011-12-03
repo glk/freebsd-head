@@ -12,8 +12,8 @@ SRCS+=  __getosreldate.c __xuname.c \
 	crypt.c ctermid.c daemon.c devname.c dirfd.c dirname.c disklabel.c \
 	dlfcn.c drand48.c elf_utils.c erand48.c err.c errlst.c errno.c \
 	exec.c fdevname.c feature_present.c fmtcheck.c fmtmsg.c fnmatch.c \
-	fpclassify.c frexp.c fstab.c ftok.c fts.c fts-compat.c ftw.c \
-	getbootfile.c getbsize.c \
+	fpclassify.c frexp.c fstab.c ftok.c fts.c fts-compat.c fts-compat9.c \
+	ftw.c ftw-compat9.c getbootfile.c getbsize.c \
 	getcap.c getcwd.c getdomainname.c getgrent.c getgrouplist.c \
 	gethostname.c getloadavg.c getlogin.c getmntinfo.c getnetgrent.c \
 	getosreldate.c getpagesize.c getpagesizes.c \
@@ -21,7 +21,7 @@ SRCS+=  __getosreldate.c __xuname.c \
 	getusershell.c getutxent.c getvfsbyname.c glob.c glob-compat9.c \
 	initgroups.c isatty.c isinf.c isnan.c jrand48.c lcong48.c \
 	libc_dlopen.c \
-	lockf.c lrand48.c mrand48.c nftw.c nice.c \
+	lockf.c lrand48.c mrand48.c nftw.c nftw-compat9.c nice.c \
 	nlist.c nrand48.c opendir.c \
 	pause.c pmadvise.c popen.c posix_spawn.c \
 	psignal.c pututxline.c pw_scan.c pwcache.c \

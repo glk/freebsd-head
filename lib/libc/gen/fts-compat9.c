@@ -50,30 +50,18 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <unistd.h>
 #include "gen-compat.h"
-#include "fts-compat.h"
+#include "fts-compat9.h"
 #include "un-namespace.h"
 
-#include "gen-private.h"
-
-FTSENT	*__fts_children_44bsd(FTS *, int);
-int	 __fts_close_44bsd(FTS *);
-void	*__fts_get_clientptr_44bsd(FTS *);
-FTS	*__fts_get_stream_44bsd(FTSENT *);
-FTS	*__fts_open_44bsd(char * const *, int,
-	    int (*)(const FTSENT * const *, const FTSENT * const *));
-FTSENT	*__fts_read_44bsd(FTS *);
-int	 __fts_set_44bsd(FTS *, FTSENT *, int);
-void	 __fts_set_clientptr_44bsd(FTS *, void *);
-
-static FTSENT	*fts_alloc(FTS *, char *, int);
+static FTSENT	*fts_alloc(FTS *, char *, size_t);
 static FTSENT	*fts_build(FTS *, int);
 static void	 fts_lfree(FTSENT *);
 static void	 fts_load(FTS *, FTSENT *);
 static size_t	 fts_maxarglen(char * const *);
 static void	 fts_padjust(FTS *, FTSENT *);
 static int	 fts_palloc(FTS *, size_t);
-static FTSENT	*fts_sort(FTS *, FTSENT *, int);
-static u_short	 fts_stat(FTS *, FTSENT *, int);
+static FTSENT	*fts_sort(FTS *, FTSENT *, size_t);
+static int	 fts_stat(FTS *, FTSENT *, int);
 static int	 fts_safe_changedir(FTS *, FTSENT *, int, char *);
 static int	 fts_ufslinks(FTS *, const FTSENT *);
 
@@ -121,7 +109,7 @@ static const char *ufslike_filesystems[] = {
 };
 
 FTS *
-__fts_open_44bsd(argv, options, compar)
+freebsd9_fts_open(argv, options, compar)
 	char * const *argv;
 	int options;
 	int (*compar)(const FTSENT * const *, const FTSENT * const *);
@@ -129,12 +117,17 @@ __fts_open_44bsd(argv, options, compar)
 	struct _fts_private *priv;
 	FTS *sp;
 	FTSENT *p, *root;
-	int nitems;
 	FTSENT *parent, *tmp;
-	int len;
+	size_t len, nitems;
 
 	/* Options check. */
 	if (options & ~FTS_OPTIONMASK) {
+		errno = EINVAL;
+		return (NULL);
+	}
+
+	/* fts_open() requires at least one path */
+	if (*argv == NULL) {
 		errno = EINVAL;
 		return (NULL);
 	}
@@ -238,7 +231,7 @@ fts_load(sp, p)
 	FTS *sp;
 	FTSENT *p;
 {
-	int len;
+	size_t len;
 	char *cp;
 
 	/*
@@ -260,7 +253,7 @@ fts_load(sp, p)
 }
 
 int
-__fts_close_44bsd(sp)
+freebsd9_fts_close(sp)
 	FTS *sp;
 {
 	FTSENT *freep, *p;
@@ -315,7 +308,7 @@ __fts_close_44bsd(sp)
 	    ? p->fts_pathlen - 1 : p->fts_pathlen)
 
 FTSENT *
-__fts_read_44bsd(sp)
+freebsd9_fts_read(sp)
 	FTS *sp;
 {
 	FTSENT *p, *tmp;
@@ -509,7 +502,7 @@ name:		t = sp->fts_path + NAPPEND(p->fts_parent);
  */
 /* ARGSUSED */
 int
-__fts_set_44bsd(sp, p, instr)
+freebsd9_fts_set(sp, p, instr)
 	FTS *sp;
 	FTSENT *p;
 	int instr;
@@ -524,7 +517,7 @@ __fts_set_44bsd(sp, p, instr)
 }
 
 FTSENT *
-__fts_children_44bsd(sp, instr)
+freebsd9_fts_children(sp, instr)
 	FTS *sp;
 	int instr;
 {
@@ -585,35 +578,37 @@ __fts_children_44bsd(sp, instr)
 	if ((fd = _open(".", O_RDONLY, 0)) < 0)
 		return (NULL);
 	sp->fts_child = fts_build(sp, instr);
-	if (fchdir(fd))
+	if (fchdir(fd)) {
+		(void)_close(fd);
 		return (NULL);
+	}
 	(void)_close(fd);
 	return (sp->fts_child);
 }
 
-#ifndef fts_get_clientptr
-#error "fts_get_clientptr not defined"
+#ifndef freebsd9_fts_get_clientptr
+#error "freebsd9_fts_get_clientptr not defined"
 #endif
 
 void *
-(__fts_get_clientptr_44bsd)(FTS *sp)
+(freebsd9_fts_get_clientptr)(FTS *sp)
 {
 
-	return (fts_get_clientptr(sp));
+	return (freebsd9_fts_get_clientptr(sp));
 }
 
-#ifndef fts_get_stream
-#error "fts_get_stream not defined"
+#ifndef freebsd9_fts_get_stream
+#error "freebsd9_fts_get_stream not defined"
 #endif
 
 FTS *
-(__fts_get_stream_44bsd)(FTSENT *p)
+(freebsd9_fts_get_stream)(FTSENT *p)
 {
-	return (fts_get_stream(p));
+	return (freebsd9_fts_get_stream(p));
 }
 
 void
-__fts_set_clientptr_44bsd(FTS *sp, void *clientptr)
+freebsd9_fts_set_clientptr(FTS *sp, void *clientptr)
 {
 
 	sp->fts_clientptr = clientptr;
@@ -640,14 +635,14 @@ fts_build(sp, type)
 {
 	struct freebsd9_dirent *dp;
 	FTSENT *p, *head;
-	int nitems;
 	FTSENT *cur, *tail;
 	DIR *dirp;
 	void *oldaddr;
-	size_t dnamlen;
-	int cderrno, descend, len, level, maxlen, nlinks, oflag, saved_errno,
-	    nostat, doadjust;
 	char *cp;
+	int cderrno, descend, oflag, saved_errno, nostat, doadjust;
+	long level;
+	long nlinks;	/* has to be signed because -1 is a magic value */
+	size_t dnamlen, len, maxlen, nitems;
 
 	/* Set current node pointer. */
 	cur = sp->fts_cur;
@@ -714,7 +709,7 @@ fts_build(sp, type)
 	 */
 	cderrno = 0;
 	if (nlinks || type == BREAD) {
-		if (fts_safe_changedir(sp, cur, _dirfd(dirp), NULL)) {
+		if (fts_safe_changedir(sp, cur, dirfd(dirp), NULL)) {
 			if (nlinks && type == BREAD)
 				cur->fts_errno = errno;
 			cur->fts_flags |= FTS_DONTCHDIR;
@@ -756,7 +751,7 @@ fts_build(sp, type)
 		if (!ISSET(FTS_SEEDOT) && ISDOT(dp->d_name))
 			continue;
 
-		if ((p = fts_alloc(sp, dp->d_name, (int)dnamlen)) == NULL)
+		if ((p = fts_alloc(sp, dp->d_name, dnamlen)) == NULL)
 			goto mem1;
 		if (dnamlen >= maxlen) {	/* include space for NUL */
 			oldaddr = sp->fts_path;
@@ -785,21 +780,6 @@ mem1:				saved_errno = errno;
 			maxlen = sp->fts_pathlen - len;
 		}
 
-		if (len + dnamlen >= USHRT_MAX) {
-			/*
-			 * In an FTSENT, fts_pathlen is a u_short so it is
-			 * possible to wraparound here.  If we do, free up
-			 * the current structure and the structures already
-			 * allocated, then error out with ENAMETOOLONG.
-			 */
-			free(p);
-			fts_lfree(head);
-			(void)closedir(dirp);
-			cur->fts_info = FTS_ERR;
-			SET(FTS_STOP);
-			errno = ENAMETOOLONG;
-			return (NULL);
-		}
 		p->fts_level = level;
 		p->fts_parent = sp->fts_cur;
 		p->fts_pathlen = len + dnamlen;
@@ -865,11 +845,8 @@ mem1:				saved_errno = errno;
 	 * If not changing directories, reset the path back to original
 	 * state.
 	 */
-	if (ISSET(FTS_NOCHDIR)) {
-		if (len == sp->fts_pathlen || nitems == 0)
-			--cp;
-		*cp = '\0';
-	}
+	if (ISSET(FTS_NOCHDIR))
+		sp->fts_path[cur->fts_pathlen] = '\0';
 
 	/*
 	 * If descended after called from fts_children or after called from
@@ -900,7 +877,7 @@ mem1:				saved_errno = errno;
 	return (head);
 }
 
-static u_short
+static int
 fts_stat(sp, p, follow)
 	FTS *sp;
 	FTSENT *p;
@@ -1002,7 +979,7 @@ static FTSENT *
 fts_sort(sp, head, nitems)
 	FTS *sp;
 	FTSENT *head;
-	int nitems;
+	size_t nitems;
 {
 	FTSENT **ap, *p;
 
@@ -1034,7 +1011,7 @@ static FTSENT *
 fts_alloc(sp, name, namelen)
 	FTS *sp;
 	char *name;
-	int namelen;
+	size_t namelen;
 {
 	FTSENT *p;
 	size_t len;
@@ -1106,18 +1083,6 @@ fts_palloc(sp, more)
 {
 
 	sp->fts_pathlen += more + 256;
-	/*
-	 * Check for possible wraparound.  In an FTS, fts_pathlen is
-	 * a signed int but in an FTSENT it is an unsigned short.
-	 * We limit fts_pathlen to USHRT_MAX to be safe in both cases.
-	 */
-	if (sp->fts_pathlen < 0 || sp->fts_pathlen >= USHRT_MAX) {
-		if (sp->fts_path)
-			free(sp->fts_path);
-		sp->fts_path = NULL;
-		errno = ENAMETOOLONG;
-		return (1);
-	}
 	sp->fts_path = reallocf(sp->fts_path, sp->fts_pathlen);
 	return (sp->fts_path == NULL);
 }
@@ -1236,11 +1201,11 @@ fts_ufslinks(FTS *sp, const FTSENT *ent)
 	return (priv->ftsp_linksreliable);
 }
 
-__sym_compat(fts_open, __fts_open_44bsd, FBSD_1.0);
-__sym_compat(fts_close, __fts_close_44bsd, FBSD_1.0);
-__sym_compat(fts_read, __fts_read_44bsd, FBSD_1.0);
-__sym_compat(fts_set, __fts_set_44bsd, FBSD_1.0);
-__sym_compat(fts_children, __fts_children_44bsd, FBSD_1.0);
-__sym_compat(fts_get_clientptr, __fts_get_clientptr_44bsd, FBSD_1.0);
-__sym_compat(fts_get_stream, __fts_get_stream_44bsd, FBSD_1.0);
-__sym_compat(fts_set_clientptr, __fts_set_clientptr_44bsd, FBSD_1.0);
+__sym_compat(fts_open, freebsd9_fts_open, FBSD_1.1);
+__sym_compat(fts_close, freebsd9_fts_close, FBSD_1.1);
+__sym_compat(fts_read, freebsd9_fts_read, FBSD_1.1);
+__sym_compat(fts_set, freebsd9_fts_set, FBSD_1.1);
+__sym_compat(fts_children, freebsd9_fts_children, FBSD_1.1);
+__sym_compat(fts_get_clientptr, freebsd9_fts_get_clientptr, FBSD_1.1);
+__sym_compat(fts_get_stream, freebsd9_fts_get_stream, FBSD_1.1);
+__sym_compat(fts_set_clientptr, freebsd9_fts_set_clientptr, FBSD_1.1);
