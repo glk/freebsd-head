@@ -94,6 +94,8 @@ __FBSDID("$FreeBSD$");
 #include <ddb/ddb.h>
 #endif
 
+CTASSERT(sizeof(struct vattr) % sizeof(quad_t) == 0);
+
 #define	WI_MPSAFEQ	0
 #define	WI_GIANTQ	1
 
