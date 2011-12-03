@@ -2216,8 +2216,16 @@ ufs_readdir(ap)
 		for (dp = (struct direct *)dirbuf;
 		    !error && uio->uio_resid > 0 && dp < edp; ) {
 			dstdp.d_fileno = dp->d_ino;
-			dstdp.d_namlen = dp->d_namlen;
-			dstdp.d_type = dp->d_type;
+#if BYTE_ORDER == LITTLE_ENDIAN
+			if (ap->a_vp->v_mount->mnt_maxsymlinklen <= 0) {
+				dstdp.d_namlen = dp->d_type;
+				dstdp.d_type = dp->d_namlen;
+			} else
+#endif
+			{
+				dstdp.d_namlen = dp->d_namlen;
+				dstdp.d_type = dp->d_type;
+			}
 			dstdp.d_reclen = GENERIC_DIRSIZ(&dstdp);
 			bcopy(dp->d_name, dstdp.d_name, dstdp.d_namlen);
 			bzero(dstdp.d_name + dstdp.d_namlen,
