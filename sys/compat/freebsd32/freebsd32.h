@@ -93,7 +93,8 @@ struct itimerval32 {
 	struct timeval32 it_value;
 };
 
-#define FREEBSD4_MNAMELEN        (88 - 2 * sizeof(int32_t)) /* size of on/from name bufs */
+#define FREEBSD4_MFSNAMELEN	16
+#define FREEBSD4_MNAMELEN	(88 - 2 * sizeof(int32_t))
 
 /* 4.x version */
 struct statfs32 {
@@ -111,7 +112,7 @@ struct statfs32 {
 	int32_t	f_flags;
 	int32_t	f_syncwrites;
 	int32_t	f_asyncwrites;
-	char	f_fstypename[MFSNAMELEN];
+	char	f_fstypename[FREEBSD4_MFSNAMELEN];
 	char	f_mntonname[FREEBSD4_MNAMELEN];
 	int32_t	f_syncreads;
 	int32_t	f_asyncreads;

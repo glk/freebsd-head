@@ -15,7 +15,8 @@ SRCS+=  __getosreldate.c __xuname.c \
 	fpclassify.c frexp.c fstab.c ftok.c fts.c fts-compat.c fts-compat9.c \
 	ftw.c ftw-compat9.c getbootfile.c getbsize.c \
 	getcap.c getcwd.c getdomainname.c getgrent.c getgrouplist.c \
-	gethostname.c getloadavg.c getlogin.c getmntinfo.c getnetgrent.c \
+	gethostname.c getloadavg.c getlogin.c \
+	getmntinfo.c getmntinfo-compat9.c getnetgrent.c \
 	getosreldate.c getpagesize.c getpagesizes.c \
 	getpeereid.c getprogname.c getpwent.c getttyent.c \
 	getusershell.c getutxent.c getvfsbyname.c glob.c glob-compat9.c \

@@ -166,7 +166,6 @@ FBSD_1.0 {
 	getloadavg;
 	getlogin;
 	getlogin_r;
-	getmntinfo;
 	setnetgrent;
 	getnetgrent;
 	endnetgrent;
@@ -368,7 +367,6 @@ FBSD_1.2 {
 FBSD_1.3 {
 	alphasort;
 	dirfd;
-<<<<<<< HEAD
 	 fdlopen;
 	__FreeBSD_libc_enter_restricted_mode;
 	fts_children;
@@ -381,6 +379,7 @@ FBSD_1.3 {
 	fts_set_clientptr;
 	ftw;
 	getcontextx;
+	getmntinfo;
 	glob;
 	globfree;
 	nftw;

@@ -107,16 +107,18 @@ ibcs2_statfs(td, uap)
 	struct thread *td;
 	struct ibcs2_statfs_args *uap;
 {
-	struct statfs sf;
+	struct statfs *sf;
 	char *path;
 	int error;
 
 	CHECKALTEXIST(td, uap->path, &path);
-	error = kern_statfs(td, path, UIO_SYSSPACE, &sf);
+	sf = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
+	error = kern_statfs(td, path, UIO_SYSSPACE, sf);
 	free(path, M_TEMP);
-	if (error)
-		return (error);
-	return cvt_statfs(&sf, (caddr_t)uap->buf, uap->len);
+	if (error == 0)
+		error = cvt_statfs(sf, (caddr_t)uap->buf, uap->len);
+	free(sf, M_TEMP);
+	return (error);
 }
 
 int
@@ -124,13 +126,15 @@ ibcs2_fstatfs(td, uap)
 	struct thread *td;
 	struct ibcs2_fstatfs_args *uap;
 {
-	struct statfs sf;
+	struct statfs *sf;
 	int error;
 
-	error = kern_fstatfs(td, uap->fd, &sf);
-	if (error)
-		return (error);
-	return cvt_statfs(&sf, (caddr_t)uap->buf, uap->len);
+	sf = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
+	error = kern_fstatfs(td, uap->fd, sf);
+	if (error == 0)
+		error = cvt_statfs(sf, (caddr_t)uap->buf, uap->len);
+	free(sf, M_TEMP);
+	return (error);
 }
 
 int

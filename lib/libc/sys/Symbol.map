@@ -88,11 +88,9 @@ FBSD_1.0 {
 	fchown;
 	fcntl;
 	fhopen;
-	fhstatfs;
 	flock;
 	fork;
 	fpathconf;
-	fstatfs;
 	fsync;
 	futimes;
 	getaudit;
@@ -103,7 +101,6 @@ FBSD_1.0 {
 	getegid;
 	geteuid;
 	getfh;
-	getfsstat;
 	getgid;
 	getgroups;
 	getitimer;
@@ -276,7 +273,6 @@ FBSD_1.0 {
 	socketpair;
 	__stack_chk_fail;
 	__stack_chk_guard;
-	statfs;
 	swapcontext;
 	swapoff;
 	swapon;
@@ -373,13 +369,17 @@ FBSD_1.2 {
 
 FBSD_1.3 {
 	fhstat;
+	fhstatfs;
 	fstat;
+	fstatfs;
 	fstatat;
 	getdents;
 	getdirentries;
+	getfsstat;
 	lstat;
 	posix_fadvise;
 	stat;
+	statfs;
 };
 
 FBSDprivate_1.0 {

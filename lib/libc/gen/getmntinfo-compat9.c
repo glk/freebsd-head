@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1983, 1993
+ * Copyright (c) 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,28 +27,40 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	_GEN_COMPAT_H_
-#define	_GEN_COMPAT_H_
+#include <sys/param.h>
+#include <sys/ucred.h>
+#include <sys/mount.h>
+#include <stdlib.h>
 
-#include <dirent.h>
+#include "gen-compat.h"
 
-#define FREEBSD9_DIRSIZ(dp)						\
-	(sizeof(struct freebsd9_dirent) - sizeof((dp)->d_name) +	\
-	    (((dp)->d_namlen + 1 + 3) &~ 3))
+/*
+ * Return information about mounted filesystems.
+ */
+int
+freebsd9_getmntinfo(struct freebsd9_statfs **mntbufp, int flags)
+{
+	static struct freebsd9_statfs *mntbuf;
+	static int mntsize;
+	static long bufsize;
 
-struct freebsd9_dirent;
-struct freebsd9_stat;
-struct freebsd9_statfs;
+	if (mntsize <= 0 &&
+	    (mntsize = freebsd9_getfsstat(0, 0, MNT_NOWAIT)) < 0)
+		return (0);
+	if (bufsize > 0 &&
+	    (mntsize = freebsd9_getfsstat(mntbuf, bufsize, flags)) < 0)
+		return (0);
+	while (bufsize <= mntsize * sizeof(struct freebsd9_statfs)) {
+		if (mntbuf)
+			free(mntbuf);
+		bufsize = (mntsize + 1) * sizeof(struct freebsd9_statfs);
+		if ((mntbuf = (struct freebsd9_statfs *)malloc(bufsize)) == 0)
+			return (0);
+		if ((mntsize = freebsd9_getfsstat(mntbuf, bufsize, flags)) < 0)
+			return (0);
+	}
+	*mntbufp = mntbuf;
+	return (mntsize);
+}
 
-struct freebsd9_dirent *freebsd9_readdir(DIR *);
-int	freebsd9_readdir_r(DIR *, struct freebsd9_dirent *,
-	    struct freebsd9_dirent **);
-int	freebsd9_stat(const char *, struct freebsd9_stat *);
-int	freebsd9_lstat(const char *, struct freebsd9_stat *);
-int	freebsd9_fstat(int, struct freebsd9_stat *);
-
-int	freebsd9_statfs(const char *, struct freebsd9_statfs *);
-int	freebsd9_getfsstat(struct freebsd9_statfs *, long, int);
-int	freebsd9_getmntinfo(struct freebsd9_statfs **, int);
-
-#endif /* _GEN_COMPAT_H_ */
+__sym_compat(getmntinfo, freebsd9_getmntinfo, FBSD_1.0);

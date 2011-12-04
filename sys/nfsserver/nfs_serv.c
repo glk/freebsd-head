@@ -3576,7 +3576,7 @@ nfsrv_statfs(struct nfsrv_descript *nfsd, struct nfssvc_sock *slp,
 	struct sockaddr *nam = nfsd->nd_nam;
 	caddr_t dpos = nfsd->nd_dpos;
 	struct ucred *cred = nfsd->nd_cr;
-	struct statfs *sf;
+	struct statfs *sf = NULL;
 	struct nfs_statfs *sfp;
 	caddr_t bpos;
 	int error = 0, rdonly, getret = 1;
@@ -3586,7 +3586,6 @@ nfsrv_statfs(struct nfsrv_descript *nfsd, struct nfssvc_sock *slp,
 	struct vattr at;
 	nfsfh_t nfh;
 	fhandle_t *fhp;
-	struct statfs statfs;
 	u_quad_t tval;
 	int vfslocked;
 
@@ -3602,7 +3601,7 @@ nfsrv_statfs(struct nfsrv_descript *nfsd, struct nfssvc_sock *slp,
 		error = 0;
 		goto nfsmout;
 	}
-	sf = &statfs;
+	sf = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
 	error = VFS_STATFS(vp->v_mount, sf);
 	getret = VOP_GETATTR(vp, &at, cred);
 	vput(vp);
@@ -3655,6 +3654,8 @@ nfsmout:
 	if (vp)
 		vput(vp);
 	VFS_UNLOCK_GIANT(vfslocked);
+	if (sf)
+		free(sf, M_TEMP);
 	return(error);
 }
 
@@ -3678,7 +3679,7 @@ nfsrv_fsinfo(struct nfsrv_descript *nfsd, struct nfssvc_sock *slp,
 	nfsfh_t nfh;
 	fhandle_t *fhp;
 	u_quad_t maxfsize;
-	struct statfs sb;
+	struct statfs *sf;
 	int v3 = (nfsd->nd_flag & ND_NFSV3);
 	int vfslocked;
 
@@ -3697,8 +3698,12 @@ nfsrv_fsinfo(struct nfsrv_descript *nfsd, struct nfssvc_sock *slp,
 	}
 
 	/* XXX Try to make a guess on the max file size. */
-	VFS_STATFS(vp->v_mount, &sb);
-	maxfsize = (u_quad_t)0x80000000 * sb.f_bsize - 1;
+	sf = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
+	if (VFS_STATFS(vp->v_mount, sf) == 0)
+		maxfsize = (u_quad_t)0x80000000 * sf->f_bsize - 1;
+	else
+		maxfsize = (u_quad_t)-1;
+	free(sf, M_TEMP);
 
 	getret = VOP_GETATTR(vp, &at, cred);
 	vput(vp);

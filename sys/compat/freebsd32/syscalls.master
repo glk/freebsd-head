@@ -698,13 +698,16 @@
 				    size_t nbytes, struct sf_hdtr32 *hdtr, \
 				    off_t *sbytes, int flags); }
 394	AUE_NULL	UNIMPL	mac_syscall
-395	AUE_GETFSSTAT	NOPROTO	{ int getfsstat(struct statfs *buf, \
+395	AUE_GETFSSTAT	COMPAT9|NOPROTO	{ int getfsstat( \
+				    struct freebsd9_statfs *buf, \
 				    long bufsize, int flags); }
-396	AUE_STATFS	NOPROTO	{ int statfs(char *path, \
+396	AUE_STATFS	COMPAT9|NOPROTO	{ int statfs(char *path, \
 				    struct statfs *buf); }
-397	AUE_FSTATFS	NOPROTO	{ int fstatfs(int fd, struct statfs *buf); }
-398	AUE_FHSTATFS	NOPROTO	{ int fhstatfs(const struct fhandle *u_fhp, \
-				    struct statfs *buf); }
+397	AUE_FSTATFS	COMPAT9|NOPROTO	{ int fstatfs(int fd, \
+				    struct freebsd9_statfs *buf); }
+398	AUE_FHSTATFS	COMPAT9|NOPROTO	{ int fhstatfs( \
+				    const struct fhandle *u_fhp, \
+				    struct freebsd9_statfs *buf); }
 399	AUE_NULL	UNIMPL	nosys
 400	AUE_NULL	NOSTD|NOPROTO	{ int ksem_close(semid_t id); }
 401	AUE_NULL	NOSTD|NOPROTO	{ int ksem_post(semid_t id); }
@@ -1012,3 +1015,10 @@
 				    size_t count); }
 538	AUE_GETDIRENTRIES	STD	{ int freebsd32_getdirentries(int fd, \
 				    char *buf, u_int count, int32_t *basep); }
+539	AUE_GETFSSTAT	NOPROTO	{ int getfsstat(struct statfs *buf, \
+				    long bufsize, int flags); }
+540	AUE_STATFS	NOPROTO	{ int statfs(char *path, \
+				    struct statfs *buf); }
+541	AUE_FSTATFS	NOPROTO	{ int fstatfs(int fd, struct statfs *buf); }
+542	AUE_FHSTATFS	NOPROTO	{ int fhstatfs(const struct fhandle *u_fhp, \
+				    struct statfs *buf); }

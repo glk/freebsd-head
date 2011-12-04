@@ -85,7 +85,7 @@ static int	 fts_ufslinks(FTS *, const FTSENT *);
  */
 struct _fts_private {
 	FTS		ftsp_fts;
-	struct statfs	ftsp_statfs;
+	struct freebsd9_statfs	ftsp_statfs;
 	dev_t		ftsp_dev;
 	int		ftsp_linksreliable;
 };
@@ -1184,7 +1184,7 @@ fts_ufslinks(FTS *sp, const FTSENT *ent)
 	 * avoidance.
 	 */
 	if (priv->ftsp_dev != ent->fts_dev) {
-		if (statfs(ent->fts_path, &priv->ftsp_statfs) != -1) {
+		if (freebsd9_statfs(ent->fts_path, &priv->ftsp_statfs) != -1) {
 			priv->ftsp_dev = ent->fts_dev;
 			priv->ftsp_linksreliable = 0;
 			for (cpp = ufslike_filesystems; *cpp; cpp++) {

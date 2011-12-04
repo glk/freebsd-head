@@ -562,7 +562,7 @@ encode_long(long val)
 static void
 acctwatch(void)
 {
-	struct statfs sb;
+	struct statfs *sp;
 	int vfslocked;
 
 	sx_assert(&acct_sx, SX_XLOCKED);
@@ -593,24 +593,27 @@ acctwatch(void)
 	 * Stopping here is better than continuing, maybe it will be VBAD
 	 * next time around.
 	 */
-	if (VFS_STATFS(acct_vp->v_mount, &sb) < 0) {
+	sp = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
+	if (VFS_STATFS(acct_vp->v_mount, sp) < 0) {
 		VFS_UNLOCK_GIANT(vfslocked);
+		free(sp, M_TEMP);
 		return;
 	}
 	VFS_UNLOCK_GIANT(vfslocked);
 	if (acct_suspended) {
-		if (sb.f_bavail > (int64_t)(acctresume * sb.f_blocks /
+		if (sp->f_bavail > (int64_t)(acctresume * sp->f_blocks /
 		    100)) {
 			acct_suspended = 0;
 			log(LOG_NOTICE, "Accounting resumed\n");
 		}
 	} else {
-		if (sb.f_bavail <= (int64_t)(acctsuspend * sb.f_blocks /
+		if (sp->f_bavail <= (int64_t)(acctsuspend * sp->f_blocks /
 		    100)) {
 			acct_suspended = 1;
 			log(LOG_NOTICE, "Accounting suspended\n");
 		}
 	}
+	free(sp, M_TEMP);
 }
 
 /*
