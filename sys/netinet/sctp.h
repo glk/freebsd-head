@@ -120,6 +120,7 @@ struct sctp_paramhdr {
 #define SCTP_DEFAULT_SNDINFO            0x00000021
 #define SCTP_DEFAULT_PRINFO             0x00000022
 #define SCTP_PEER_ADDR_THLDS            0x00000023
+#define SCTP_REMOTE_UDP_ENCAPS_PORT     0x00000024
 
 /*
  * read-only options
@@ -496,6 +497,7 @@ struct sctp_error_unrecognized_chunk {
 /*
  * PCB Features (in sctp_features bitmask)
  */
+#define SCTP_PCB_FLAGS_DO_NOT_PMTUD     0x00000001
 #define SCTP_PCB_FLAGS_EXT_RCVINFO      0x00000002	/* deprecated */
 #define SCTP_PCB_FLAGS_DONOT_HEARTBEAT  0x00000004
 #define SCTP_PCB_FLAGS_FRAG_INTERLEAVE  0x00000008

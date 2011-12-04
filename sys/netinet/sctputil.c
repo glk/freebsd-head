@@ -923,16 +923,19 @@ sctp_init_asoc(struct sctp_inpcb *m, struct sctp_tcb *stcb,
 	asoc->sctp_cmt_pf = (uint8_t) 0;
 	asoc->sctp_frag_point = m->sctp_frag_point;
 	asoc->sctp_features = m->sctp_features;
-#ifdef INET
-	asoc->default_dscp = m->ip_inp.inp.inp_ip_tos;
-#else
-	asoc->default_dscp = 0;
-#endif
-
+	asoc->default_dscp = m->sctp_ep.default_dscp;
 #ifdef INET6
-	asoc->default_flowlabel = ((struct in6pcb *)m)->in6p_flowinfo;
-#else
-	asoc->default_flowlabel = 0;
+	if (m->sctp_ep.default_flowlabel) {
+		asoc->default_flowlabel = m->sctp_ep.default_flowlabel;
+	} else {
+		if (m->ip_inp.inp.inp_flags & IN6P_AUTOFLOWLABEL) {
+			asoc->default_flowlabel = sctp_select_initial_TSN(&m->sctp_ep);
+			asoc->default_flowlabel &= 0x000fffff;
+			asoc->default_flowlabel |= 0x80000000;
+		} else {
+			asoc->default_flowlabel = 0;
+		}
+	}
 #endif
 	asoc->sb_send_resv = 0;
 	if (override_tag) {
@@ -1114,6 +1117,7 @@ sctp_init_asoc(struct sctp_inpcb *m, struct sctp_tcb *stcb,
 	asoc->authinfo.recv_keyid = 0;
 	LIST_INIT(&asoc->shared_keys);
 	asoc->marked_retrans = 0;
+	asoc->port = m->sctp_ep.port;
 	asoc->timoinit = 0;
 	asoc->timodata = 0;
 	asoc->timosack = 0;
@@ -1290,10 +1294,6 @@ select_a_new_ep:
 				SCTP_INP_DECR_REF(it->inp);
 				atomic_add_int(&it->stcb->asoc.refcnt, -1);
 				if (sctp_it_ctl.iterator_flags &
-				    SCTP_ITERATOR_MUST_EXIT) {
-					goto done_with_iterator;
-				}
-				if (sctp_it_ctl.iterator_flags &
 				    SCTP_ITERATOR_STOP_CUR_IT) {
 					sctp_it_ctl.iterator_flags &= ~SCTP_ITERATOR_STOP_CUR_IT;
 					goto done_with_iterator;
@@ -1369,9 +1369,6 @@ sctp_iterator_worker(void)
 		sctp_it_ctl.cur_it = NULL;
 		CURVNET_RESTORE();
 		SCTP_IPI_ITERATOR_WQ_LOCK();
-		if (sctp_it_ctl.iterator_flags & SCTP_ITERATOR_MUST_EXIT) {
-			break;
-		}
 		/* sa_ignore FREED_MEMORY */
 	}
 	sctp_it_ctl.iterator_running = 0;
@@ -1665,7 +1662,7 @@ sctp_timeout_handler(void *t)
 		sctp_auditing(4, inp, stcb, net);
 #endif
 		if (!(net->dest_state & SCTP_ADDR_NOHB)) {
-			sctp_timer_start(SCTP_TIMER_TYPE_HEARTBEAT, stcb->sctp_ep, stcb, net);
+			sctp_timer_start(SCTP_TIMER_TYPE_HEARTBEAT, inp, stcb, net);
 			sctp_chunk_output(inp, stcb, SCTP_OUTPUT_FROM_HB_TMR, SCTP_SO_NOT_LOCKED);
 		}
 		break;
@@ -2047,6 +2044,9 @@ sctp_timer_start(int t_type, struct sctp_inpcb *inp, struct sctp_tcb *stcb,
 			return;
 		}
 		if (net == NULL) {
+			return;
+		}
+		if (net->dest_state & SCTP_ADDR_NO_PMTUD) {
 			return;
 		}
 		to_ticks = inp->sctp_ep.sctp_timeoutticks[SCTP_TIMER_PMTU];
@@ -3619,9 +3619,13 @@ sctp_abort_notification(struct sctp_tcb *stcb, int error, int so_locked
 #endif
 )
 {
-
 	if (stcb == NULL) {
 		return;
+	}
+	if ((stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_IN_TCPPOOL) ||
+	    ((stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_TCPTYPE) &&
+	    (stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_CONNECTED))) {
+		stcb->sctp_ep->sctp_flags |= SCTP_PCB_FLAGS_WAS_ABORTED;
 	}
 	if ((stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_SOCKET_GONE) ||
 	    (stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_SOCKET_ALLGONE) ||
@@ -3630,11 +3634,6 @@ sctp_abort_notification(struct sctp_tcb *stcb, int error, int so_locked
 	}
 	/* Tell them we lost the asoc */
 	sctp_report_all_outbound(stcb, 1, so_locked);
-	if ((stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_IN_TCPPOOL) ||
-	    ((stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_TCPTYPE) &&
-	    (stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_CONNECTED))) {
-		stcb->sctp_ep->sctp_flags |= SCTP_PCB_FLAGS_WAS_ABORTED;
-	}
 	sctp_ulp_notify(SCTP_NOTIFY_ASSOC_ABORTED, stcb, error, NULL, so_locked);
 }
 
@@ -5095,17 +5094,6 @@ restart_nosblocks:
 					 */
 					SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTPUTIL, ECONNRESET);
 					error = ECONNRESET;
-					/*
-					 * You get this once if you are
-					 * active open side
-					 */
-					if (!(inp->sctp_flags & SCTP_PCB_FLAGS_IN_TCPPOOL)) {
-						/*
-						 * Remove flag if on the
-						 * active open side
-						 */
-						inp->sctp_flags &= ~SCTP_PCB_FLAGS_WAS_ABORTED;
-					}
 				}
 				so->so_state &= ~(SS_ISCONNECTING |
 				    SS_ISDISCONNECTING |
@@ -5115,8 +5103,6 @@ restart_nosblocks:
 					if ((inp->sctp_flags & SCTP_PCB_FLAGS_WAS_CONNECTED) == 0) {
 						SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTPUTIL, ENOTCONN);
 						error = ENOTCONN;
-					} else {
-						inp->sctp_flags &= ~SCTP_PCB_FLAGS_WAS_CONNECTED;
 					}
 				}
 				goto out;
@@ -5149,18 +5135,6 @@ restart_nosblocks:
 						 */
 						SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTPUTIL, ECONNRESET);
 						error = ECONNRESET;
-						/*
-						 * You get this once if you
-						 * are active open side
-						 */
-						if (!(inp->sctp_flags & SCTP_PCB_FLAGS_IN_TCPPOOL)) {
-							/*
-							 * Remove flag if on
-							 * the active open
-							 * side
-							 */
-							inp->sctp_flags &= ~SCTP_PCB_FLAGS_WAS_ABORTED;
-						}
 					}
 					so->so_state &= ~(SS_ISCONNECTING |
 					    SS_ISDISCONNECTING |
@@ -5170,8 +5144,6 @@ restart_nosblocks:
 						if ((inp->sctp_flags & SCTP_PCB_FLAGS_WAS_CONNECTED) == 0) {
 							SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTPUTIL, ENOTCONN);
 							error = ENOTCONN;
-						} else {
-							inp->sctp_flags &= ~SCTP_PCB_FLAGS_WAS_CONNECTED;
 						}
 					}
 					goto out;
@@ -6105,6 +6077,15 @@ sctp_connectx_helper_add(struct sctp_tcb *stcb, struct sockaddr *addr,
 	struct sockaddr *sa;
 	size_t incr = 0;
 
+#ifdef INET
+	struct sockaddr_in *sin;
+
+#endif
+#ifdef INET6
+	struct sockaddr_in6 *sin6;
+
+#endif
+
 	sa = addr;
 	inp = stcb->sctp_ep;
 	*error = 0;
@@ -6113,6 +6094,15 @@ sctp_connectx_helper_add(struct sctp_tcb *stcb, struct sockaddr *addr,
 #ifdef INET
 		case AF_INET:
 			incr = sizeof(struct sockaddr_in);
+			sin = (struct sockaddr_in *)sa;
+			if ((sin->sin_addr.s_addr == INADDR_ANY) ||
+			    (sin->sin_addr.s_addr == INADDR_BROADCAST) ||
+			    IN_MULTICAST(ntohl(sin->sin_addr.s_addr))) {
+				SCTP_LTRACE_ERR_RET(NULL, stcb, NULL, SCTP_FROM_SCTPUTIL, EINVAL);
+				(void)sctp_free_assoc(inp, stcb, SCTP_NORMAL_PROC, SCTP_FROM_SCTP_USRREQ + SCTP_LOC_7);
+				*error = EINVAL;
+				goto out_now;
+			}
 			if (sctp_add_remote_addr(stcb, sa, NULL, SCTP_DONOT_SETSCOPE, SCTP_ADDR_IS_CONFIRMED)) {
 				/* assoc gone no un-lock */
 				SCTP_LTRACE_ERR_RET(NULL, stcb, NULL, SCTP_FROM_SCTPUTIL, ENOBUFS);
@@ -6126,6 +6116,14 @@ sctp_connectx_helper_add(struct sctp_tcb *stcb, struct sockaddr *addr,
 #ifdef INET6
 		case AF_INET6:
 			incr = sizeof(struct sockaddr_in6);
+			sin6 = (struct sockaddr_in6 *)sa;
+			if (IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr) ||
+			    IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr)) {
+				SCTP_LTRACE_ERR_RET(NULL, stcb, NULL, SCTP_FROM_SCTPUTIL, EINVAL);
+				(void)sctp_free_assoc(inp, stcb, SCTP_NORMAL_PROC, SCTP_FROM_SCTP_USRREQ + SCTP_LOC_8);
+				*error = EINVAL;
+				goto out_now;
+			}
 			if (sctp_add_remote_addr(stcb, sa, NULL, SCTP_DONOT_SETSCOPE, SCTP_ADDR_IS_CONFIRMED)) {
 				/* assoc gone no un-lock */
 				SCTP_LTRACE_ERR_RET(NULL, stcb, NULL, SCTP_FROM_SCTPUTIL, ENOBUFS);

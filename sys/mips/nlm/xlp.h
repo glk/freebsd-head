@@ -25,25 +25,36 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
  * THE POSSIBILITY OF SUCH DAMAGE.
  *
+ * NETLOGIC_BSD
  * $FreeBSD$
- * NETLOGIC_BSD */
+ */
 
 #ifndef __NLM_XLP_H__
 #define __NLM_XLP_H__
-#include <mips/nlm/hal/pic.h>
+#include <mips/nlm/hal/mips-extns.h>
+#include <mips/nlm/hal/iomap.h>
 
-#define XLP_PIC_IRT_UART0_IRQ	9
-#define XLP_PIC_IRT_UART1_IRQ	10
+#define PIC_UART_0_IRQ	9
+#define PIC_UART_1_IRQ	10
 
-#define XLP_PIC_IRT_PCIE0_IRQ	11
-#define XLP_PIC_IRT_PCIE1_IRQ	12
-#define XLP_PIC_IRT_PCIE2_IRQ	13
-#define XLP_PIC_IRT_PCIE3_IRQ	14
+#define PIC_PCIE_0_IRQ	11
+#define PIC_PCIE_1_IRQ	12
+#define PIC_PCIE_2_IRQ	13
+#define PIC_PCIE_3_IRQ	14
 
-#define XLP_PIC_IRT_EHCI0_IRQ	39 
-#define XLP_PIC_IRT_EHCI1_IRQ	42 
-#define XLP_PIC_IRT_MMC_IRQ	43
+#define PIC_EHCI_0_IRQ	39 
+#define PIC_EHCI_1_IRQ	42 
+#define PIC_MMC_IRQ	43
 
+/* XLP 8xx/4xx A0, A1, A2 CPU COP0 PRIDs */
+#define	CHIP_PROCESSOR_ID_XLP_8XX		0x10
+#define	CHIP_PROCESSOR_ID_XLP_3XX		0x11
+
+/* Revision id's */
+#define	XLP_REVISION_A0				0x00
+#define	XLP_REVISION_A1				0x01
+#define	XLP_REVISION_A2				0x02
+#define	XLP_REVISION_B0				0x03
 
 #ifndef LOCORE
 /*
@@ -58,76 +69,25 @@ extern int xlp_hwtid_to_cpuid[];
 #ifdef SMP
 extern void xlp_enable_threads(int code);
 #endif
+uint32_t xlp_get_cpu_frequency(int core);
+void nlm_pic_irt_init(void);
+int xlp_irt_to_irq(int irt);
+int xlp_irq_to_irt(int irq);
+int xlp_irq_is_picintr(int irq);
 
-extern uint64_t xlp_pic_base; /* TODO just for node 0 now */
-
-static __inline__ int
-xlp_irt_to_irq(int irt)
+static __inline int nlm_is_xlp3xx(void)
 {
-	switch (irt) {
-		case XLP_PIC_IRT_MMC_INDEX :
-			return XLP_PIC_IRT_MMC_IRQ;
-		case XLP_PIC_IRT_EHCI0_INDEX :
- 			return XLP_PIC_IRT_EHCI0_IRQ;
- 		case XLP_PIC_IRT_EHCI1_INDEX :
- 			return XLP_PIC_IRT_EHCI1_IRQ;
-		case XLP_PIC_IRT_UART0_INDEX :
-			return XLP_PIC_IRT_UART0_IRQ;
-		case XLP_PIC_IRT_UART1_INDEX :
-			return XLP_PIC_IRT_UART1_IRQ;
-		case XLP_PIC_IRT_PCIE_LINK0_INDEX :
-			return XLP_PIC_IRT_PCIE0_IRQ;
-		case XLP_PIC_IRT_PCIE_LINK1_INDEX :
-			return XLP_PIC_IRT_PCIE1_IRQ;
-		case XLP_PIC_IRT_PCIE_LINK2_INDEX :
-			return XLP_PIC_IRT_PCIE2_IRQ;
-		case XLP_PIC_IRT_PCIE_LINK3_INDEX :
-			return XLP_PIC_IRT_PCIE3_IRQ;
-		default: panic("Bad IRT %d\n", irt);
-	}
+	int prid = (mips_rd_prid() >> 8) & 0xff;
+
+	return (prid == CHIP_PROCESSOR_ID_XLP_3XX);
 }
 
-static __inline__ int
-xlp_irq_to_irt(int irq)
+static __inline int nlm_is_xlp8xx(void)
 {
-	switch (irq) {
-		case XLP_PIC_IRT_MMC_IRQ :
-			return XLP_PIC_IRT_MMC_INDEX;
- 		case XLP_PIC_IRT_EHCI0_IRQ :
- 			return XLP_PIC_IRT_EHCI0_INDEX;
- 		case XLP_PIC_IRT_EHCI1_IRQ :
- 			return XLP_PIC_IRT_EHCI1_INDEX;
-		case XLP_PIC_IRT_UART0_IRQ :
-			return XLP_PIC_IRT_UART0_INDEX;
-		case XLP_PIC_IRT_UART1_IRQ :
-			return XLP_PIC_IRT_UART1_INDEX;
-		case XLP_PIC_IRT_PCIE0_IRQ :
-			return XLP_PIC_IRT_PCIE_LINK0_INDEX;
-		case XLP_PIC_IRT_PCIE1_IRQ :
-			return XLP_PIC_IRT_PCIE_LINK1_INDEX;
-		case XLP_PIC_IRT_PCIE2_IRQ :
-			return XLP_PIC_IRT_PCIE_LINK2_INDEX;
-		case XLP_PIC_IRT_PCIE3_IRQ :
-			return XLP_PIC_IRT_PCIE_LINK3_INDEX;
-		default: panic("Bad IRQ %d\n", irq);
-	}
+	int prid = (mips_rd_prid() >> 8) & 0xff;
+
+	return (prid == CHIP_PROCESSOR_ID_XLP_8XX);
 }
 
-static __inline__ int
-xlp_irq_is_picintr(int irq)
-{
-	switch (irq) {
-		case XLP_PIC_IRT_MMC_IRQ : return 1;
- 		case XLP_PIC_IRT_EHCI0_IRQ : return 1;
- 		case XLP_PIC_IRT_EHCI1_IRQ : return 1;
-		case XLP_PIC_IRT_UART0_IRQ : return 1;
-		case XLP_PIC_IRT_UART1_IRQ : return 1;
-		case XLP_PIC_IRT_PCIE0_IRQ : return 1;
-		case XLP_PIC_IRT_PCIE1_IRQ : return 1;
-		case XLP_PIC_IRT_PCIE2_IRQ : return 1;
-		case XLP_PIC_IRT_PCIE3_IRQ : return 1;
-		default: return 0;
-	}
-}
 #endif /* LOCORE */
 #endif /* __NLM_XLP_H__ */

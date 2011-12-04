@@ -89,7 +89,7 @@ struct getpriority_args {
 };
 #endif
 int
-getpriority(td, uap)
+sys_getpriority(td, uap)
 	struct thread *td;
 	register struct getpriority_args *uap;
 {
@@ -174,7 +174,7 @@ struct setpriority_args {
 };
 #endif
 int
-setpriority(td, uap)
+sys_setpriority(td, uap)
 	struct thread *td;
 	struct setpriority_args *uap;
 {
@@ -284,7 +284,7 @@ struct rtprio_thread_args {
 };
 #endif
 int
-rtprio_thread(struct thread *td, struct rtprio_thread_args *uap)
+sys_rtprio_thread(struct thread *td, struct rtprio_thread_args *uap)
 {
 	struct proc *p;
 	struct rtprio rtp;
@@ -358,7 +358,7 @@ struct rtprio_args {
 };
 #endif
 int
-rtprio(td, uap)
+sys_rtprio(td, uap)
 	struct thread *td;		/* curthread */
 	register struct rtprio_args *uap;
 {
@@ -488,8 +488,9 @@ rtp_to_pri(struct rtprio *rtp, struct thread *td)
 	sched_class(td, rtp->type);	/* XXX fix */
 	oldpri = td->td_user_pri;
 	sched_user_prio(td, newpri);
-	if (curthread == td)
-		sched_prio(curthread, td->td_user_pri); /* XXX dubious */
+	if (td->td_user_pri != oldpri && (td == curthread ||
+	    td->td_priority == oldpri || td->td_user_pri >= PRI_MAX_REALTIME))
+		sched_prio(td, td->td_user_pri);
 	if (TD_ON_UPILOCK(td) && oldpri != newpri) {
 		critical_enter();
 		thread_unlock(td);
@@ -592,7 +593,7 @@ struct __setrlimit_args {
 };
 #endif
 int
-setrlimit(td, uap)
+sys_setrlimit(td, uap)
 	struct thread *td;
 	register struct __setrlimit_args *uap;
 {
@@ -632,7 +633,7 @@ lim_cb(void *arg)
 		} else {
 			if (p->p_cpulimit < rlim.rlim_max)
 				p->p_cpulimit += 5;
-			psignal(p, SIGXCPU);
+			kern_psignal(p, SIGXCPU);
 		}
 	}
 	if ((p->p_flag & P_WEXIT) == 0)
@@ -771,7 +772,7 @@ struct __getrlimit_args {
 #endif
 /* ARGSUSED */
 int
-getrlimit(td, uap)
+sys_getrlimit(td, uap)
 	struct thread *td;
 	register struct __getrlimit_args *uap;
 {
@@ -950,7 +951,7 @@ struct getrusage_args {
 };
 #endif
 int
-getrusage(td, uap)
+sys_getrusage(td, uap)
 	register struct thread *td;
 	register struct getrusage_args *uap;
 {
@@ -1118,6 +1119,10 @@ lim_hold(limp)
 void
 lim_fork(struct proc *p1, struct proc *p2)
 {
+
+	PROC_LOCK_ASSERT(p1, MA_OWNED);
+	PROC_LOCK_ASSERT(p2, MA_OWNED);
+
 	p2->p_limit = lim_hold(p1->p_limit);
 	callout_init_mtx(&p2->p_limco, &p2->p_mtx, 0);
 	if (p1->p_cpulimit != RLIM_INFINITY)

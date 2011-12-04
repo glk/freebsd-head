@@ -3541,7 +3541,7 @@ sctp_process_cmsgs_for_init(struct sctp_tcb *stcb, struct mbuf *control, int *er
 				    (sin.sin_addr.s_addr == INADDR_BROADCAST) ||
 				    IN_MULTICAST(ntohl(sin.sin_addr.s_addr))) {
 					*error = EINVAL;
-					return (-1);
+					return (1);
 				}
 				if (sctp_add_remote_addr(stcb, (struct sockaddr *)&sin, NULL,
 				    SCTP_DONOT_SETSCOPE, SCTP_ADDR_IS_CONFIRMED)) {
@@ -3564,7 +3564,7 @@ sctp_process_cmsgs_for_init(struct sctp_tcb *stcb, struct mbuf *control, int *er
 				if (IN6_IS_ADDR_UNSPECIFIED(&sin6.sin6_addr) ||
 				    IN6_IS_ADDR_MULTICAST(&sin6.sin6_addr)) {
 					*error = EINVAL;
-					return (-1);
+					return (1);
 				}
 #ifdef INET
 				if (IN6_IS_ADDR_V4MAPPED(&sin6.sin6_addr)) {
@@ -3573,7 +3573,7 @@ sctp_process_cmsgs_for_init(struct sctp_tcb *stcb, struct mbuf *control, int *er
 					    (sin.sin_addr.s_addr == INADDR_BROADCAST) ||
 					    IN_MULTICAST(ntohl(sin.sin_addr.s_addr))) {
 						*error = EINVAL;
-						return (-1);
+						return (1);
 					}
 					if (sctp_add_remote_addr(stcb, (struct sockaddr *)&sin, NULL,
 					    SCTP_DONOT_SETSCOPE, SCTP_ADDR_IS_CONFIRMED)) {
@@ -3904,6 +3904,7 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 	uint32_t vrf_id;
 	sctp_route_t *ro = NULL;
 	struct udphdr *udp = NULL;
+	uint8_t tos_value;
 
 #if defined (__APPLE__) || defined(SCTP_SO_LOCK_TESTING)
 	struct socket *so = NULL;
@@ -3925,13 +3926,20 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 	if ((auth != NULL) && (stcb != NULL)) {
 		sctp_fill_hmac_digest_m(m, auth_offset, auth, stcb, auth_keyid);
 	}
+	if (net) {
+		tos_value = net->dscp;
+	} else if (stcb) {
+		tos_value = stcb->asoc.default_dscp;
+	} else {
+		tos_value = inp->sctp_ep.default_dscp;
+	}
+
 	switch (to->sa_family) {
 #ifdef INET
 	case AF_INET:
 		{
 			struct ip *ip = NULL;
 			sctp_route_t iproute;
-			uint8_t tos_value;
 			int len;
 
 			len = sizeof(struct ip) + sizeof(struct sctphdr);
@@ -3966,10 +3974,17 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 			ip = mtod(m, struct ip *);
 			ip->ip_v = IPVERSION;
 			ip->ip_hl = (sizeof(struct ip) >> 2);
-			if (net) {
-				tos_value = net->dscp;
-			} else {
+			if (tos_value == 0) {
+				/*
+				 * This means especially, that it is not set
+				 * at the SCTP layer. So use the value from
+				 * the IP layer.
+				 */
 				tos_value = inp->ip_inp.inp.inp_ip_tos;
+			}
+			tos_value &= 0xfc;
+			if (ecn_ok) {
+				tos_value |= sctp_get_ect(stcb, chk);
 			}
 			if ((nofragment_flag) && (port == 0)) {
 				ip->ip_off = IP_DF;
@@ -3981,10 +3996,7 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 
 			ip->ip_ttl = inp->ip_inp.inp.inp_ip_ttl;
 			ip->ip_len = packet_length;
-			ip->ip_tos = tos_value & 0xfc;
-			if (ecn_ok) {
-				ip->ip_tos |= sctp_get_ect(stcb, chk);
-			}
+			ip->ip_tos = tos_value;
 			if (port) {
 				ip->ip_p = IPPROTO_UDP;
 			} else {
@@ -4050,6 +4062,12 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 				}
 			}
 			if (port) {
+				if (htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port)) == 0) {
+					sctp_handle_no_route(stcb, net, so_locked);
+					SCTP_LTRACE_ERR_RET_PKT(m, inp, stcb, NULL, SCTP_FROM_SCTP_OUTPUT, EHOSTUNREACH);
+					sctp_m_freem(m);
+					return (EHOSTUNREACH);
+				}
 				udp = (struct udphdr *)((caddr_t)ip + sizeof(struct ip));
 				udp->uh_sport = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
 				udp->uh_dport = port;
@@ -4189,13 +4207,10 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 #ifdef INET6
 	case AF_INET6:
 		{
-			uint32_t flowlabel;
+			uint32_t flowlabel, flowinfo;
 			struct ip6_hdr *ip6h;
 			struct route_in6 ip6route;
 			struct ifnet *ifp;
-			u_char flowTop;
-			uint16_t flowBottom;
-			u_char tosBottom, tosTop;
 			struct sockaddr_in6 *sin6, tmp, *lsa6, lsa6_tmp;
 			int prev_scope = 0;
 			struct sockaddr_in6 lsa6_storage;
@@ -4203,12 +4218,22 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 			u_short prev_port = 0;
 			int len;
 
-			if (net != NULL) {
+			if (net) {
 				flowlabel = net->flowlabel;
+			} else if (stcb) {
+				flowlabel = stcb->asoc.default_flowlabel;
 			} else {
-				flowlabel = ((struct in6pcb *)inp)->in6p_flowinfo;
+				flowlabel = inp->sctp_ep.default_flowlabel;
 			}
-
+			if (flowlabel == 0) {
+				/*
+				 * This means especially, that it is not set
+				 * at the SCTP layer. So use the value from
+				 * the IP layer.
+				 */
+				flowlabel = ntohl(((struct in6pcb *)inp)->in6p_flowinfo);
+			}
+			flowlabel &= 0x000fffff;
 			len = sizeof(struct ip6_hdr) + sizeof(struct sctphdr);
 			if (port) {
 				len += sizeof(struct udphdr);
@@ -4240,13 +4265,6 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 			packet_length = sctp_calculate_len(m);
 
 			ip6h = mtod(m, struct ip6_hdr *);
-			/*
-			 * We assume here that inp_flow is in host byte
-			 * order within the TCB!
-			 */
-			flowBottom = flowlabel & 0x0000ffff;
-			flowTop = ((flowlabel & 0x000f0000) >> 16);
-			tosTop = (((flowlabel & 0xf0) >> 4) | IPV6_VERSION);
 			/* protect *sin6 from overwrite */
 			sin6 = (struct sockaddr_in6 *)to;
 			tmp = *sin6;
@@ -4264,12 +4282,28 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 			} else {
 				ro = (sctp_route_t *) & net->ro;
 			}
-			tosBottom = (((struct in6pcb *)inp)->in6p_flowinfo & 0x0c);
-			if (ecn_ok) {
-				tosBottom |= sctp_get_ect(stcb, chk);
+			/*
+			 * We assume here that inp_flow is in host byte
+			 * order within the TCB!
+			 */
+			if (tos_value == 0) {
+				/*
+				 * This means especially, that it is not set
+				 * at the SCTP layer. So use the value from
+				 * the IP layer.
+				 */
+				tos_value = (ntohl(((struct in6pcb *)inp)->in6p_flowinfo) >> 20) & 0xff;
 			}
-			tosBottom <<= 4;
-			ip6h->ip6_flow = htonl(((tosTop << 24) | ((tosBottom | flowTop) << 16) | flowBottom));
+			tos_value &= 0xfc;
+			if (ecn_ok) {
+				tos_value |= sctp_get_ect(stcb, chk);
+			}
+			flowinfo = 0x06;
+			flowinfo <<= 8;
+			flowinfo |= tos_value;
+			flowinfo <<= 20;
+			flowinfo |= flowlabel;
+			ip6h->ip6_flow = htonl(flowinfo);
 			if (port) {
 				ip6h->ip6_nxt = IPPROTO_UDP;
 			} else {
@@ -4385,6 +4419,12 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 			ip6h->ip6_src = lsa6->sin6_addr;
 
 			if (port) {
+				if (htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port)) == 0) {
+					sctp_handle_no_route(stcb, net, so_locked);
+					SCTP_LTRACE_ERR_RET_PKT(m, inp, stcb, NULL, SCTP_FROM_SCTP_OUTPUT, EHOSTUNREACH);
+					sctp_m_freem(m);
+					return (EHOSTUNREACH);
+				}
 				udp = (struct udphdr *)((caddr_t)ip6h + sizeof(struct ip6_hdr));
 				udp->uh_sport = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
 				udp->uh_dport = port;
@@ -4640,24 +4680,24 @@ sctp_send_initiate(struct sctp_inpcb *inp, struct sctp_tcb *stcb, int so_locked
 #ifdef INET6
 #ifdef INET
 	/* we support 2 types: IPv4/IPv6 */
-	sup_addr->ph.param_length = htons(sizeof(*sup_addr) + sizeof(uint16_t));
+	sup_addr->ph.param_length = htons(sizeof(struct sctp_paramhdr) + 2 * sizeof(uint16_t));
 	sup_addr->addr_type[0] = htons(SCTP_IPV4_ADDRESS);
 	sup_addr->addr_type[1] = htons(SCTP_IPV6_ADDRESS);
 #else
 	/* we support 1 type: IPv6 */
-	sup_addr->ph.param_length = htons(sizeof(*sup_addr) + sizeof(uint8_t));
+	sup_addr->ph.param_length = htons(sizeof(struct sctp_paramhdr) + sizeof(uint16_t));
 	sup_addr->addr_type[0] = htons(SCTP_IPV6_ADDRESS);
 	sup_addr->addr_type[1] = htons(0);	/* this is the padding */
 #endif
 #else
 	/* we support 1 type: IPv4 */
-	sup_addr->ph.param_length = htons(sizeof(*sup_addr) + sizeof(uint8_t));
+	sup_addr->ph.param_length = htons(sizeof(struct sctp_paramhdr) + sizeof(uint16_t));
 	sup_addr->addr_type[0] = htons(SCTP_IPV4_ADDRESS);
 	sup_addr->addr_type[1] = htons(0);	/* this is the padding */
 #endif
-	SCTP_BUF_LEN(m) += sizeof(*sup_addr) + sizeof(uint16_t);
+	SCTP_BUF_LEN(m) += sizeof(struct sctp_supported_addr_param);
 	/* adaptation layer indication parameter */
-	ali = (struct sctp_adaptation_layer_indication *)((caddr_t)sup_addr + sizeof(*sup_addr) + sizeof(uint16_t));
+	ali = (struct sctp_adaptation_layer_indication *)((caddr_t)sup_addr + sizeof(struct sctp_supported_addr_param));
 	ali->ph.param_type = htons(SCTP_ULP_ADAPTATION);
 	ali->ph.param_length = htons(sizeof(*ali));
 	ali->indication = ntohl(inp->sctp_ep.adaptation_layer_indicator);
@@ -5683,6 +5723,8 @@ do_a_abort:
 			stc.laddress[2] = 0;
 			stc.laddress[3] = 0;
 			stc.laddr_type = SCTP_IPV4_ADDRESS;
+			/* scope_id is only for v6 */
+			stc.scope_id = 0;
 			break;
 #endif
 #ifdef INET6
@@ -5691,6 +5733,7 @@ do_a_abort:
 			memcpy(&stc.address, &sin6->sin6_addr,
 			    sizeof(struct in6_addr));
 			stc.addr_type = SCTP_IPV6_ADDRESS;
+			stc.scope_id = sin6->sin6_scope_id;
 			if (net->src_addr_selected == 0) {
 				/*
 				 * strange case here, the INIT should have
@@ -5718,6 +5761,7 @@ do_a_abort:
 	/* who are we */
 	memcpy(stc.identification, SCTP_VERSION_STRING,
 	    min(strlen(SCTP_VERSION_STRING), sizeof(stc.identification)));
+	memset(stc.reserved, 0, SCTP_RESERVE_SPACE);
 	/* now the chunk header */
 	initack->ch.chunk_type = SCTP_INITIATION_ACK;
 	initack->ch.chunk_flags = 0;
@@ -7975,12 +8019,20 @@ again_one_more_time:
 			if (chk->rec.chunk_id.id != SCTP_ASCONF) {
 				continue;
 			}
-			if (chk->whoTo != net) {
-				/*
-				 * No, not sent to the network we are
-				 * looking at
-				 */
-				break;
+			if (chk->whoTo == NULL) {
+				if (asoc->alternate == NULL) {
+					if (asoc->primary_destination != net) {
+						break;
+					}
+				} else {
+					if (asoc->alternate != net) {
+						break;
+					}
+				}
+			} else {
+				if (chk->whoTo != net) {
+					break;
+				}
 			}
 			if (chk->data == NULL) {
 				break;
@@ -8064,6 +8116,10 @@ again_one_more_time:
 				 */
 				no_data_chunks = 1;
 				chk->sent = SCTP_DATAGRAM_SENT;
+				if (chk->whoTo == NULL) {
+					chk->whoTo = net;
+					atomic_add_int(&net->ref_count, 1);
+				}
 				chk->snd_count++;
 				if (mtu == 0) {
 					/*
@@ -8170,12 +8226,20 @@ again_one_more_time:
 					goto skip_net_check;
 				}
 			}
-			if (chk->whoTo != net) {
-				/*
-				 * No, not sent to the network we are
-				 * looking at
-				 */
-				continue;
+			if (chk->whoTo == NULL) {
+				if (asoc->alternate == NULL) {
+					if (asoc->primary_destination != net) {
+						continue;
+					}
+				} else {
+					if (asoc->alternate != net) {
+						continue;
+					}
+				}
+			} else {
+				if (chk->whoTo != net) {
+					continue;
+				}
 			}
 	skip_net_check:
 			if (chk->data == NULL) {
@@ -8304,6 +8368,10 @@ again_one_more_time:
 						SCTP_STAT_INCR(sctps_sendecne);
 					}
 					chk->sent = SCTP_DATAGRAM_SENT;
+					if (chk->whoTo == NULL) {
+						chk->whoTo = net;
+						atomic_add_int(&net->ref_count, 1);
+					}
 					chk->snd_count++;
 				}
 				if (mtu == 0) {
@@ -9821,19 +9889,22 @@ sctp_chunk_output(struct sctp_inpcb *inp,
 	unsigned int burst_cnt = 0;
 	struct timeval now;
 	int now_filled = 0;
-	int nagle_on = 0;
+	int nagle_on;
 	int frag_point = sctp_get_frag_point(stcb, &stcb->asoc);
 	int un_sent = 0;
 	int fr_done;
 	unsigned int tot_frs = 0;
 
 	asoc = &stcb->asoc;
+	/* The Nagle algorithm is only applied when handling a send call. */
 	if (from_where == SCTP_OUTPUT_FROM_USR_SEND) {
 		if (sctp_is_feature_on(inp, SCTP_PCB_FLAGS_NODELAY)) {
 			nagle_on = 0;
 		} else {
 			nagle_on = 1;
 		}
+	} else {
+		nagle_on = 0;
 	}
 	SCTP_TCB_LOCK_ASSERT(stcb);
 
@@ -10007,15 +10078,18 @@ sctp_chunk_output(struct sctp_inpcb *inp,
 			}
 		}
 		if (nagle_on) {
-			/*-
-			 * When nagle is on, we look at how much is un_sent, then
-			 * if its smaller than an MTU and we have data in
-			 * flight we stop.
+			/*
+			 * When the Nagle algorithm is used, look at how
+			 * much is unsent, then if its smaller than an MTU
+			 * and we have data in flight we stop, except if we
+			 * are handling a fragmented user message.
 			 */
 			un_sent = ((stcb->asoc.total_output_queue_size - stcb->asoc.total_flight) +
 			    (stcb->asoc.stream_queue_cnt * sizeof(struct sctp_data_chunk)));
 			if ((un_sent < (int)(stcb->asoc.smallest_mtu - SCTP_MIN_OVERHEAD)) &&
-			    (stcb->asoc.total_flight > 0)) {
+			    (stcb->asoc.total_flight > 0) &&
+			    ((stcb->asoc.locked_on_sending == NULL) ||
+			    sctp_is_feature_on(inp, SCTP_PCB_FLAGS_EXPLICIT_EOR))) {
 				break;
 			}
 		}
@@ -10903,6 +10977,10 @@ sctp_send_shutdown_complete2(struct mbuf *m, int iphlen, struct sctphdr *sh,
 		return;
 	}
 	if (port) {
+		if (htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port)) == 0) {
+			sctp_m_freem(mout);
+			return;
+		}
 		udp = (struct udphdr *)comp_cp;
 		udp->uh_sport = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
 		udp->uh_dport = port;
@@ -11863,6 +11941,10 @@ sctp_send_abort(struct mbuf *m, int iphlen, struct sctphdr *sh, uint32_t vtag,
 
 	udp = (struct udphdr *)abm;
 	if (port) {
+		if (htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port)) == 0) {
+			sctp_m_freem(mout);
+			return;
+		}
 		udp->uh_sport = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
 		udp->uh_dport = port;
 		/* set udp->uh_ulen later */
@@ -12124,6 +12206,10 @@ sctp_send_operr_to(struct mbuf *m, int iphlen, struct mbuf *scm, uint32_t vtag,
 
 	udp = (struct udphdr *)sh_out;
 	if (port) {
+		if (htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port)) == 0) {
+			sctp_m_freem(mout);
+			return;
+		}
 		udp->uh_sport = htons(SCTP_BASE_SYSCTL(sctp_udp_tunneling_port));
 		udp->uh_dport = port;
 		/* set udp->uh_ulen later */
@@ -12594,14 +12680,10 @@ sctp_lower_sosend(struct socket *so,
 	    (inp->sctp_flags & SCTP_PCB_FLAGS_IN_TCPPOOL)) {
 		SCTP_INP_RLOCK(inp);
 		stcb = LIST_FIRST(&inp->sctp_asoc_list);
-		if (stcb == NULL) {
-			SCTP_INP_RUNLOCK(inp);
-			SCTP_LTRACE_ERR_RET(inp, stcb, net, SCTP_FROM_SCTP_OUTPUT, ENOTCONN);
-			error = ENOTCONN;
-			goto out_unlocked;
+		if (stcb) {
+			SCTP_TCB_LOCK(stcb);
+			hold_tcblock = 1;
 		}
-		SCTP_TCB_LOCK(stcb);
-		hold_tcblock = 1;
 		SCTP_INP_RUNLOCK(inp);
 	} else if (sinfo_assoc_id) {
 		stcb = sctp_findassociation_ep_asocid(inp, sinfo_assoc_id, 0);
@@ -12666,21 +12748,12 @@ sctp_lower_sosend(struct socket *so,
 		}
 	}
 	if (stcb == NULL) {
-		if ((inp->sctp_flags & SCTP_PCB_FLAGS_TCPTYPE) ||
-		    (inp->sctp_flags & SCTP_PCB_FLAGS_IN_TCPPOOL)) {
-			SCTP_LTRACE_ERR_RET(inp, stcb, net, SCTP_FROM_SCTP_OUTPUT, ENOTCONN);
-			error = ENOTCONN;
-			goto out_unlocked;
-		}
 		if (addr == NULL) {
 			SCTP_LTRACE_ERR_RET(inp, stcb, net, SCTP_FROM_SCTP_OUTPUT, ENOENT);
 			error = ENOENT;
 			goto out_unlocked;
 		} else {
-			/*
-			 * UDP style, we must go ahead and start the INIT
-			 * process
-			 */
+			/* We must go ahead and start the INIT process */
 			uint32_t vrf_id;
 
 			if ((sinfo_flags & SCTP_ABORT) ||
@@ -12706,6 +12779,14 @@ sctp_lower_sosend(struct socket *so,
 			if (stcb == NULL) {
 				/* Error is setup for us in the call */
 				goto out_unlocked;
+			}
+			if (stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_TCPTYPE) {
+				stcb->sctp_ep->sctp_flags |= SCTP_PCB_FLAGS_CONNECTED;
+				/*
+				 * Set the connected flag so we can queue
+				 * data
+				 */
+				soisconnecting(so);
 			}
 			hold_tcblock = 1;
 			if (create_lock_applied) {

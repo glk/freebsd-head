@@ -78,7 +78,7 @@ __FBSDID("$FreeBSD$");
 #define	DEFAULT_HOSTUUID	"00000000-0000-0000-0000-000000000000"
 
 MALLOC_DEFINE(M_PRISON, "prison", "Prison structures");
-MALLOC_DEFINE(M_PRISON_RACCT, "prison_racct", "Prison racct structures");
+static MALLOC_DEFINE(M_PRISON_RACCT, "prison_racct", "Prison racct structures");
 
 /* Keep struct prison prison0 and some code in kern_jail_set() readable. */
 #ifdef INET
@@ -276,7 +276,7 @@ qcmp_v6(const void *ip1, const void *ip2)
  * };
  */
 int
-jail(struct thread *td, struct jail_args *uap)
+sys_jail(struct thread *td, struct jail_args *uap)
 {
 	uint32_t version;
 	int error;
@@ -489,7 +489,7 @@ kern_jail(struct thread *td, struct jail *j)
  * };
  */
 int
-jail_set(struct thread *td, struct jail_set_args *uap)
+sys_jail_set(struct thread *td, struct jail_set_args *uap)
 {
 	struct uio *auio;
 	int error;
@@ -1819,7 +1819,7 @@ kern_jail_set(struct thread *td, struct uio *optuio, int flags)
  * };
  */
 int
-jail_get(struct thread *td, struct jail_get_args *uap)
+sys_jail_get(struct thread *td, struct jail_get_args *uap)
 {
 	struct uio *auio;
 	int error;
@@ -2119,7 +2119,7 @@ kern_jail_get(struct thread *td, struct uio *optuio, int flags)
  * };
  */
 int
-jail_remove(struct thread *td, struct jail_remove_args *uap)
+sys_jail_remove(struct thread *td, struct jail_remove_args *uap)
 {
 	struct prison *pr, *cpr, *lpr, *tpr;
 	int descend, error;
@@ -2206,7 +2206,7 @@ prison_remove_one(struct prison *pr)
 		PROC_LOCK(p);
 		if (p->p_state != PRS_NEW && p->p_ucred &&
 		    p->p_ucred->cr_prison == pr)
-			psignal(p, SIGKILL);
+			kern_psignal(p, SIGKILL);
 		PROC_UNLOCK(p);
 	}
 	sx_sunlock(&allproc_lock);
@@ -2221,7 +2221,7 @@ prison_remove_one(struct prison *pr)
  * };
  */
 int
-jail_attach(struct thread *td, struct jail_attach_args *uap)
+sys_jail_attach(struct thread *td, struct jail_attach_args *uap)
 {
 	struct prison *pr;
 	int error;
@@ -3944,7 +3944,7 @@ prison_path(struct prison *pr1, struct prison *pr2)
 /*
  * Jail-related sysctls.
  */
-SYSCTL_NODE(_security, OID_AUTO, jail, CTLFLAG_RW, 0,
+static SYSCTL_NODE(_security, OID_AUTO, jail, CTLFLAG_RW, 0,
     "Jails");
 
 static int

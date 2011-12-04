@@ -322,8 +322,13 @@ struct sctp_pcb {
 	uint32_t store_at;
 	uint32_t max_burst;
 	uint32_t fr_max_burst;
+#ifdef INET6
+	uint32_t default_flowlabel;
+#endif
+	uint8_t default_dscp;
 	char current_secret_number;
 	char last_secret_number;
+	uint16_t port;		/* remote UDP encapsulation port */
 };
 
 #ifndef SCTP_ALIGNMENT

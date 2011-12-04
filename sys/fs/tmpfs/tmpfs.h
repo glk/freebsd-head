@@ -495,7 +495,10 @@ int	tmpfs_truncate(struct vnode *, off_t);
 static __inline size_t
 tmpfs_pages_max(struct tmpfs_mount *tmp)
 {
-	return (tmp->tm_pages_max);
+	size_t avail;
+
+	avail = swap_pager_avail + cnt.v_free_count + cnt.v_cache_count;
+	return MIN(avail, tmp->tm_pages_max);
 }
 
 static __inline size_t

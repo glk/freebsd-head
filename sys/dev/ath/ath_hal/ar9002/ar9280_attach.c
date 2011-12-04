@@ -153,13 +153,13 @@ ar9280Attach(uint16_t devid, HAL_SOFTC sc,
 	int8_t pwr_table_offset;
 	uint8_t pwr;
 
-	HALDEBUG_G(AH_NULL, HAL_DEBUG_ATTACH, "%s: sc %p st %p sh %p\n",
+	HALDEBUG(AH_NULL, HAL_DEBUG_ATTACH, "%s: sc %p st %p sh %p\n",
 	    __func__, sc, (void*) st, (void*) sh);
 
 	/* NB: memory is returned zero'd */
 	ahp9280 = ath_hal_malloc(sizeof (struct ath_hal_9280));
 	if (ahp9280 == AH_NULL) {
-		HALDEBUG_G(AH_NULL, HAL_DEBUG_ANY,
+		HALDEBUG(AH_NULL, HAL_DEBUG_ANY,
 		    "%s: cannot allocate memory for state block\n", __func__);
 		*status = HAL_ENOMEM;
 		return AH_NULL;
@@ -892,9 +892,12 @@ ar9280SetAntennaSwitch(struct ath_hal *ah, HAL_ANT_SETTING settings)
 static const char*
 ar9280Probe(uint16_t vendorid, uint16_t devid)
 {
-	if (vendorid == ATHEROS_VENDOR_ID &&
-	    (devid == AR9280_DEVID_PCI || devid == AR9280_DEVID_PCIE))
-		return "Atheros 9280";
+	if (vendorid == ATHEROS_VENDOR_ID) {
+		if (devid == AR9280_DEVID_PCI)
+			return "Atheros 9220";
+		if (devid == AR9280_DEVID_PCIE)
+			return "Atheros 9280";
+	}
 	return AH_NULL;
 }
 AH_CHIP(AR9280, ar9280Probe, ar9280Attach);

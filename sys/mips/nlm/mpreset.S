@@ -25,8 +25,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
  * THE POSSIBILITY OF SUCH DAMAGE.
  *
+ * NETLOGIC_BSD
  * $FreeBSD$
- * NETLOGIC_BSD */
+ */
 
 #include <machine/asm.h>
 #include <machine/cpu.h>
@@ -35,12 +36,50 @@
 #include <mips/nlm/hal/sys.h>
 #include <mips/nlm/hal/cpucontrol.h>
 
+#define SYS_REG_KSEG1(node, reg)	(0xa0000000 + XLP_DEFAULT_IO_BASE + \
+		XLP_IO_SYS_OFFSET(node)  + XLP_IO_PCI_HDRSZ + (reg) * 4)
 #include "assym.s"
 
 	.text
 	.set	noat
 	.set	noreorder
 	.set	mips64
+
+#define	MFCR(rt,rs)	.word	((0x1c<<26)|((rs)<<21)|((rt)<<16)|(0x18))
+#define	MTCR(rt,rs)	.word	((0x1c<<26)|((rs)<<21)|((rt)<<16)|(0x19))
+/*
+ * We need to do this to really flush the dcache before splitting it
+ */
+.macro flush_l1_dcache
+	.set	push
+	.set	noreorder
+	li	$8, LSU_DEBUG_DATA0 /* use register number to handle */
+	li	$9, LSU_DEBUG_ADDR  /* different ABIs */
+	li	t2, 0
+	li	t3, 0x200
+1:
+	sll	v0, t2, 5
+	MTCR(0, 8)
+	ori	v1, v0, 0x3
+	MTCR(3, 9)
+2:
+	MFCR(3, 9)
+	andi	v1, 0x1
+	bnez	v1, 2b
+	nop
+	MTCR(0, 8)
+	ori	v1, v0, 0x7
+	MTCR(3, 9)
+3:
+	MFCR(3, 9)
+	andi	v1, 0x1
+	bnez	v1, 3b
+	nop
+	addi	t2, 1
+	bne	t3, t2, 1b
+	nop
+	.set pop
+.endm
 
 VECTOR(XLPResetEntry, unknown)
 	mfc0	t0, MIPS_COP_0_STATUS
@@ -59,7 +98,7 @@ VECTOR(XLPResetEntry, unknown)
 	nor     t0, t0, zero		/* mask with core id bit clear */
 
 	/* clear CPU non-coherent bit */
-	li	t2, XLP_DEFAULT_IO_BASE_KSEG1 + XLP_IO_SYS_OFFSET(0) + XLP_SYS_CPU_NONCOHERENT_MODE_REG * 4
+	li	t2, SYS_REG_KSEG1(0, SYS_CPU_NONCOHERENT_MODE)
 	lw	t1, 0(t2)
 	and	t1, t1, t0
 	sw	t1, 0(t2)
@@ -108,11 +147,14 @@ LEAF(xlp_enable_threads)
 	sd	t1, 72(sp)
 	sd	gp, 80(sp)
 	sd	ra, 88(sp)
+
+	flush_l1_dcache
+
 	/* Use register number to work in o32 and n32 */
-	li	$9, ((XLP_CPU_BLOCKID_MAP << 8) | XLP_BLKID_MAP_THREADMODE)
+	li	$9, ((CPU_BLOCKID_MAP << 8) | MAP_THREADMODE)
 	move	$8, a0	
 	sync
-	.word	0x71280019	/* mtcr    t0, t1*/
+	MTCR(8, 9)
 	mfc0	t0, MIPS_COP_0_PRID, 1
 	andi	t0, 0x3
 	beqz	t0, 2f
@@ -131,8 +173,8 @@ LEAF(xlp_enable_threads)
 	 */
 	li	$9, 0x400
 	li	$8, 0
-	.word	0x71280019	/* mtcr    $8, $9*/
-	.word	0x000000c0	/* ehb */
+	MTCR(8, 9)
+	sll	zero,3		/* ehb */
 #endif
 	dmfc0	t0, $4, 2	/* SP saved in UserLocal */
 	ori	sp, t0, 0x7

@@ -43,7 +43,6 @@ MAN=	accept_filter.9 \
 	BUS_SETUP_INTR.9 \
 	bus_space.9 \
 	byteorder.9 \
-	cc.9 \
 	cd.9 \
 	condvar.9 \
 	config_intrhook.9 \
@@ -169,6 +168,7 @@ MAN=	accept_filter.9 \
 	microtime.9 \
 	microuptime.9 \
 	mi_switch.9 \
+	mod_cc.9 \
 	module.9 \
 	MODULE_DEPEND.9 \
 	MODULE_VERSION.9 \
@@ -320,7 +320,7 @@ MAN=	accept_filter.9 \
 	vm_page_cache.9 \
 	vm_page_deactivate.9 \
 	vm_page_dontneed.9 \
-	vm_page_flag.9 \
+	vm_page_aflag.9 \
 	vm_page_free.9 \
 	vm_page_grab.9 \
 	vm_page_hold.9 \
@@ -724,7 +724,8 @@ MLINKS+=kobj.9 DEFINE_CLASS.9 \
 	kobj.9 kobj_class_free.9 \
 	kobj.9 kobj_create.9 \
 	kobj.9 kobj_delete.9 \
-	kobj.9 kobj_init.9
+	kobj.9 kobj_init.9 \
+	kobj.9 kobj_init_static.9
 MLINKS+=kproc.9 kproc_create.9 \
 	kproc.9 kproc_exit.9 \
 	kproc.9 kproc_resume.9 \
@@ -972,7 +973,8 @@ MLINKS+=printf.9 log.9 \
 MLINKS+=priv.9 priv_check.9 \
 	priv.9 priv_check_cred.9
 MLINKS+=psignal.9 gsignal.9 \
-	psignal.9 pgsignal.9
+	psignal.9 pgsignal.9 \
+	psignal.9 tdsignal.9
 MLINKS+=random.9 arc4rand.9 \
 	random.9 arc4random.9 \
 	random.9 read_random.9 \
@@ -1372,8 +1374,9 @@ MLINKS+=vm_page_bits.9 vm_page_clear_dirty.9 \
 	vm_page_bits.9 vm_page_test_dirty.9 \
 	vm_page_bits.9 vm_page_undirty.9 \
 	vm_page_bits.9 vm_page_zero_invalid.9
-MLINKS+=vm_page_flag.9 vm_page_flag_clear.9 \
-	vm_page_flag.9 vm_page_flag_set.9
+MLINKS+=vm_page_aflag.9 vm_page_aflag_clear.9 \
+	vm_page_aflag.9 vm_page_aflag_set.9 \
+	vm_page_aflag.9 vm_page_reference.9
 MLINKS+=vm_page_free.9 vm_page_free_toq.9 \
 	vm_page_free.9 vm_page_free_zero.9 \
 	vm_page_free.9 vm_page_try_to_free.9

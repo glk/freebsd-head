@@ -144,7 +144,7 @@ static void ld_utrace_log(int, void *, void *, size_t, int, const char *);
 static void rtld_fill_dl_phdr_info(const Obj_Entry *obj,
     struct dl_phdr_info *phdr_info);
 
-void r_debug_state(struct r_debug *, struct link_map *);
+void r_debug_state(struct r_debug *, struct link_map *) __noinline;
 
 /*
  * Data declarations.
@@ -495,8 +495,12 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
        exit (0);
     }
 
-    /* setup TLS for main thread */
-    dbg("initializing initial thread local storage");
+    /*
+     * Processing tls relocations requires having the tls offsets
+     * initialized.  Prepare offsets before starting initial
+     * relocation processing.
+     */
+    dbg("initializing initial thread local storage offsets");
     STAILQ_FOREACH(entry, &list_main, link) {
 	/*
 	 * Allocate all the initial objects out of the static TLS
@@ -504,7 +508,6 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
 	 */
 	allocate_tls_offset(entry->obj);
     }
-    allocate_initial_tls(obj_list);
 
     if (relocate_objects(obj_main,
       ld_bind_now != NULL && *ld_bind_now != '\0', &obj_rtld, NULL) == -1)
@@ -518,6 +521,14 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
        dump_relocations(obj_main);
        exit (0);
     }
+
+    /*
+     * Setup TLS for main thread.  This must be done after the
+     * relocations are processed, since tls initialization section
+     * might be the subject for relocations.
+     */
+    dbg("initializing initial thread local storage");
+    allocate_initial_tls(obj_list);
 
     dbg("initializing key program variables");
     set_program_var("__progname", argv[0] != NULL ? basename(argv[0]) : "");
@@ -1646,6 +1657,7 @@ load_object(const char *name, const Obj_Entry *refobj, int flags)
     }
     if (flags & RTLD_LO_NOLOAD) {
 	free(path);
+	close(fd);
 	return (NULL);
     }
 
@@ -2782,6 +2794,14 @@ linkmap_delete(Obj_Entry *obj)
 void
 r_debug_state(struct r_debug* rd, struct link_map *m)
 {
+    /*
+     * The following is a hack to force the compiler to emit calls to
+     * this function, even when optimizing.  If the function is empty,
+     * the compiler is not obliged to emit any code for calls to it,
+     * even when marked __noinline.  However, gdb depends on those
+     * calls being made.
+     */
+    __asm __volatile("" : : : "memory");
 }
 
 /*
@@ -3362,7 +3382,7 @@ tls_get_addr_common(Elf_Addr** dtvp, int index, size_t offset)
 	newdtv[1] = tls_max_index;
 	free(dtv);
 	lock_release(rtld_bind_lock, &lockstate);
-	*dtvp = newdtv;
+	dtv = *dtvp = newdtv;
     }
 
     /* Dynamically allocate module TLS if necessary */
