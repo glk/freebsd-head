@@ -121,7 +121,6 @@ struct vm_object {
 		 */
 		struct {
 			TAILQ_HEAD(, vm_page) devp_pglist;
-			struct cdev_pager_ops *ops;
 		} devp;
 
 		/*

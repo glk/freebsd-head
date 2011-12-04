@@ -77,8 +77,6 @@ static void radeon_configure(struct drm_device *dev)
 	dev->driver->major		= DRIVER_MAJOR;
 	dev->driver->minor		= DRIVER_MINOR;
 	dev->driver->patchlevel		= DRIVER_PATCHLEVEL;
-
-	drm_sleep_locking_init(dev);
 }
 
 static int

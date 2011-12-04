@@ -1035,8 +1035,7 @@ vm_fault_prefault(pmap_t pmap, vm_offset_t addra, vm_map_entry_t entry)
 			break;
 		}
 		if (m->valid == VM_PAGE_BITS_ALL &&
-		    (m->flags & PG_FICTITIOUS) == 0 &&
-		    (m->oflags & VPO_UNMANAGED) == 0)
+		    (m->flags & PG_FICTITIOUS) == 0)
 			pmap_enter_quick(pmap, addr, m, entry->protection);
 		VM_OBJECT_UNLOCK(lobject);
 	}
