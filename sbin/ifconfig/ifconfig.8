@@ -28,7 +28,7 @@
 .\"     From: @(#)ifconfig.8	8.3 (Berkeley) 1/5/94
 .\" $FreeBSD$
 .\"
-.Dd July 3, 2011
+.Dd November 12, 2011
 .Dt IFCONFIG 8
 .Os
 .Sh NAME
@@ -626,12 +626,37 @@ is needed for them:
 .Bl -tag -width indent
 .It Cm accept_rtadv
 Set a flag to enable accepting ICMPv6 Router Advertisement messages.
+The
+.Xr sysctl 8
+variable
+.Va net.inet6.ip6.accept_rtadv
+controls whether this flag is set by default or not.
 .It Cm -accept_rtadv
 Clear a flag
 .Cm accept_rtadv .
+.It Cm no_radr
+Set a flag to control whether routers from which the system accepts
+Router Advertisement messages will be added to the Default Router List
+or not.
+When the
+.Cm accept_rtadv
+flag is disabled, this flag has no effect.
+The
+.Xr sysctl 8
+variable
+.Va net.inet6.ip6.no_radr
+controls whether this flag is set by default or not.
+.It Cm -no_radr
+Clear a flag
+.Cm no_radr .
 .It Cm auto_linklocal
 Set a flag to perform automatic link-local address configuration when
 the interface becomes available.
+The
+.Xr sysctl 8
+variable
+.Va net.inet6.ip6.auto_linklocal
+controls whether this flag is set by default or not.
 .It Cm -auto_linklocal
 Clear a flag
 .Cm auto_linklocal .
@@ -1063,6 +1088,38 @@ The
 specifies the number of beacon intervals between DTIM
 and must be in the range 1 to 15.
 By default DTIM is 1 (i.e., DTIM occurs at each beacon).
+.It Cm quiet
+Enable the use of quiet IE.  Hostap will use this to silent other
+stations to reduce interference for radar detection when
+operating on 5Ghz frequency and doth support is enabled.
+Use
+.Fl quiet
+to disable this functionality.
+.It Cm quiet_period Ar period
+Set the QUIET
+.Ar period
+to the number of beacon intervals between the start of regularly
+scheduled quiet intervals defined by Quiet element.
+.It Cm quiet_count Ar count
+Set the QUIET
+.Ar count
+to the number of TBTTs until the beacon interval during which the
+next quiet interval shall start.  A value of 1 indicates the quiet
+interval will start during the beacon interval starting at the next
+TBTT. A value 0 is reserved.
+.It Cm quiet_offset Ar offset
+Set the QUIET
+.Ar offset
+to the offset of the start of the quiet interval from the TBTT
+specified by the Quiet count, expressed in TUs.
+The value of the
+.Ar offset
+shall be less than one beacon interval.
+.It Cm quiet_duration Ar dur
+Set the QUIET
+.Ar dur
+to the duration of the Quiet interval, expressed in TUs.
+The value should be less than beacon interval.
 .It Cm dturbo
 Enable the use of Atheros Dynamic Turbo mode when communicating with
 another Dynamic Turbo-capable station.

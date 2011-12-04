@@ -136,8 +136,8 @@ static	int		sc_no_suspend_vtswitch = 0;
 #endif
 static	int		sc_susp_scr;
 
-SYSCTL_NODE(_hw, OID_AUTO, syscons, CTLFLAG_RD, 0, "syscons");
-SYSCTL_NODE(_hw_syscons, OID_AUTO, saver, CTLFLAG_RD, 0, "saver");
+static SYSCTL_NODE(_hw, OID_AUTO, syscons, CTLFLAG_RD, 0, "syscons");
+static SYSCTL_NODE(_hw_syscons, OID_AUTO, saver, CTLFLAG_RD, 0, "saver");
 SYSCTL_INT(_hw_syscons_saver, OID_AUTO, keybonly, CTLFLAG_RW,
     &sc_saver_keyb_only, 0, "screen saver interrupted by input only");
 SYSCTL_INT(_hw_syscons, OID_AUTO, bell, CTLFLAG_RW, &enable_bell, 
@@ -2508,7 +2508,7 @@ signal_vt_rel(scr_stat *scp)
 	return FALSE;
     scp->status |= SWITCH_WAIT_REL;
     PROC_LOCK(scp->proc);
-    psignal(scp->proc, scp->smode.relsig);
+    kern_psignal(scp->proc, scp->smode.relsig);
     PROC_UNLOCK(scp->proc);
     DPRINTF(5, ("sending relsig to %d\n", scp->pid));
     return TRUE;
@@ -2523,7 +2523,7 @@ signal_vt_acq(scr_stat *scp)
 	cnavailable(sc_consptr,  FALSE);
     scp->status |= SWITCH_WAIT_ACQ;
     PROC_LOCK(scp->proc);
-    psignal(scp->proc, scp->smode.acqsig);
+    kern_psignal(scp->proc, scp->smode.acqsig);
     PROC_UNLOCK(scp->proc);
     DPRINTF(5, ("sending acqsig to %d\n", scp->pid));
     return TRUE;

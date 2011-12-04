@@ -48,7 +48,9 @@ SUBDIR_ORDERED=	${_csu} \
 	libsbuf \
 	libtacplus \
 	libutil \
-	${_libypclnt}
+	${_libypclnt} \
+	${_libcxxrt} \
+	${_libcplusplus}
 
 SUBDIR=	${SUBDIR_ORDERED} \
 	libalias \
@@ -70,7 +72,6 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libefi} \
 	libexpat \
 	libfetch \
-	libftpio \
 	libgeom \
 	${_libgpib} \
 	${_libgssapi} \
@@ -192,12 +193,6 @@ _libefi=	libefi
 _libsmb=	libsmb
 .endif
 
-.if ${MACHINE_CPUARCH} == "amd64"
-.if ${MK_NCP} != "no"
-_libncp=	libncp
-.endif
-.endif
-
 .if ${MACHINE_CPUARCH} == "powerpc"
 _libsmb=	libsmb
 .endif
@@ -208,6 +203,11 @@ _libsmb=	libsmb
 
 .if ${MK_OPENSSL} != "no"
 _libmp=		libmp
+.endif
+
+.if ${MK_LIBCPLUSPLUS} != "no"
+_libcxxrt=	libcxxrt
+_libcplusplus=	libc++
 .endif
 
 .if ${MK_PMC} != "no"

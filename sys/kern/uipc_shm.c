@@ -301,7 +301,7 @@ shm_dotruncate(struct shmfd *shmfd, off_t length)
 			 * have been zeroed.  Some of these valid bits may
 			 * have already been set.
 			 */
-			vm_page_set_valid(m, base, size);
+			vm_page_set_valid_range(m, base, size);
 
 			/*
 			 * Round "base" to the next block boundary so that the
@@ -486,7 +486,7 @@ shm_remove(char *path, Fnv32_t fnv, struct ucred *ucred)
 
 /* System calls. */
 int
-shm_open(struct thread *td, struct shm_open_args *uap)
+sys_shm_open(struct thread *td, struct shm_open_args *uap)
 {
 	struct filedesc *fdp;
 	struct shmfd *shmfd;
@@ -620,7 +620,7 @@ shm_open(struct thread *td, struct shm_open_args *uap)
 }
 
 int
-shm_unlink(struct thread *td, struct shm_unlink_args *uap)
+sys_shm_unlink(struct thread *td, struct shm_unlink_args *uap)
 {
 	char *path;
 	Fnv32_t fnv;

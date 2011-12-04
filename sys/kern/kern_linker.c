@@ -28,6 +28,7 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_ddb.h"
+#include "opt_kld.h"
 #include "opt_hwpmc_hooks.h"
 
 #include <sys/param.h>
@@ -1045,7 +1046,7 @@ done:
 }
 
 int
-kldload(struct thread *td, struct kldload_args *uap)
+sys_kldload(struct thread *td, struct kldload_args *uap)
 {
 	char *pathname = NULL;
 	int error, fileid;
@@ -1125,14 +1126,14 @@ kern_kldunload(struct thread *td, int fileid, int flags)
 }
 
 int
-kldunload(struct thread *td, struct kldunload_args *uap)
+sys_kldunload(struct thread *td, struct kldunload_args *uap)
 {
 
 	return (kern_kldunload(td, uap->fileid, LINKER_UNLOAD_NORMAL));
 }
 
 int
-kldunloadf(struct thread *td, struct kldunloadf_args *uap)
+sys_kldunloadf(struct thread *td, struct kldunloadf_args *uap)
 {
 
 	if (uap->flags != LINKER_UNLOAD_NORMAL &&
@@ -1142,7 +1143,7 @@ kldunloadf(struct thread *td, struct kldunloadf_args *uap)
 }
 
 int
-kldfind(struct thread *td, struct kldfind_args *uap)
+sys_kldfind(struct thread *td, struct kldfind_args *uap)
 {
 	char *pathname;
 	const char *filename;
@@ -1175,7 +1176,7 @@ out:
 }
 
 int
-kldnext(struct thread *td, struct kldnext_args *uap)
+sys_kldnext(struct thread *td, struct kldnext_args *uap)
 {
 	linker_file_t lf;
 	int error = 0;
@@ -1212,7 +1213,7 @@ out:
 }
 
 int
-kldstat(struct thread *td, struct kldstat_args *uap)
+sys_kldstat(struct thread *td, struct kldstat_args *uap)
 {
 	struct kld_file_stat stat;
 	int error, version;
@@ -1274,7 +1275,7 @@ kern_kldstat(struct thread *td, int fileid, struct kld_file_stat *stat)
 }
 
 int
-kldfirstmod(struct thread *td, struct kldfirstmod_args *uap)
+sys_kldfirstmod(struct thread *td, struct kldfirstmod_args *uap)
 {
 	linker_file_t lf;
 	module_t mp;
@@ -1303,7 +1304,7 @@ kldfirstmod(struct thread *td, struct kldfirstmod_args *uap)
 }
 
 int
-kldsym(struct thread *td, struct kldsym_args *uap)
+sys_kldsym(struct thread *td, struct kldsym_args *uap)
 {
 	char *symstr = NULL;
 	c_linker_sym_t sym;

@@ -170,14 +170,11 @@ static device_method_t et_methods[] = {
 	DEVMETHOD(device_detach,	et_detach),
 	DEVMETHOD(device_shutdown,	et_shutdown),
 
-	DEVMETHOD(bus_print_child,	bus_generic_print_child),
-	DEVMETHOD(bus_driver_added,	bus_generic_driver_added),
-
 	DEVMETHOD(miibus_readreg,	et_miibus_readreg),
 	DEVMETHOD(miibus_writereg,	et_miibus_writereg),
 	DEVMETHOD(miibus_statchg,	et_miibus_statchg),
 
-	{ 0, 0 }
+	DEVMETHOD_END
 };
 
 static driver_t et_driver = {
@@ -518,9 +515,7 @@ et_ifmedia_upd_locked(struct ifnet *ifp)
 
 	LIST_FOREACH(miisc, &mii->mii_phys, mii_list)
 		PHY_RESET(miisc);
-	mii_mediachg(mii);
-
-	return (0);
+	return (mii_mediachg(mii));
 }
 
 static int
@@ -542,9 +537,11 @@ et_ifmedia_sts(struct ifnet *ifp, struct ifmediareq *ifmr)
 	struct et_softc *sc = ifp->if_softc;
 	struct mii_data *mii = device_get_softc(sc->sc_miibus);
 
+	ET_LOCK(sc);
 	mii_pollstat(mii);
 	ifmr->ifm_active = mii->mii_media_active;
 	ifmr->ifm_status = mii->mii_media_status;
+	ET_UNLOCK(sc);
 }
 
 static void
