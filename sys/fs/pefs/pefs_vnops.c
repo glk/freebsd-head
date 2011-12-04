@@ -2259,21 +2259,20 @@ pefs_setkey(struct vnode *vp, struct pefs_key *pk, struct ucred *cred,
 	ldvp = PEFS_LOWERVP(dvp);
 	vn_lock(dvp, LK_EXCLUSIVE | LK_RETRY);
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
-	vdrop(dvp); /* vhold by vn_vptocnp */
 
 	error = VOP_ACCESS(vp, VWRITE, cred, td);
 	if (error == 0)
 		error = pefs_enccn_get(&fenccn, dvp, vp, &cn);
 	if (error != 0) {
 		VOP_UNLOCK(vp, 0);
-		VOP_UNLOCK(dvp, 0);
+		vput(dvp); /* vref by vn_vptocnp */
 		PEFSDEBUG("pefs_setkey: pefs_enccn_get failed: %d\n", error);
 		goto out;
 	}
 	error = pefs_enccn_create(&tenccn, pk, NULL, &cn);
 	if (error != 0) {
 		VOP_UNLOCK(vp, 0);
-		VOP_UNLOCK(dvp, 0);
+		vput(dvp); /* vref by vn_vptocnp */
 		pefs_enccn_free(&fenccn);
 		goto out;
 	}
@@ -2287,6 +2286,7 @@ pefs_setkey(struct vnode *vp, struct pefs_key *pk, struct ucred *cred,
 	vref(ldvp);
 	error = VOP_RENAME(ldvp, lvp, &fenccn.pec_cn, ldvp, lvp,
 	    &tenccn.pec_cn);
+	vrele(dvp); /* vref by vn_vptocnp */
 	if (error == 0) {
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 		vgone(vp);
