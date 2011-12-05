@@ -249,6 +249,15 @@ int drm_setversion(struct drm_device *dev, void *data,
 	sv->drm_dd_major = dev->driver->major;
 	sv->drm_dd_minor = dev->driver->minor;
 
+	DRM_DEBUG("ver.drm_di_major %d ver.drm_di_minor %d "
+	    "ver.drm_dd_major %d ver.drm_dd_minor %d\n",
+	    ver.drm_di_major, ver.drm_di_minor, ver.drm_dd_major,
+	    ver.drm_dd_minor);
+	DRM_DEBUG("sv->drm_di_major %d sv->drm_di_minor %d "
+	    "sv->drm_dd_major %d sv->drm_dd_minor %d\n",
+	    sv->drm_di_major, sv->drm_di_minor, sv->drm_dd_major,
+	    sv->drm_dd_minor);
+
 	if (ver.drm_di_major != -1) {
 		if (ver.drm_di_major != DRM_IF_MAJOR ||
 		    ver.drm_di_minor < 0 || ver.drm_di_minor > DRM_IF_MINOR) {
