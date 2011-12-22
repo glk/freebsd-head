@@ -48,7 +48,7 @@ static int drm_alloc_resource(struct drm_device *dev, int resource)
 	struct resource *res;
 	int rid;
 
-	DRM_LOCK_ASSERT(dev);
+	DRM_SPINLOCK_ASSERT(&dev->dev_lock);
 
 	if (resource >= DRM_MAX_PCI_RESOURCE) {
 		DRM_ERROR("Resource %d too large\n", resource);
@@ -301,7 +301,7 @@ int drm_addmap_ioctl(struct drm_device *dev, void *data,
 
 void drm_rmmap(struct drm_device *dev, drm_local_map_t *map)
 {
-	DRM_LOCK_ASSERT(dev);
+	DRM_SPINLOCK_ASSERT(&dev->dev_lock);
 
 	if (map == NULL)
 		return;
