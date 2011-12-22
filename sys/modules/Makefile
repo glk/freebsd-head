@@ -50,6 +50,7 @@ SUBDIR=	${_3dfx} \
 	${_canbepm} \
 	${_canbus} \
 	${_cardbus} \
+	${_carp} \
 	cas \
 	${_cbb} \
 	cc \
@@ -117,7 +118,6 @@ SUBDIR=	${_3dfx} \
 	${_ida} \
 	${_ie} \
 	if_bridge \
-	${_if_carp} \
 	if_disc \
 	if_edsc \
 	if_ef \
@@ -319,6 +319,7 @@ SUBDIR=	${_3dfx} \
 	${_vesa} \
 	${_virtio} \
 	vge \
+	${_viawd} \
 	vkbd \
 	${_vpo} \
 	vr \
@@ -374,7 +375,7 @@ _if_gre=	if_gre
 
 .if (${MK_INET_SUPPORT} != "no" || ${MK_INET6_SUPPORT} != "no") || \
 	defined(ALL_MODULES)
-_if_carp=	if_carp
+_carp=	carp
 .endif
 
 .if ${MK_IPFILTER} != "no" || defined(ALL_MODULES)
@@ -529,6 +530,7 @@ _nve=		nve
 _nvram=		nvram
 _nxge=		nxge
 _tpm=		tpm
+_viawd=		viawd
 _wpi=		wpi
 _wpifw=		wpifw
 .if ${MK_CRYPT} != "no" || defined(ALL_MODULES)
@@ -638,6 +640,7 @@ _sppp=		sppp
 _tpm=		tpm
 _twa=		twa
 _vesa=		vesa
+_viawd=		viawd
 _virtio=	virtio
 _vxge=  	vxge
 _x86bios=	x86bios
