@@ -6,6 +6,10 @@ GCCLIB=	${.CURDIR}/../../../contrib/gcclibs
 SHLIB_NAME=	libgcc_s.so.1
 SHLIBDIR?=	/lib
 
+.if ${CC:T:Mclang} == "clang"
+CC=gcc
+.endif
+
 .include <bsd.own.mk>
 #
 # libgcc is linked in last and thus cannot depend on ssp symbols coming
