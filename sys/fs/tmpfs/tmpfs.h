@@ -486,32 +486,57 @@ int	tmpfs_truncate(struct vnode *, off_t);
  * Memory management stuff.
  */
 
+/* Amount of memory pages to reserve for the system (e.g., to not use by
+ * tmpfs).
+ * XXX: Should this be tunable through sysctl, for instance? */
+#define TMPFS_PAGES_RESERVED (4 * 1024 * 1024 / PAGE_SIZE)
+
 /*
- * Number of reserved swap pages should not be lower than
- * swap_pager_almost_full high water mark.
+ * Returns information about the number of available memory pages,
+ * including physical and virtual ones.
+ *
+ * Remember to remove TMPFS_PAGES_RESERVED from the returned value to avoid
+ * excessive memory usage.
+ *
  */
-#define TMPFS_SWAP_MINRESERVED		1024
-
 static __inline size_t
-tmpfs_pages_max(struct tmpfs_mount *tmp)
+tmpfs_mem_info(void)
 {
-	size_t avail;
 
-	avail = swap_pager_avail + cnt.v_free_count + cnt.v_cache_count;
-	return MIN(avail, tmp->tm_pages_max);
+	return (swap_pager_avail + cnt.v_free_count + cnt.v_cache_count);
 }
 
+/* Returns the maximum size allowed for a tmpfs file system.  This macro
+ * must be used instead of directly retrieving the value from tm_pages_max.
+ * The reason is that the size of a tmpfs file system is dynamic: it lets
+ * the user store files as long as there is enough free memory (including
+ * physical memory and swap space).  Therefore, the amount of memory to be
+ * used is either the limit imposed by the user during mount time or the
+ * amount of available memory, whichever is lower.  To avoid consuming all
+ * the memory for a given mount point, the system will always reserve a
+ * minimum of TMPFS_PAGES_RESERVED pages, which is also taken into account
+ * by this macro (see above). */
 static __inline size_t
-tmpfs_pages_used(struct tmpfs_mount *tmp)
+TMPFS_PAGES_MAX(struct tmpfs_mount *tmp)
 {
-	const size_t node_size = sizeof(struct tmpfs_node) +
-	    sizeof(struct tmpfs_dirent);
-	size_t meta_pages;
+	size_t freepages;
 
-	meta_pages = howmany((uintmax_t)tmp->tm_nodes_inuse * node_size,
-	    PAGE_SIZE);
-	return (meta_pages + tmp->tm_pages_used);
+	freepages = tmpfs_mem_info();
+	freepages -= freepages < TMPFS_PAGES_RESERVED ?
+	    freepages : TMPFS_PAGES_RESERVED;
+
+	return MIN(tmp->tm_pages_max, freepages + tmp->tm_pages_used);
 }
+
+/* Returns the available space for the given file system. */
+#define TMPFS_META_PAGES(tmp) (howmany((tmp)->tm_nodes_inuse * (sizeof(struct tmpfs_node) \
+				+ sizeof(struct tmpfs_dirent)), PAGE_SIZE))
+#define TMPFS_FILE_PAGES(tmp) ((tmp)->tm_pages_used)
+
+#define TMPFS_PAGES_AVAIL(tmp) (TMPFS_PAGES_MAX(tmp) > \
+			TMPFS_META_PAGES(tmp)+TMPFS_FILE_PAGES(tmp)? \
+			TMPFS_PAGES_MAX(tmp) - TMPFS_META_PAGES(tmp) \
+			- TMPFS_FILE_PAGES(tmp):0)
 
 #endif
 

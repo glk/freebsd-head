@@ -90,8 +90,6 @@ tmpfs_node_ctor(void *mem, int size, void *arg, int flags)
 	struct tmpfs_node *node = (struct tmpfs_node *)mem;
 
 	node->tn_gen++;
-	if (node->tn_gen == 0)
-		node->tn_gen = (arc4random() / 2) + 1;
 	node->tn_size = 0;
 	node->tn_status = 0;
 	node->tn_flags = 0;
@@ -116,7 +114,7 @@ tmpfs_node_init(void *mem, int size, int flags)
 	node->tn_id = 0;
 
 	mtx_init(&node->tn_interlock, "tmpfs node interlock", NULL, MTX_DEF);
-	node->tn_gen = (arc4random() / 2) + 1;
+	node->tn_gen = arc4random();
 
 	return (0);
 }
@@ -129,59 +127,17 @@ tmpfs_node_fini(void *mem, int size)
 	mtx_destroy(&node->tn_interlock);
 }
 
-/*
- * XXX Rename to vfs_getopt_size()
- */
-static int
-tmpfs_getopt_size(struct vfsoptlist *opts, const char *name, u_quad_t *data)
-{
-	char *opt_value, *vtp;
-	quad_t	iv;
-	int error, opt_len;
-
-	error = vfs_getopt(opts, name, (void **)&opt_value, &opt_len);
-	if (error != 0)
-		return (error);
-	if (opt_len == 0 || opt_value == NULL)
-		return (EINVAL);
-	if (opt_value[0] == '\0' || opt_value[opt_len - 1] != '\0')
-		return (EINVAL);
-
-	iv = strtoq(opt_value, &vtp, 0);
-	if (vtp == opt_value || (vtp[0] != '\0' && vtp[1] != '\0'))
-		return (EINVAL);
-	if (iv < 0)
-		return (EINVAL);
-	switch (vtp[0]) {
-	case 't': case 'T':
-		iv *= 1024;
-	case 'g': case 'G':
-		iv *= 1024;
-	case 'm': case 'M':
-		iv *= 1024;
-	case 'k': case 'K':
-		iv *= 1024;
-	case '\0':
-		break;
-	default:
-		return (EINVAL);
-	}
-	*data = iv;
-
-	return (0);
-}
-
 static int
 tmpfs_mount(struct mount *mp)
 {
-	const size_t nodes_per_page = howmany(PAGE_SIZE,
-	    sizeof(struct tmpfs_dirent) + sizeof(struct tmpfs_node));
 	struct tmpfs_mount *tmp;
 	struct tmpfs_node *root;
+	size_t pages;
+	uint32_t nodes;
 	int error;
 	/* Size counters. */
-	u_quad_t pages;
-	u_quad_t nodes_max, size_max, maxfilesize;
+	u_int nodes_max;
+	u_quad_t size_max, maxfilesize;
 
 	/* Root node attributes. */
 	uid_t root_uid;
@@ -215,56 +171,46 @@ tmpfs_mount(struct mount *mp)
 	if (mp->mnt_cred->cr_ruid != 0 ||
 	    vfs_scanopt(mp->mnt_optnew, "mode", "%ho", &root_mode) != 1)
 		root_mode = va.va_mode;
-	if (tmpfs_getopt_size(mp->mnt_optnew, "inodes", &nodes_max) != 0)
+	if (vfs_scanopt(mp->mnt_optnew, "inodes", "%u", &nodes_max) != 1)
 		nodes_max = 0;
-	if (tmpfs_getopt_size(mp->mnt_optnew, "size", &size_max) != 0)
+	if (vfs_scanopt(mp->mnt_optnew, "size", "%qu", &size_max) != 1)
 		size_max = 0;
-	if (tmpfs_getopt_size(mp->mnt_optnew, "maxfilesize", &maxfilesize) != 0)
+	if (vfs_scanopt(mp->mnt_optnew, "maxfilesize", "%qu",
+	    &maxfilesize) != 1)
 		maxfilesize = 0;
 
-	/*
-	 * XXX Deny mounts if pagedaemon wasn't able to recovery desired
-	 * number of pages.
-	 */
-	if (vm_page_count_target())
+	/* Do not allow mounts if we do not have enough memory to preserve
+	 * the minimum reserved pages. */
+	if (tmpfs_mem_info() < TMPFS_PAGES_RESERVED)
 		return ENOSPC;
 
 	/* Get the maximum number of memory pages this file system is
 	 * allowed to use, based on the maximum size the user passed in
-	 * the mount structure. Use half of RAM by default. */
-	if (size_max < PAGE_SIZE*4 || size_max > SIZE_MAX - PAGE_SIZE)
-		pages = cnt.v_page_count / 2;
+	 * the mount structure.  A value of zero is treated as if the
+	 * maximum available space was requested. */
+	if (size_max < PAGE_SIZE || size_max > SIZE_MAX - PAGE_SIZE)
+		pages = SIZE_MAX;
 	else
 		pages = howmany(size_max, PAGE_SIZE);
 	MPASS(pages > 0);
-	MPASS(pages < SIZE_MAX);
-
-	if (pages < SIZE_MAX / PAGE_SIZE)
-		size_max = pages * PAGE_SIZE;
-	else
-		size_max = SIZE_MAX;
 
 	if (nodes_max <= 3) {
-		if (pages < INT_MAX / nodes_per_page)
-			nodes_max = pages * nodes_per_page;
+		if (pages > UINT32_MAX - 3)
+			nodes = UINT32_MAX;
 		else
-			nodes_max = INT_MAX;
-	}
-	if (nodes_max > INT_MAX)
-		nodes_max = INT_MAX;
-	MPASS(nodes_max >= 3);
-
-	if (maxfilesize < PAGE_SIZE || maxfilesize > size_max)
-		maxfilesize = size_max;
+			nodes = pages + 3;
+	} else
+		nodes = nodes_max;
+	MPASS(nodes >= 3);
 
 	/* Allocate the tmpfs mount structure and fill it. */
 	tmp = (struct tmpfs_mount *)malloc(sizeof(struct tmpfs_mount),
 	    M_TMPFSMNT, M_WAITOK | M_ZERO);
 
 	mtx_init(&tmp->allnode_lock, "tmpfs allnode lock", NULL, MTX_DEF);
-	tmp->tm_nodes_max = nodes_max;
+	tmp->tm_nodes_max = nodes;
 	tmp->tm_nodes_inuse = 0;
-	tmp->tm_maxfilesize = maxfilesize;
+	tmp->tm_maxfilesize = maxfilesize > 0 ? maxfilesize : UINT64_MAX;
 	LIST_INIT(&tmp->tm_nodes_used);
 
 	tmp->tm_pages_max = pages;
@@ -407,16 +353,16 @@ tmpfs_fhtovp(struct mount *mp, struct fid *fhp, int flags,
 	if (tfhp->tf_len != sizeof(struct tmpfs_fid))
 		return EINVAL;
 
-	if (tfhp->tf_id > INT_MAX || tfhp->tf_id <= 0)
+	if (tfhp->tf_id >= tmp->tm_nodes_max)
 		return EINVAL;
 
 	found = FALSE;
 
 	TMPFS_LOCK(tmp);
 	LIST_FOREACH(node, &tmp->tm_nodes_used, tn_entries) {
-		if (node->tn_id == tfhp->tf_id) {
-			if (node->tn_gen == tfhp->tf_gen)
-				found = TRUE;
+		if (node->tn_id == tfhp->tf_id &&
+		    node->tn_gen == tfhp->tf_gen) {
+			found = TRUE;
 			break;
 		}
 	}
@@ -425,7 +371,7 @@ tmpfs_fhtovp(struct mount *mp, struct fid *fhp, int flags,
 	if (found)
 		return (tmpfs_alloc_vp(mp, node, LK_EXCLUSIVE, vpp));
 
-	return (ESTALE);
+	return (EINVAL);
 }
 
 /* --------------------------------------------------------------------- */
@@ -434,23 +380,22 @@ tmpfs_fhtovp(struct mount *mp, struct fid *fhp, int flags,
 static int
 tmpfs_statfs(struct mount *mp, struct statfs *sbp)
 {
+	fsfilcnt_t freenodes;
 	struct tmpfs_mount *tmp;
-	size_t used;
 
 	tmp = VFS_TO_TMPFS(mp);
 
 	sbp->f_iosize = PAGE_SIZE;
 	sbp->f_bsize = PAGE_SIZE;
 
-	sbp->f_blocks = tmpfs_pages_max(tmp);
-	used = tmpfs_pages_used(tmp);
-	if (tmpfs_pages_max(tmp) <= used)
-		sbp->f_bavail = 0;
-	else
-		sbp->f_bavail = tmpfs_pages_max(tmp) - used;
-	sbp->f_bfree = sbp->f_bavail;
-	sbp->f_files = tmp->tm_nodes_max;
-	sbp->f_ffree = tmp->tm_nodes_max - tmp->tm_nodes_inuse;
+	sbp->f_blocks = TMPFS_PAGES_MAX(tmp);
+	sbp->f_bavail = sbp->f_bfree = TMPFS_PAGES_AVAIL(tmp);
+
+	freenodes = MIN(tmp->tm_nodes_max - tmp->tm_nodes_inuse,
+	    TMPFS_PAGES_AVAIL(tmp) * PAGE_SIZE / sizeof(struct tmpfs_node));
+
+	sbp->f_files = freenodes + tmp->tm_nodes_inuse;
+	sbp->f_ffree = freenodes;
 	/* sbp->f_owner = tmp->tn_uid; */
 
 	return 0;

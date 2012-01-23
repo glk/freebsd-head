@@ -41,7 +41,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/priv.h>
 #include <sys/proc.h>
 #include <sys/stat.h>
-#include <sys/sysctl.h>
 #include <sys/systm.h>
 #include <sys/vnode.h>
 #include <sys/vmmeter.h>
@@ -55,60 +54,6 @@ __FBSDID("$FreeBSD$");
 #include <fs/tmpfs/tmpfs.h>
 #include <fs/tmpfs/tmpfs_fifoops.h>
 #include <fs/tmpfs/tmpfs_vnops.h>
-
-static long tmpfs_swap_reserved = TMPFS_SWAP_MINRESERVED * 2;
-
-SYSCTL_NODE(_vfs, OID_AUTO, tmpfs, CTLFLAG_RW, 0, "tmpfs memory file system");
-
-static int
-sysctl_swap_reserved(SYSCTL_HANDLER_ARGS)
-{
-	int error;
-	long pages, bytes;
-
-	pages = *(long *)arg1;
-	bytes = pages * PAGE_SIZE;
-
-	error = sysctl_handle_long(oidp, &bytes, 0, req);
-	if (error || !req->newptr)
-		return (error);
-
-	pages = bytes / PAGE_SIZE;
-	if (pages < TMPFS_SWAP_MINRESERVED)
-		return (EINVAL);
-
-	*(long *)arg1 = pages;
-	return (0);
-}
-
-SYSCTL_PROC(_vfs_tmpfs, OID_AUTO, swap_reserved, CTLTYPE_LONG|CTLFLAG_RW,
-    &tmpfs_swap_reserved, 0, sysctl_swap_reserved, "L", "reserved swap space");
-
-static __inline size_t
-tmpfs_pages_avail(struct tmpfs_mount *tmp, size_t req_pages)
-{
-	vm_ooffset_t avail;
-
-	if (tmpfs_pages_max(tmp) < tmpfs_pages_used(tmp) + req_pages)
-		return (0);
-
-	if (!vm_page_count_target())
-		return (1);
-
-	/*
-	 * Fail if pagedaemon wasn't able to free desired number of pages and
-	 * we are running out of swap.
-	 */
-	avail = swap_pager_avail - vm_paging_target() - req_pages;
-	if (avail < tmpfs_swap_reserved) {	/* avail is signed */
-		printf("tmpfs: low memory: available %jd, "
-		    "paging target %d, requested %zd\n",
-		    (intmax_t)swap_pager_avail, vm_paging_target(), req_pages);
-		return (0);
-	}
-
-	return (1);
-}
 
 /* --------------------------------------------------------------------- */
 
@@ -149,8 +94,6 @@ tmpfs_alloc_node(struct tmpfs_mount *tmp, enum vtype type,
 	MPASS(IFF(type == VBLK || type == VCHR, rdev != VNOVAL));
 
 	if (tmp->tm_nodes_inuse >= tmp->tm_nodes_max)
-		return (ENOSPC);
-	if (tmpfs_pages_avail(tmp, 1) == 0)
 		return (ENOSPC);
 
 	nnode = (struct tmpfs_node *)uma_zalloc_arg(
@@ -966,7 +909,7 @@ tmpfs_reg_resize(struct vnode *vp, off_t newsize)
 	MPASS(oldpages == uobj->size);
 	newpages = OFF_TO_IDX(newsize + PAGE_MASK);
 	if (newpages > oldpages &&
-	    tmpfs_pages_avail(tmp, newpages - oldpages) == 0)
+	    newpages - oldpages > TMPFS_PAGES_AVAIL(tmp))
 		return (ENOSPC);
 
 	TMPFS_LOCK(tmp);
