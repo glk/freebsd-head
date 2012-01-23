@@ -122,7 +122,7 @@ struct vpglocks vm_page_queue_free_lock;
 struct vpglocks	pa_lock[PA_LOCK_COUNT];
 
 vm_page_t vm_page_array = 0;
-long vm_page_array_size = 0;
+int vm_page_array_size = 0;
 long first_page = 0;
 int vm_page_zero_count = 0;
 
@@ -633,30 +633,6 @@ vm_page_unhold_pages(vm_page_t *ma, int count)
 		mtx_unlock(mtx);
 }
 
-vm_page_t
-PHYS_TO_VM_PAGE(vm_paddr_t pa)
-{
-	vm_page_t m;
-
-#ifdef VM_PHYSSEG_SPARSE
-	m = vm_phys_paddr_to_vm_page(pa);
-	if (m == NULL)
-		m = vm_phys_fictitious_to_vm_page(pa);
-	return (m);
-#elif defined(VM_PHYSSEG_DENSE)
-	long pi;
-
-	pi = atop(pa);
-	if (pi >= first_page && pi < vm_page_array_size) {
-		m = &vm_page_array[pi - first_page];
-		return (m);
-	}
-	return (vm_phys_fictitious_to_vm_page(pa));
-#else
-#error "Either VM_PHYSSEG_DENSE or VM_PHYSSEG_SPARSE must be defined."
-#endif
-}
-
 /*
  *	vm_page_getfake:
  *
@@ -670,17 +646,6 @@ vm_page_getfake(vm_paddr_t paddr, vm_memattr_t memattr)
 	vm_page_t m;
 
 	m = uma_zalloc(fakepg_zone, M_WAITOK | M_ZERO);
-	vm_page_initfake(m, paddr, memattr);
-	return (m);
-}
-
-void
-vm_page_initfake(vm_page_t m, vm_paddr_t paddr, vm_memattr_t memattr)
-{
-
-	if ((m->flags & PG_FICTITIOUS) != 0)
-		return;
-
 	m->phys_addr = paddr;
 	m->queue = PQ_NONE;
 	/* Fictitious pages don't use "segind". */
@@ -689,6 +654,7 @@ vm_page_initfake(vm_page_t m, vm_paddr_t paddr, vm_memattr_t memattr)
 	m->oflags = VPO_BUSY | VPO_UNMANAGED;
 	m->wire_count = 1;
 	pmap_page_set_memattr(m, memattr);
+	return (m);
 }
 
 /*
@@ -700,14 +666,9 @@ void
 vm_page_putfake(vm_page_t m)
 {
 
-	if ((m->oflags & VPO_UNMANAGED) == 0) {
-		pmap_remove_all(m);
-		vm_page_lock(m);
-		vm_page_remove(m);
-		vm_page_unlock(m);
-	} else {
-		uma_zfree(fakepg_zone, m);
-	}
+	KASSERT((m->flags & PG_FICTITIOUS) != 0,
+	    ("vm_page_putfake: bad page %p", m));
+	uma_zfree(fakepg_zone, m);
 }
 
 /*
