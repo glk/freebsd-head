@@ -37,6 +37,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#include <sys/fnv_hash.h>
 #include <sys/namei.h>
 #include <sys/priv.h>
 #include <sys/proc.h>
@@ -55,6 +56,12 @@ __FBSDID("$FreeBSD$");
 #include <fs/tmpfs/tmpfs.h>
 #include <fs/tmpfs/tmpfs_fifoops.h>
 #include <fs/tmpfs/tmpfs_vnops.h>
+
+#define TMPFS_DEBUG_FORCE_FAKECOOKIE	0
+
+static __inline int tmpfs_dirtree_cmp(struct tmpfs_dirent *a,
+    struct tmpfs_dirent *b);
+RB_PROTOTYPE_STATIC(tmpfs_dir, tmpfs_dirent, td_entries, tmpfs_dirtree_cmp);
 
 /* --------------------------------------------------------------------- */
 
@@ -118,7 +125,7 @@ tmpfs_alloc_node(struct tmpfs_mount *tmp, enum vtype type,
 		break;
 
 	case VDIR:
-		TAILQ_INIT(&nnode->tn_dir.tn_dirhead);
+		RB_INIT(&nnode->tn_dir.tn_dirhead);
 		MPASS(parent != nnode);
 		MPASS(IMPLIES(parent == NULL, tmp->tm_root == NULL));
 		nnode->tn_dir.tn_parent = (parent == NULL) ? nnode : parent;
@@ -239,6 +246,26 @@ tmpfs_free_node(struct tmpfs_mount *tmp, struct tmpfs_node *node)
 
 /* --------------------------------------------------------------------- */
 
+static __inline uint32_t
+tmpfs_hash_dirent(char *name, u_int len)
+{
+	uint32_t hash;
+
+	hash = fnv_32_buf(name, len, FNV1_32_INIT + len) & TMPFS_DIRCOOKIE_MASK;
+	if (hash < TMPFS_DIRCOOKIE_MIN)
+		hash += TMPFS_DIRCOOKIE_MIN;
+
+	return hash;
+}
+
+void
+tmpfs_init_dirent(struct tmpfs_dirent *de, char *name, u_int len)
+{
+	de->td_namehash = tmpfs_hash_dirent(name, len);
+	de->td_namelen = len;
+	de->td_name = name;
+}
+
 /*
  * Allocates a new directory entry for the node node with a name of name.
  * The new directory entry is returned in *de.
@@ -250,15 +277,15 @@ tmpfs_free_node(struct tmpfs_mount *tmp, struct tmpfs_node *node)
  */
 int
 tmpfs_alloc_dirent(struct tmpfs_mount *tmp, struct tmpfs_node *node,
-    const char *name, uint16_t len, struct tmpfs_dirent **de)
+    const char *name, u_int len, struct tmpfs_dirent **de)
 {
 	struct tmpfs_dirent *nde;
+	char *nname;
 
-	nde = (struct tmpfs_dirent *)uma_zalloc(
-					tmp->tm_dirent_pool, M_WAITOK);
-	nde->td_name = malloc(len, M_TMPFSNAME, M_WAITOK);
-	nde->td_namelen = len;
-	memcpy(nde->td_name, name, len);
+	nde = uma_zalloc(tmp->tm_dirent_pool, M_WAITOK);
+	nname = malloc(len, M_TMPFSNAME, M_WAITOK);
+	memcpy(nname, name, len);
+	tmpfs_init_dirent(nde, nname, len);
 
 	nde->td_node = node;
 	if (node != NULL)
@@ -271,6 +298,13 @@ tmpfs_alloc_dirent(struct tmpfs_mount *tmp, struct tmpfs_node *node,
 
 /* --------------------------------------------------------------------- */
 
+static __inline void
+tmpfs_destroy_dirent(struct tmpfs_mount *tmp, struct tmpfs_dirent *de)
+{
+	free(de->td_name, M_TMPFSNAME);
+	uma_zfree(tmp->tm_dirent_pool, de);
+}
+
 /*
  * Frees a directory entry.  It is the caller's responsibility to destroy
  * the node referenced by it if needed.
@@ -281,21 +315,17 @@ tmpfs_alloc_dirent(struct tmpfs_mount *tmp, struct tmpfs_node *node,
  * directory entry, as it may already have been released from the outside.
  */
 void
-tmpfs_free_dirent(struct tmpfs_mount *tmp, struct tmpfs_dirent *de,
-    boolean_t node_exists)
+tmpfs_free_dirent(struct tmpfs_mount *tmp, struct tmpfs_dirent *de)
 {
-	if (node_exists) {
-		struct tmpfs_node *node;
+	struct tmpfs_node *node;
 
-		node = de->td_node;
-		if (node != NULL) {
-			MPASS(node->tn_links > 0);
-			node->tn_links--;
-		}
+	node = de->td_node;
+	if (node != NULL) {
+		MPASS(node->tn_links > 0);
+		node->tn_links--;
 	}
 
-	free(de->td_name, M_TMPFSNAME);
-	uma_zfree(tmp->tm_dirent_pool, de);
+	tmpfs_destroy_dirent(tmp, de);
 }
 
 /* --------------------------------------------------------------------- */
@@ -512,7 +542,7 @@ tmpfs_alloc_file(struct vnode *dvp, struct vnode **vpp, struct vattr *vap,
 	/* Allocate a vnode for the new file. */
 	error = tmpfs_alloc_vp(dvp->v_mount, node, LK_EXCLUSIVE, vpp);
 	if (error != 0) {
-		tmpfs_free_dirent(tmp, de, TRUE);
+		tmpfs_free_dirent(tmp, de);
 		tmpfs_free_node(tmp, node);
 		goto out;
 	}
@@ -531,6 +561,38 @@ out:
 
 /* --------------------------------------------------------------------- */
 
+static __inline off_t
+tmpfs_dir_fakecookie(struct tmpfs_dirent *de)
+{
+	off_t cookie;
+
+	cookie = (((off_t)(uintptr_t)de >> 2) & TMPFS_DIRCOOKIE_MASK) |
+	    TMPFS_DIRCOOKIE_FAKE;
+
+	return cookie;
+}
+
+static off_t
+tmpfs_dir_cookie(struct tmpfs_node *node, struct tmpfs_dirent *de)
+{
+	struct tmpfs_dirent *nde;
+	off_t cookie;
+
+	cookie = de->td_namehash;
+
+	MPASS(cookie >= TMPFS_DIRCOOKIE_MIN);
+
+	nde = RB_NEXT(tmpfs_dir, &node->tn_dir.tn_dirhead, de);
+	/* Use fake cookies for all entries with same hash except last one */
+	if ((nde != NULL && nde->td_namehash == cookie) ||
+	    TMPFS_DEBUG_FORCE_FAKECOOKIE)
+		return tmpfs_dir_fakecookie(de);
+
+	return cookie;
+}
+
+/* --------------------------------------------------------------------- */
+
 /*
  * Attaches the directory entry de to the directory represented by vp.
  * Note that this does not change the link count of the node pointed by
@@ -540,10 +602,14 @@ void
 tmpfs_dir_attach(struct vnode *vp, struct tmpfs_dirent *de)
 {
 	struct tmpfs_node *dnode;
+	struct tmpfs_dirent *xde;
 
 	ASSERT_VOP_ELOCKED(vp, __func__);
+	MPASS(de->td_namelen > 0);
+	MPASS(de->td_namehash > TMPFS_DIRCOOKIE_MIN);
 	dnode = VP_TO_TMPFS_DIR(vp);
-	TAILQ_INSERT_TAIL(&dnode->tn_dir.tn_dirhead, de, td_entries);
+	xde = RB_INSERT(tmpfs_dir, &dnode->tn_dir.tn_dirhead, de);
+	MPASS(xde == NULL);
 	dnode->tn_size += sizeof(struct tmpfs_dirent);
 	dnode->tn_status |= TMPFS_NODE_ACCESSED | TMPFS_NODE_CHANGED | \
 	    TMPFS_NODE_MODIFIED;
@@ -569,10 +635,22 @@ tmpfs_dir_detach(struct vnode *vp, struct tmpfs_dirent *de)
 		dnode->tn_dir.tn_readdir_lastp = NULL;
 	}
 
-	TAILQ_REMOVE(&dnode->tn_dir.tn_dirhead, de, td_entries);
+	RB_REMOVE(tmpfs_dir, &dnode->tn_dir.tn_dirhead, de);
 	dnode->tn_size -= sizeof(struct tmpfs_dirent);
 	dnode->tn_status |= TMPFS_NODE_ACCESSED | TMPFS_NODE_CHANGED | \
 	    TMPFS_NODE_MODIFIED;
+}
+
+void
+tmpfs_dir_free(struct tmpfs_mount *tmp, struct tmpfs_node *dnode)
+{
+	struct tmpfs_dirent *de, *nde;
+
+	RB_FOREACH_SAFE(de, tmpfs_dir, &dnode->tn_dir.tn_dirhead, nde) {
+		RB_REMOVE(tmpfs_dir, &dnode->tn_dir.tn_dirhead, de);
+		dnode->tn_size -= sizeof(struct tmpfs_dirent);
+		tmpfs_destroy_dirent(tmp, de);
+	}
 }
 
 /* --------------------------------------------------------------------- */
@@ -589,28 +667,19 @@ struct tmpfs_dirent *
 tmpfs_dir_lookup(struct tmpfs_node *node, struct tmpfs_node *f,
     struct componentname *cnp)
 {
-	boolean_t found;
-	struct tmpfs_dirent *de;
+	struct tmpfs_dirent *de, dekey;
 
 	MPASS(IMPLIES(cnp->cn_namelen == 1, cnp->cn_nameptr[0] != '.'));
 	MPASS(IMPLIES(cnp->cn_namelen == 2, !(cnp->cn_nameptr[0] == '.' &&
 	    cnp->cn_nameptr[1] == '.')));
 	TMPFS_VALIDATE_DIR(node);
 
-	found = 0;
-	TAILQ_FOREACH(de, &node->tn_dir.tn_dirhead, td_entries) {
-		if (f != NULL && de->td_node != f)
-		    continue;
-		MPASS(cnp->cn_namelen < 0xffff);
-		if (de->td_namelen == (uint16_t)cnp->cn_namelen &&
-		    bcmp(de->td_name, cnp->cn_nameptr, de->td_namelen) == 0) {
-			found = 1;
-			break;
-		}
-	}
-	node->tn_status |= TMPFS_NODE_ACCESSED;
+	tmpfs_init_dirent(&dekey, cnp->cn_nameptr, cnp->cn_namelen);
+	de = RB_FIND(tmpfs_dir, &node->tn_dir.tn_dirhead, &dekey);
+	if (de != NULL && f != NULL && de->td_node != f)
+		de = NULL;
 
-	return found ? de : NULL;
+	return de;
 }
 
 /* --------------------------------------------------------------------- */
@@ -622,7 +691,7 @@ tmpfs_dir_lookup(struct tmpfs_node *node, struct tmpfs_node *f,
  * hold the directory entry or an appropriate error code if another
  * error happens.
  */
-int
+static int
 tmpfs_dir_getdotdent(struct tmpfs_node *node, struct uio *uio)
 {
 	int error;
@@ -639,12 +708,9 @@ tmpfs_dir_getdotdent(struct tmpfs_node *node, struct uio *uio)
 	dent.d_reclen = GENERIC_DIRSIZ(&dent);
 
 	if (dent.d_reclen > uio->uio_resid)
-		error = -1;
-	else {
+		error = EJUSTRETURN;
+	else
 		error = uiomove(&dent, dent.d_reclen, uio);
-		if (error == 0)
-			uio->uio_offset = TMPFS_DIRCOOKIE_DOTDOT;
-	}
 
 	node->tn_status |= TMPFS_NODE_ACCESSED;
 
@@ -660,7 +726,7 @@ tmpfs_dir_getdotdent(struct tmpfs_node *node, struct uio *uio)
  * hold the directory entry or an appropriate error code if another
  * error happens.
  */
-int
+static int
 tmpfs_dir_getdotdotdent(struct tmpfs_node *node, struct uio *uio)
 {
 	int error;
@@ -689,19 +755,9 @@ tmpfs_dir_getdotdotdent(struct tmpfs_node *node, struct uio *uio)
 	dent.d_reclen = GENERIC_DIRSIZ(&dent);
 
 	if (dent.d_reclen > uio->uio_resid)
-		error = -1;
-	else {
+		error = EJUSTRETURN;
+	else
 		error = uiomove(&dent, dent.d_reclen, uio);
-		if (error == 0) {
-			struct tmpfs_dirent *de;
-
-			de = TAILQ_FIRST(&node->tn_dir.tn_dirhead);
-			if (de == NULL)
-				uio->uio_offset = TMPFS_DIRCOOKIE_EOF;
-			else
-				uio->uio_offset = tmpfs_dircookie(de);
-		}
-	}
 
 	node->tn_status |= TMPFS_NODE_ACCESSED;
 
@@ -713,23 +769,51 @@ tmpfs_dir_getdotdotdent(struct tmpfs_node *node, struct uio *uio)
 /*
  * Lookup a directory entry by its associated cookie.
  */
-struct tmpfs_dirent *
+static struct tmpfs_dirent *
 tmpfs_dir_lookupbycookie(struct tmpfs_node *node, off_t cookie)
 {
-	struct tmpfs_dirent *de;
+	struct tmpfs_dir *head = &node->tn_dir.tn_dirhead;
+	struct tmpfs_dirent *de, *nde, dekey;
+	off_t pcookie;
+
+	MPASS(cookie >= TMPFS_DIRCOOKIE_MIN);
 
 	if (cookie == node->tn_dir.tn_readdir_lastn &&
-	    node->tn_dir.tn_readdir_lastp != NULL) {
-		return node->tn_dir.tn_readdir_lastp;
+	    (de = node->tn_dir.tn_readdir_lastp) != NULL) {
+		/* Protect against possible race, tn_readdir_last[pn]
+		 * may be updated with only shared vnode lock held */
+		if ((cookie & TMPFS_DIRCOOKIE_FAKE) != 0)
+			pcookie = tmpfs_dir_fakecookie(de);
+		else
+			pcookie = de->td_namehash;
+		if (cookie == pcookie)
+			return de;
 	}
 
-	TAILQ_FOREACH(de, &node->tn_dir.tn_dirhead, td_entries) {
-		if (tmpfs_dircookie(de) == cookie) {
-			break;
+	if ((cookie & TMPFS_DIRCOOKIE_FAKE) != 0) {
+		RB_FOREACH(de, tmpfs_dir, head) {
+			if (tmpfs_dir_fakecookie(de) == cookie)
+				return de;
+		}
+		return NULL;
+	}
+
+	dekey.td_namehash = cookie;
+	dekey.td_namelen = 0;
+	dekey.td_name = NULL;
+	/* Recovery if direntry for cookie was removed */
+	de = RB_NFIND(tmpfs_dir, head, &dekey);
+	/* Use fake cookies for all entries with same hash except last one */
+	if (de != NULL && de->td_namehash == cookie) {
+		while (1) {
+			nde = RB_NEXT(tmpfs_dir, &node->tn_dir.tn_dirhead, de);
+			if (nde == NULL || nde->td_namehash != cookie)
+				break;
+			de = nde;
 		}
 	}
 
-	return de;
+	return (de);
 }
 
 /* --------------------------------------------------------------------- */
@@ -742,27 +826,45 @@ tmpfs_dir_lookupbycookie(struct tmpfs_node *node, off_t cookie)
  * error code if another error happens.
  */
 int
-tmpfs_dir_getdents(struct tmpfs_node *node, struct uio *uio, off_t *cntp)
+tmpfs_dir_getdents(struct tmpfs_node *node, struct uio *uio, int cnt,
+    u_long *cookies, int *ncookies)
 {
 	int error;
-	off_t startcookie;
+	off_t off = 0;
 	struct tmpfs_dirent *de;
 
 	TMPFS_VALIDATE_DIR(node);
 
-	/* Locate the first directory entry we have to return.  We have cached
-	 * the last readdir in the node, so use those values if appropriate.
-	 * Otherwise do a linear scan to find the requested entry. */
-	startcookie = uio->uio_offset;
-	MPASS(startcookie != TMPFS_DIRCOOKIE_DOT);
-	MPASS(startcookie != TMPFS_DIRCOOKIE_DOTDOT);
-	if (startcookie == TMPFS_DIRCOOKIE_EOF) {
+	switch (uio->uio_offset) {
+	case TMPFS_DIRCOOKIE_DOT:
+		error = tmpfs_dir_getdotdent(node, uio);
+		if (error != 0)
+			return error;
+		uio->uio_offset = TMPFS_DIRCOOKIE_DOTDOT;
+		if (cnt != 0)
+			cookies[(*ncookies)++] = uio->uio_offset;
+	case TMPFS_DIRCOOKIE_DOTDOT:
+		error = tmpfs_dir_getdotdotdent(node, uio);
+		if (error != 0)
+			return error;
+		de = RB_MIN(tmpfs_dir, &node->tn_dir.tn_dirhead);
+		if (de == NULL)
+			uio->uio_offset = TMPFS_DIRCOOKIE_EOF;
+		else
+			uio->uio_offset = tmpfs_dir_cookie(node, de);
+		if (cnt != 0)
+			cookies[(*ncookies)++] = off = uio->uio_offset;
+		if (de == NULL)
+			return 0;
+		break;
+	case TMPFS_DIRCOOKIE_EOF:
 		return 0;
-	} else {
-		de = tmpfs_dir_lookupbycookie(node, startcookie);
-	}
-	if (de == NULL) {
-		return EINVAL;
+	default:
+		de = tmpfs_dir_lookupbycookie(node, uio->uio_offset);
+		if (de == NULL)
+			return EINVAL;
+		if (cnt != 0)
+			off = tmpfs_dir_cookie(node, de);
 	}
 
 	/* Read as much entries as possible; i.e., until we reach the end of
@@ -820,7 +922,7 @@ tmpfs_dir_getdents(struct tmpfs_node *node, struct uio *uio, off_t *cntp)
 		/* Stop reading if the directory entry we are treating is
 		 * bigger than the amount of data that can be returned. */
 		if (d.d_reclen > uio->uio_resid) {
-			error = -1;
+			error = EJUSTRETURN;
 			break;
 		}
 
@@ -828,20 +930,29 @@ tmpfs_dir_getdents(struct tmpfs_node *node, struct uio *uio, off_t *cntp)
 		 * advance pointers. */
 		error = uiomove(&d, d.d_reclen, uio);
 		if (error == 0) {
-			(*cntp)++;
-			de = TAILQ_NEXT(de, td_entries);
+			de = RB_NEXT(tmpfs_dir, &node->tn_dir.tn_dirhead, de);
+			if (cnt != 0) {
+				if (de == NULL)
+					off = TMPFS_DIRCOOKIE_EOF;
+				else
+					off = tmpfs_dir_cookie(node, de);
+				MPASS(*ncookies < cnt);
+				cookies[(*ncookies)++] = off;
+			}
 		}
 	} while (error == 0 && uio->uio_resid > 0 && de != NULL);
 
 	/* Update the offset and cache. */
-	if (de == NULL) {
-		uio->uio_offset = TMPFS_DIRCOOKIE_EOF;
-		node->tn_dir.tn_readdir_lastn = 0;
-		node->tn_dir.tn_readdir_lastp = NULL;
-	} else {
-		node->tn_dir.tn_readdir_lastn = uio->uio_offset = tmpfs_dircookie(de);
-		node->tn_dir.tn_readdir_lastp = de;
+	if (cnt == 0) {
+		if (de == NULL)
+			off = TMPFS_DIRCOOKIE_EOF;
+		else
+			off = tmpfs_dir_cookie(node, de);
 	}
+
+	uio->uio_offset = off;
+	node->tn_dir.tn_readdir_lastn = off;
+	node->tn_dir.tn_readdir_lastp = de;
 
 	node->tn_status |= TMPFS_NODE_ACCESSED;
 	return error;
@@ -869,7 +980,7 @@ tmpfs_dir_whiteout_remove(struct vnode *dvp, struct componentname *cnp)
 	de = tmpfs_dir_lookup(VP_TO_TMPFS_DIR(dvp), NULL, cnp);
 	MPASS(de != NULL && de->td_node == NULL);
 	tmpfs_dir_detach(dvp, de);
-	tmpfs_free_dirent(VFS_TO_TMPFS(dvp->v_mount), de, TRUE);
+	tmpfs_free_dirent(VFS_TO_TMPFS(dvp->v_mount), de);
 }
 
 /* --------------------------------------------------------------------- */
@@ -1365,3 +1476,22 @@ out:
 
 	return error;
 }
+
+static __inline int
+tmpfs_dirtree_cmp(struct tmpfs_dirent *a, struct tmpfs_dirent *b)
+{
+	int rv;
+
+	rv = (a->td_namehash - b->td_namehash);
+	if (rv != 0)
+		return rv;
+	rv = (a->td_namelen - b->td_namelen);
+	if (rv != 0)
+		return rv;
+	/* td_name == NULL iff de is synthetic key and td_namelen == 0 */
+	rv = memcmp(a->td_name, b->td_name, a->td_namelen);
+
+	return (rv);
+}
+
+RB_GENERATE_STATIC(tmpfs_dir, tmpfs_dirent, td_entries, tmpfs_dirtree_cmp);
