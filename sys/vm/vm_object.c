@@ -1876,8 +1876,10 @@ again:
 		}
 		if (vm_page_sleep_if_busy(p, TRUE, "vmopar"))
 			goto again;
-		KASSERT((p->flags & PG_FICTITIOUS) == 0,
-		    ("vm_object_page_remove: page %p is fictitious", p));
+		KASSERT((p->flags & PG_FICTITIOUS) == 0 ||
+		    (p->oflags & VPO_UNMANAGED) == 0,
+		    ("vm_object_page_remove: page %p is fictitious unmanaged",
+		    p));
 		if ((options & OBJPR_CLEANONLY) != 0 && p->valid != 0) {
 			if ((options & OBJPR_NOTMAPPED) == 0)
 				pmap_remove_write(p);

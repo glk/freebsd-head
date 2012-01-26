@@ -77,6 +77,8 @@ static void radeon_configure(struct drm_device *dev)
 	dev->driver->major		= DRIVER_MAJOR;
 	dev->driver->minor		= DRIVER_MINOR;
 	dev->driver->patchlevel		= DRIVER_PATCHLEVEL;
+
+	drm_sleep_locking_init(dev);
 }
 
 static int
@@ -116,8 +118,7 @@ static device_method_t radeon_methods[] = {
 	DEVMETHOD(device_probe,		radeon_probe),
 	DEVMETHOD(device_attach,	radeon_attach),
 	DEVMETHOD(device_detach,	radeon_detach),
-
-	{ 0, 0 }
+	DEVMETHOD_END
 };
 
 static driver_t radeon_driver = {
@@ -127,9 +128,5 @@ static driver_t radeon_driver = {
 };
 
 extern devclass_t drm_devclass;
-#if __FreeBSD_version >= 700010
 DRIVER_MODULE(radeon, vgapci, radeon_driver, drm_devclass, 0, 0);
-#else
-DRIVER_MODULE(radeon, pci, radeon_driver, drm_devclass, 0, 0);
-#endif
 MODULE_DEPEND(radeon, drm, 1, 1, 1);
