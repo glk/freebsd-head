@@ -1,15 +1,15 @@
 /*
  * Copyright (C) 2011 Matteo Landi, Luigi Rizzo. All rights reserved.
- *
+ * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
+ *   1. Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *   2. Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,7 +25,7 @@
 
 /*
  * $FreeBSD$
- * $Id: netmap_kern.h 9662 2011-11-16 13:18:06Z luigi $
+ * $Id: netmap_kern.h 9795 2011-12-02 11:39:08Z luigi $
  *
  * The header contains the definitions of constants and function
  * prototypes used only in kernelspace.
@@ -39,13 +39,13 @@ MALLOC_DECLARE(M_NETMAP);
 #endif
 
 #define ND(format, ...)
-#define D(format, ...)					\
-	do {						\
-		struct timeval __xxts;			\
+#define D(format, ...)						\
+	do {							\
+		struct timeval __xxts;				\
 		microtime(&__xxts);				\
-		printf("%03d.%06d %s [%d] " format "\n",\
-		(int)__xxts.tv_sec % 1000, (int)__xxts.tv_usec,		\
-		__FUNCTION__, __LINE__, ##__VA_ARGS__);	\
+		printf("%03d.%06d %s [%d] " format "\n",	\
+		(int)__xxts.tv_sec % 1000, (int)__xxts.tv_usec,	\
+		__FUNCTION__, __LINE__, ##__VA_ARGS__);		\
 	} while (0)
  
 struct netmap_adapter;
@@ -68,7 +68,7 @@ struct netmap_kring {
 	u_int nr_kflags;
 	u_int nkr_num_slots;
 
-	u_int	nkr_hwofs;	/* offset between NIC and netmap ring */
+	int	nkr_hwofs;	/* offset between NIC and netmap ring */
 	struct netmap_adapter *na;	 // debugging
 	struct selinfo si; /* poll/select wait queue */
 };
@@ -94,7 +94,7 @@ struct netmap_adapter {
 	u_int num_rx_desc;
 	u_int buff_size;
 
-	u_int	flags;	/* NR_REINIT */
+	u_int	flags;
 	/* tx_rings and rx_rings are private but allocated
 	 * as a contiguous chunk of memory. Each array has
 	 * N+1 entries, for the adapter queues and for the host queue.
@@ -169,18 +169,8 @@ int netmap_start(struct ifnet *, struct mbuf *);
 enum txrx { NR_RX = 0, NR_TX = 1 };
 struct netmap_slot *netmap_reset(struct netmap_adapter *na,
 	enum txrx tx, int n, u_int new_cur);
-void netmap_load_map(bus_dma_tag_t tag, bus_dmamap_t map,
-        void *buf, bus_size_t buflen);
-void netmap_reload_map(bus_dma_tag_t tag, bus_dmamap_t map,
-        void *buf, bus_size_t buflen);
 int netmap_ring_reinit(struct netmap_kring *);
 
-/*
- * XXX eventually, get rid of netmap_total_buffers and netmap_buffer_base
- * in favour of the structure
- */
-// struct netmap_buf_pool;
-// extern struct netmap_buf_pool nm_buf_pool;
 extern u_int netmap_total_buffers;
 extern char *netmap_buffer_base;
 extern int netmap_verbose;	// XXX debugging
@@ -196,17 +186,49 @@ enum {                                  /* verbose flags */
 };
 
 /*
- * return a pointer to the struct netmap adapter from the ifp
+ * NA returns a pointer to the struct netmap adapter from the ifp,
+ * WNA is used to write it.
  */
-#define	NA(_ifp)	((struct netmap_adapter *)(_ifp)->if_pspare[0])
+#ifndef WNA
+#define	WNA(_ifp)	(_ifp)->if_pspare[0]
+#endif
+#define	NA(_ifp)	((struct netmap_adapter *)WNA(_ifp))
+
+
+/* Callback invoked by the dma machinery after a successfull dmamap_load */
+static void netmap_dmamap_cb(__unused void *arg,
+    __unused bus_dma_segment_t * segs, __unused int nseg, __unused int error)
+{
+}
+
+/* bus_dmamap_load wrapper: call aforementioned function if map != NULL.
+ * XXX can we do it without a callback ?
+ */
+static inline void
+netmap_load_map(bus_dma_tag_t tag, bus_dmamap_t map, void *buf)
+{
+	if (map)
+		bus_dmamap_load(tag, map, buf, NETMAP_BUF_SIZE,
+		    netmap_dmamap_cb, NULL, BUS_DMA_NOWAIT);
+}
+
+/* update the map when a buffer changes. */
+static inline void
+netmap_reload_map(bus_dma_tag_t tag, bus_dmamap_t map, void *buf)
+{
+	if (map) {
+		bus_dmamap_unload(tag, map);
+		bus_dmamap_load(tag, map, buf, NETMAP_BUF_SIZE,
+		    netmap_dmamap_cb, NULL, BUS_DMA_NOWAIT);
+	}
+}
 
 
 /*
- * return the address of a buffer.
- * XXX this is a special version with hardwired 2k bufs
- * On error return netmap_buffer_base which is detected as a bad pointer.
+ * NMB return the virtual address of a buffer (buffer 0 on bad index)
+ * PNMB also fills the physical address
  */
-static inline char *
+static inline void *
 NMB(struct netmap_slot *slot)
 {
 	uint32_t i = slot->buf_idx;
@@ -216,6 +238,20 @@ NMB(struct netmap_slot *slot)
 #else
 		netmap_buffer_base + (i *NETMAP_BUF_SIZE);
 #endif
+}
+
+static inline void *
+PNMB(struct netmap_slot *slot, uint64_t *pp)
+{
+	uint32_t i = slot->buf_idx;
+	void *ret = (i >= netmap_total_buffers) ? netmap_buffer_base :
+#if NETMAP_BUF_SIZE == 2048
+		netmap_buffer_base + (i << 11);
+#else
+		netmap_buffer_base + (i *NETMAP_BUF_SIZE);
+#endif
+	*pp = vtophys(ret);
+	return ret;
 }
 
 #endif /* _NET_NETMAP_KERN_H_ */
