@@ -150,6 +150,7 @@ MAN=	aac.4 \
 	hifn.4 \
 	hme.4 \
 	hpet.4 \
+	${_hpt27xx.4} \
 	${_hptiop.4} \
 	${_hptmv.4} \
 	${_hptrr.4} \
@@ -504,11 +505,15 @@ MAN=	aac.4 \
 	viapm.4 \
 	${_viawd.4} \
 	vinum.4 \
+	${_virtio.4} \
+	${_virtio_balloon.4} \
+	${_virtio_blk.4} \
 	vkbd.4 \
 	vlan.4 \
 	vpo.4 \
 	vr.4 \
 	vte.4 \
+	${_vtnet.4} \
 	${_vxge.4} \
 	watchdog.4 \
 	wb.4 \
@@ -655,6 +660,7 @@ MLINKS+=vge.4 if_vge.4
 MLINKS+=vlan.4 if_vlan.4
 MLINKS+=vpo.4 imm.4
 MLINKS+=vr.4 if_vr.4
+MLINKS+=${_vtnet.4} ${_if_vtnet.4}
 MLINKS+=${_vxge.4} ${_if_vxge.4}
 MLINKS+=watchdog.4 SW_WATCHDOG.4
 MLINKS+=wb.4 if_wb.4
@@ -687,6 +693,7 @@ _atp.4=		atp.4
 _coretemp.4=	coretemp.4
 _cpuctl.4=	cpuctl.4
 _dpms.4=	dpms.4
+_hpt27xx.4=	hpt27xx.4
 _hptiop.4=	hptiop.4
 _hptmv.4=	hptmv.4
 _hptrr.4=	hptrr.4
@@ -697,6 +704,7 @@ _if_nfe.4=	if_nfe.4
 _if_nve.4=	if_nve.4
 _if_nxge.4=	if_nxge.4
 _if_urtw.4=	if_urtw.4
+_if_vtnet.4=	if_vtnet.4
 _if_vxge.4=	if_vxge.4
 _if_wpi.4=	if_wpi.4
 _ipmi.4=	ipmi.4
@@ -709,6 +717,10 @@ _nfsmb.4=	nfsmb.4
 _nve.4=		nve.4
 _nvram.4=	nvram.4
 _nxge.4=	nxge.4
+_virtio.4=	virtio.4
+_virtio_balloon.4=virtio_balloon.4
+_virtio_blk.4=	virtio_blk.4
+_vtnet.4=	vtnet.4
 _vxge.4=	vxge.4
 _padlock.4=	padlock.4
 _rr232x.4=	rr232x.4

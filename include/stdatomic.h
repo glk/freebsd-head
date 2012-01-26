@@ -35,14 +35,14 @@
 
 #if __has_feature(cxx_atomic)
 #define	__CLANG_ATOMICS
-#elif defined(__GNUC__)
+#elif __GNUC_PREREQ__(4, 7)
 #define	__GNUC_ATOMICS
-#else
+#elif !defined(__GNUC__)
 #error "stdatomic.h does not support your compiler"
 #endif
 
-#ifdef __GNUC_ATOMICS
-#define	_Atomic(T)				struct { volatile T __val; }
+#if !defined(__CLANG_ATOMICS)
+#define	_Atomic(T)			struct { volatile T __val; }
 #endif
 
 /*
@@ -50,11 +50,13 @@
  */
 
 #if defined(__CLANG_ATOMICS)
-#define	ATOMIC_VAR_INIT(value)			(value)
-#define	atomic_init(obj, value)			__atomic_init(obj, value)
-#elif defined(__GNUC_ATOMICS)
-#define	ATOMIC_VAR_INIT(value)			{ .__val = (value) }
-#define	atomic_init(obj, value)			(obj = ATOMIC_VAR_INIT(value))
+#define	ATOMIC_VAR_INIT(value)		(value)
+#define	atomic_init(obj, value)		__atomic_init(obj, value)
+#else
+#define	ATOMIC_VAR_INIT(value)		{ .__val = (value) }
+#define	atomic_init(obj, value) do {					\
+	(obj)->__val = (value);						\
+} while (0)
 #endif
 
 /*
@@ -64,29 +66,29 @@
  */
 
 #ifndef __ATOMIC_RELAXED
-#define __ATOMIC_RELAXED			0
+#define __ATOMIC_RELAXED		0
 #endif
 #ifndef __ATOMIC_CONSUME
-#define __ATOMIC_CONSUME			1
+#define __ATOMIC_CONSUME		1
 #endif
 #ifndef __ATOMIC_ACQUIRE
-#define __ATOMIC_ACQUIRE			2
+#define __ATOMIC_ACQUIRE		2
 #endif
 #ifndef __ATOMIC_RELEASE
-#define __ATOMIC_RELEASE			3
+#define __ATOMIC_RELEASE		3
 #endif
 #ifndef __ATOMIC_ACQ_REL
-#define __ATOMIC_ACQ_REL			4
+#define __ATOMIC_ACQ_REL		4
 #endif
 #ifndef __ATOMIC_SEQ_CST
-#define __ATOMIC_SEQ_CST			5
+#define __ATOMIC_SEQ_CST		5
 #endif
 
 /*
  * 7.17.3 Order and consistency.
  *
  * The memory_order_* constants that denote the barrier behaviour of the
- * atomic operations.  
+ * atomic operations.
  */
 
 enum memory_order {
@@ -102,21 +104,27 @@ enum memory_order {
  * 7.17.4 Fences.
  */
 
-#if defined(__CLANG_ATOMICS)
+#if defined(__CLANG_ATOMICS) || defined(__GNUC_ATOMICS)
 #define	atomic_thread_fence(order)	__atomic_thread_fence(order)
-#elif defined(__GNUC_ATOMICS)
+#define	atomic_signal_fence(order)	__atomic_signal_fence(order)
+#else
 #define	atomic_thread_fence(order)	__sync_synchronize()
+#define	atomic_signal_fence(order)	__asm volatile ("" : : : "memory")
 #endif
-#define	atomic_signal_fence(order)	__asm volatile ("" : : : "memory");
 
 /*
  * 7.17.5 Lock-free property.
  */
 
 #if defined(__CLANG_ATOMICS)
-#define	atomic_is_lock_free(obj)	__atomic_is_lock_free(obj)
+#define	atomic_is_lock_free(obj) \
+	__atomic_is_lock_free(sizeof(obj))
 #elif defined(__GNUC_ATOMICS)
-#define	atomic_is_lock_free(obj)	(sizeof((obj->__val)) <= sizeof(void *))
+#define	atomic_is_lock_free(obj) \
+	__atomic_is_lock_free(sizeof((obj)->__val))
+#else
+#define	atomic_is_lock_free(obj) \
+	(sizeof((obj)->__val) <= sizeof(void *))
 #endif
 
 /*
@@ -198,14 +206,40 @@ typedef _Atomic(__uintmax_t)		atomic_uintmax_t;
 	__atomic_store(object, desired, order)
 #elif defined(__GNUC_ATOMICS)
 #define	atomic_compare_exchange_strong_explicit(object, expected,	\
+    desired, success, failure)						\
+	__atomic_compare_exchange_n(&(object)->__val, expected,		\
+	    desired, 0, success, failure)
+#define	atomic_compare_exchange_weak_explicit(object, expected,		\
+    desired, success, failure)						\
+	__atomic_compare_exchange_n(&(object)->__val, expected,		\
+	    desired, 1, success, failure)
+#define	atomic_exchange_explicit(object, desired, order)		\
+	__atomic_exchange_n(&(object)->__val, desired, order)
+#define	atomic_fetch_add_explicit(object, operand, order)		\
+	__atomic_fetch_add(&(object)->__val, operand, order)
+#define	atomic_fetch_and_explicit(object, operand, order)		\
+	__atomic_fetch_and(&(object)->__val, operand, order)
+#define	atomic_fetch_or_explicit(object, operand, order)		\
+	__atomic_fetch_or(&(object)->__val, operand, order)
+#define	atomic_fetch_sub_explicit(object, operand, order)		\
+	__atomic_fetch_sub(&(object)->__val, operand, order)
+#define	atomic_fetch_xor_explicit(object, operand, order)		\
+	__atomic_fetch_xor(&(object)->__val, operand, order)
+#define	atomic_load_explicit(object, order)				\
+	__atomic_load_n(&(object)->__val, order)
+#define	atomic_store_explicit(object, desired, order)			\
+	__atomic_store_n(&(object)->__val, desired, order)
+#else
+#define	atomic_compare_exchange_strong_explicit(object, expected,	\
     desired, success, failure) ({					\
 	__typeof__((object)->__val) __v;				\
-	__v =								\
-	__sync_val_compare_and_swap((__typeof(&((object)->__val)))object,\
-		*expected, desired);					\
-	*expected = __v;						\
-	(*expected == __v);						\
-	})
+	_Bool __r;							\
+	__v = __sync_val_compare_and_swap(&(object)->__val,		\
+	    *(expected), desired);					\
+	__r = *(expected) == __v;					\
+	*(expected) = __v;						\
+	__r;								\
+})
 
 #define	atomic_compare_exchange_weak_explicit(object, expected,		\
     desired, success, failure)						\
@@ -214,7 +248,7 @@ typedef _Atomic(__uintmax_t)		atomic_uintmax_t;
 #if __has_builtin(__sync_swap)
 /* Clang provides a full-barrier atomic exchange - use it if available. */
 #define atomic_exchange_explicit(object, desired, order)		\
-	__sync_swap(&(object)->value, desired)
+	__sync_swap(&(object)->__val, desired)
 #else
 /*
  * __sync_lock_test_and_set() is only an acquire barrier in theory (although in
@@ -223,7 +257,7 @@ typedef _Atomic(__uintmax_t)		atomic_uintmax_t;
  */
 #define	atomic_exchange_explicit(object, desired, order) ({		\
 	__typeof__((object)->__val) __v;				\
-	__v = __sync_lock_test_and_set(object, desired);		\
+	__v = __sync_lock_test_and_set(&(object)->__val, desired);	\
 	__sync_synchronize();						\
 	__v;								\
 })
@@ -278,9 +312,9 @@ typedef _Atomic(__uintmax_t)		atomic_uintmax_t;
  * 7.17.8 Atomic flag type and operations.
  */
 
-typedef atomic_bool		atomic_flag;
+typedef atomic_bool			atomic_flag;
 
-#define	ATOMIC_FLAG_INIT	ATOMIC_VAR_INIT(0)
+#define	ATOMIC_FLAG_INIT		ATOMIC_VAR_INIT(0)
 
 #define	atomic_flag_clear_explicit(object, order)			\
 	atomic_store_explicit(object, 0, order)
@@ -288,9 +322,8 @@ typedef atomic_bool		atomic_flag;
 	atomic_compare_exchange_strong_explicit(object, 0, 1, order, order)
 
 #define	atomic_flag_clear(object)					\
-	atomic_flag_clear_explicit(object, 0, memory_order_seq_cst)
+	atomic_flag_clear_explicit(object, memory_order_seq_cst)
 #define	atomic_flag_test_and_set(object)				\
-	atomic_flag_test_and_set_explicit(object, 0, 1,			\
-	    memory_order_seq_cst, memory_order_seq_cst)
+	atomic_flag_test_and_set_explicit(object, memory_order_seq_cst)
 
 #endif /* !_STDATOMIC_H_ */

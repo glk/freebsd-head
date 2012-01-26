@@ -57,6 +57,7 @@ SUBDIR=	${_3dfx} \
 	cd9660 \
 	cd9660_iconv \
 	${_ce} \
+	${_cfi} \
 	${_ciss} \
 	${_cm} \
 	${_cmx} \
@@ -108,6 +109,7 @@ SUBDIR=	${_3dfx} \
 	hatm \
 	hifn \
 	hme \
+	${_hpt27xx} \
 	${_hptiop} \
 	${_hptmv} \
 	${_hptrr} \
@@ -134,7 +136,7 @@ SUBDIR=	${_3dfx} \
 	${_igb} \
 	${_iir} \
 	${_io} \
-	ipdivert \
+	${_ipdivert} \
 	${_ipfilter} \
 	${_ipfw} \
 	ipfw_nat \
@@ -369,13 +371,13 @@ _random=	random
 .endif
 .endif
 
-.if ${MK_INET_SUPPORT} != "no" || defined(ALL_MODULES)
-_if_gre=	if_gre
-.endif
-
 .if (${MK_INET_SUPPORT} != "no" || ${MK_INET6_SUPPORT} != "no") || \
 	defined(ALL_MODULES)
 _carp=	carp
+.endif
+
+.if ${MK_INET_SUPPORT} != "no" || defined(ALL_MODULES)
+_if_gre=	if_gre
 .endif
 
 .if ${MK_IPFILTER} != "no" || defined(ALL_MODULES)
@@ -383,6 +385,7 @@ _ipfilter=	ipfilter
 .endif
 
 .if ${MK_INET_SUPPORT} != "no" || defined(ALL_MODULES)
+_ipdivert=	ipdivert
 _ipfw=		ipfw
 .endif
 
@@ -508,6 +511,7 @@ _coretemp=	coretemp
 _ctau=		ctau
 _dpt=		dpt
 _ex=		ex
+_hpt27xx=	hpt27xx
 _hptiop=	hptiop
 _hptmv=		hptmv
 _hptrr=		hptrr
@@ -562,6 +566,7 @@ _amdsbwd=	amdsbwd
 _amdtemp=	amdtemp
 _arcmsr=	arcmsr
 _asmc=		asmc
+_bktr=		bktr
 _bxe=		bxe
 _cardbus=	cardbus
 _cbb=		cbb
@@ -583,6 +588,7 @@ _et=		et
 _em=		em
 _exca=		exca
 _ext2fs=	ext2fs
+_hpt27xx=	hpt27xx
 _hptiop=	hptiop
 _hptmv=		hptmv
 _hptrr=		hptrr
@@ -652,6 +658,10 @@ _zfs=		zfs
 .endif
 .endif
 
+.if ${MACHINE_CPUARCH} == "arm"
+_cfi=		cfi
+.endif
+
 .if ${MACHINE_CPUARCH} == "ia64"
 _aac=		aac
 _aic=		aic
@@ -695,6 +705,7 @@ _xe=		xe
 _agp=		agp
 _an=		an
 _bm=		bm
+_cfi=		cfi
 _cpufreq=	cpufreq
 _nvram=		powermac_nvram
 _smbfs=		smbfs
