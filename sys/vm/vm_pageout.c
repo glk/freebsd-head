@@ -797,6 +797,11 @@ rescan0:
 		if (m->flags & PG_MARKER)
 			continue;
 
+		KASSERT((m->flags & PG_FICTITIOUS) == 0,
+		    ("Fictitious page %p cannot be in inactive queue", m));
+		KASSERT((m->oflags & VPO_UNMANAGED) == 0,
+		    ("Unmanaged page %p cannot be in inactive queue", m));
+
 		/*
 		 * Lock the page.
 		 */
@@ -1135,6 +1140,10 @@ unlock_and_continue:
 			m = next;
 			continue;
 		}
+		KASSERT((m->flags & PG_FICTITIOUS) == 0,
+		    ("Fictitious page %p cannot be in active queue", m));
+		KASSERT((m->oflags & VPO_UNMANAGED) == 0,
+		    ("Unmanaged page %p cannot be in active queue", m));
 		if (!vm_pageout_page_lock(m, &next)) {
 			vm_page_unlock(m);
 			m = next;

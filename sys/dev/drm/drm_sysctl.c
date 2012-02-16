@@ -65,12 +65,11 @@ int drm_sysctl_init(struct drm_device *dev)
 	int		  i;
 
 	info = malloc(sizeof *info, DRM_MEM_DRIVER, M_WAITOK | M_ZERO);
-	if ( !info )
-		return 1;
 	dev->sysctl = info;
 
 	/* Add the sysctl node for DRI if it doesn't already exist */
-	drioid = SYSCTL_ADD_NODE( &info->ctx, &sysctl__hw_children, OID_AUTO, "dri", CTLFLAG_RW, NULL, "DRI Graphics");
+	drioid = SYSCTL_ADD_NODE(&info->ctx, &sysctl__hw_children, OID_AUTO,
+	    "dri", CTLFLAG_RW, NULL, "DRI Graphics");
 	if (!drioid)
 		return 1;
 
@@ -80,46 +79,65 @@ int drm_sysctl_init(struct drm_device *dev)
 		if (i <= oid->oid_arg2)
 			i = oid->oid_arg2 + 1;
 	}
-	if (i>9)
-		return 1;
+	if (i > 9)
+		return (1);
 	
+	dev->sysctl_node_idx = i;
 	/* Add the hw.dri.x for our device */
 	info->name[0] = '0' + i;
 	info->name[1] = 0;
-	top = SYSCTL_ADD_NODE( &info->ctx, SYSCTL_CHILDREN(drioid), OID_AUTO, info->name, CTLFLAG_RW, NULL, NULL);
+	top = SYSCTL_ADD_NODE(&info->ctx, SYSCTL_CHILDREN(drioid),
+	    OID_AUTO, info->name, CTLFLAG_RW, NULL, NULL);
 	if (!top)
 		return 1;
 	
 	for (i = 0; i < DRM_SYSCTL_ENTRIES; i++) {
-		oid = SYSCTL_ADD_OID(&info->ctx, 
-			SYSCTL_CHILDREN(top), 
-			OID_AUTO, 
-			drm_sysctl_list[i].name, 
-			CTLTYPE_STRING | CTLFLAG_RD, 
-			dev, 
-			0, 
-			drm_sysctl_list[i].f, 
-			"A", 
+		oid = SYSCTL_ADD_OID(&info->ctx,
+			SYSCTL_CHILDREN(top),
+			OID_AUTO,
+			drm_sysctl_list[i].name,
+			CTLTYPE_STRING | CTLFLAG_RD,
+			dev,
+			0,
+			drm_sysctl_list[i].f,
+			"A",
 			NULL);
 		if (!oid)
 			return 1;
 	}
-	SYSCTL_ADD_INT(&info->ctx, SYSCTL_CHILDREN(top), OID_AUTO, "debug",
+	SYSCTL_ADD_INT(&info->ctx, SYSCTL_CHILDREN(drioid), OID_AUTO, "debug",
 	    CTLFLAG_RW, &drm_debug_flag, sizeof(drm_debug_flag),
 	    "Enable debugging output");
+	SYSCTL_ADD_INT(&info->ctx, SYSCTL_CHILDREN(drioid), OID_AUTO, "notyet",
+	    CTLFLAG_RW, &drm_notyet_flag, sizeof(drm_debug_flag),
+	    "Enable notyet reminders");
 
-	return 0;
+	if (dev->driver->sysctl_init != NULL)
+		dev->driver->sysctl_init(dev, &info->ctx, top);
+
+	SYSCTL_ADD_INT(&info->ctx, SYSCTL_CHILDREN(drioid), OID_AUTO,
+	    "vblank_offdelay", CTLFLAG_RW, &drm_vblank_offdelay,
+	    sizeof(drm_vblank_offdelay),
+	    "");
+	SYSCTL_ADD_INT(&info->ctx, SYSCTL_CHILDREN(drioid), OID_AUTO,
+	    "timestamp_precision", CTLFLAG_RW, &drm_timestamp_precision,
+	    sizeof(drm_timestamp_precision),
+	    "");
+
+	return (0);
 }
 
 int drm_sysctl_cleanup(struct drm_device *dev)
 {
 	int error;
-	error = sysctl_ctx_free( &dev->sysctl->ctx );
 
+	error = sysctl_ctx_free(&dev->sysctl->ctx);
 	free(dev->sysctl, DRM_MEM_DRIVER);
 	dev->sysctl = NULL;
+	if (dev->driver->sysctl_cleanup != NULL)
+		dev->driver->sysctl_cleanup(dev);
 
-	return error;
+	return (error);
 }
 
 #define DRM_SYSCTL_PRINT(fmt, arg...)				\
@@ -327,16 +345,20 @@ static int drm_vblank_info DRM_SYSCTL_HANDLER_ARGS
 	int i;
 
 	DRM_SYSCTL_PRINT("\ncrtc ref count    last     enabled inmodeset\n");
-	for(i = 0 ; i < dev->num_crtcs ; i++) {
+	DRM_LOCK();
+	if (dev->_vblank_count == NULL)
+		goto done;
+	for (i = 0 ; i < dev->num_crtcs ; i++) {
 		DRM_SYSCTL_PRINT("  %02d  %02d %08d %08d %02d      %02d\n",
-		    i, atomic_load_acq_32(&dev->vblank[i].refcount),
-		    atomic_load_acq_32(&dev->vblank[i].count),
-		    atomic_load_acq_32(&dev->vblank[i].last),
-		    atomic_load_acq_int(&dev->vblank[i].enabled),
-		    atomic_load_acq_int(&dev->vblank[i].inmodeset));
+		    i, dev->vblank_refcount[i],
+		    dev->_vblank_count[i],
+		    dev->last_vblank[i],
+		    dev->vblank_enabled[i],
+		    dev->vblank_inmodeset[i]);
 	}
+done:
+	DRM_UNLOCK();
 
 	SYSCTL_OUT(req, "", -1);
-done:
 	return retcode;
 }
