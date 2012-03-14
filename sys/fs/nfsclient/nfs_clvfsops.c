@@ -459,10 +459,10 @@ nfs_mountroot(struct mount *mp)
 		sin.sin_len = sizeof(sin);
                 /* XXX MRT use table 0 for this sort of thing */
 		CURVNET_SET(TD_TO_VNET(td));
-		error = rtrequest(RTM_ADD, (struct sockaddr *)&sin,
+		error = rtrequest_fib(RTM_ADD, (struct sockaddr *)&sin,
 		    (struct sockaddr *)&nd->mygateway,
 		    (struct sockaddr *)&mask,
-		    RTF_UP | RTF_GATEWAY, NULL);
+		    RTF_UP | RTF_GATEWAY, NULL, RT_DEFAULT_FIB);
 		CURVNET_RESTORE();
 		if (error)
 			panic("nfs_mountroot: RTM_ADD: %d", error);
@@ -1001,20 +1001,16 @@ nfs_mount(struct mount *mp)
 		}
 
 		/*
-		 * Cannot switch to UDP if current rsize/wsize/readdirsize is
-		 * too large, since there may be an I/O RPC in progress that
-		 * will get retried after the switch to the UDP socket. These
-		 * retries will fail over and over and over again.
+		 * If a change from TCP->UDP is done and there are thread(s)
+		 * that have I/O RPC(s) in progress with a tranfer size
+		 * greater than NFS_MAXDGRAMDATA, those thread(s) will be
+		 * hung, retrying the RPC(s) forever. Usually these threads
+		 * will be seen doing an uninterruptible sleep on wait channel
+		 * "newnfsreq" (truncated to "newnfsre" by procstat).
 		 */
-		if (args.sotype == SOCK_DGRAM &&
-		    (nmp->nm_rsize > NFS_MAXDGRAMDATA ||
-		     nmp->nm_wsize > NFS_MAXDGRAMDATA ||
-		     nmp->nm_readdirsize > NFS_MAXDGRAMDATA)) {
-			vfs_mount_error(mp,
-			    "old rsize/wsize/readdirsize greater than UDP max");
-			error = EINVAL;
-			goto out;
-		}
+		if (args.sotype == SOCK_DGRAM && nmp->nm_sotype == SOCK_STREAM)
+			tprintf(td->td_proc, LOG_WARNING,
+	"Warning: mount -u that changes TCP->UDP can result in hung threads\n");
 
 		/*
 		 * When doing an update, we can't change version,
