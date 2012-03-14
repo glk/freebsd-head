@@ -48,7 +48,7 @@ struct drm_hash_item {
 
 struct drm_open_hash {
 	LIST_HEAD(drm_hash_item_list, drm_hash_item) *table;
-	unsigned int  size;
+	unsigned int size;
 	unsigned int order;
 	unsigned long mask;
 };
