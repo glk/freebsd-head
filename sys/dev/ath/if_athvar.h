@@ -501,6 +501,7 @@ struct ath_softc {
 	struct ath_txq		*sc_cabq;	/* tx q for cab frames */
 	struct task		sc_bmisstask;	/* bmiss int processing */
 	struct task		sc_bstucktask;	/* stuck beacon processing */
+	struct task		sc_resettask;	/* interface reset task */
 	enum {
 		OK,				/* no change needed */
 		UPDATE,				/* update pending */
@@ -528,6 +529,28 @@ struct ath_softc {
 	uint16_t		*sc_eepromdata;	/* Local eeprom data, if AR9100 */
 	int			sc_txchainmask;	/* currently configured TX chainmask */
 	int			sc_rxchainmask;	/* currently configured RX chainmask */
+
+	/* Queue limits */
+
+	/*
+	 * To avoid queue starvation in congested conditions,
+	 * these parameters tune the maximum number of frames
+	 * queued to the data/mcastq before they're dropped.
+	 *
+	 * This is to prevent:
+	 * + a single destination overwhelming everything, including
+	 *   management/multicast frames;
+	 * + multicast frames overwhelming everything (when the
+	 *   air is sufficiently busy that cabq can't drain.)
+	 *
+	 * These implement:
+	 * + data_minfree is the maximum number of free buffers
+	 *   overall to successfully allow a data frame.
+	 *
+	 * + mcastq_maxdepth is the maximum depth allowed of the cabq.
+	 */
+	int			sc_txq_data_minfree;
+	int			sc_txq_mcastq_maxdepth;
 
 	/*
 	 * Aggregation twiddles

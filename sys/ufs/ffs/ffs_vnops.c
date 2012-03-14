@@ -216,8 +216,10 @@ ffs_syncvnode(struct vnode *vp, int waitfor)
 	struct buf *bp;
 	struct buf *nbp;
 	ufs_lbn_t lbn;
-	int error, wait, passes;
+	int error, wait, passes, noupdate;
 
+	noupdate = waitfor & NO_INO_UPDT;
+	waitfor &= ~NO_INO_UPDT;
 	ip = VTOI(vp);
 	ip->i_flag &= ~IN_NEEDSYNC;
 	bo = &vp->v_bufobj;
@@ -300,7 +302,10 @@ next:
 	}
 	if (waitfor != MNT_WAIT) {
 		BO_UNLOCK(bo);
-		return (ffs_update(vp, waitfor));
+		if (noupdate)
+			return (0);
+		else
+			return (ffs_update(vp, 0));
 	}
 	/* Drain IO to see if we're done. */
 	bufobj_wwait(bo, 0, 0);
@@ -317,9 +322,9 @@ next:
 	 */
 	if (bo->bo_dirty.bv_cnt > 0) {
 		/* Write the inode after sync passes to flush deps. */
-		if (wait && DOINGSOFTDEP(vp)) {
+		if (wait && DOINGSOFTDEP(vp) && noupdate == 0) {
 			BO_UNLOCK(bo);
-			ffs_update(vp, MNT_WAIT);
+			ffs_update(vp, 1);
 			BO_LOCK(bo);
 		}
 		/* switch between sync/async. */
@@ -332,7 +337,9 @@ next:
 #endif
 	}
 	BO_UNLOCK(bo);
-	error = ffs_update(vp, MNT_WAIT);
+	error = 0;
+	if (noupdate == 0)
+		error = ffs_update(vp, 1);
 	if (DOINGSUJ(vp))
 		softdep_journal_fsync(VTOI(vp));
 	return (error);
@@ -402,7 +409,6 @@ ffs_lock(ap)
 /*
  * Vnode op for reading.
  */
-/* ARGSUSED */
 static int
 ffs_read(ap)
 	struct vop_read_args /* {
@@ -420,7 +426,8 @@ ffs_read(ap)
 	ufs_lbn_t lbn, nextlbn;
 	off_t bytesinfile;
 	long size, xfersize, blkoffset;
-	int error, orig_resid;
+	ssize_t orig_resid;
+	int error;
 	int seqcount;
 	int ioflag;
 
@@ -633,8 +640,9 @@ ffs_write(ap)
 	struct buf *bp;
 	ufs_lbn_t lbn;
 	off_t osize;
+	ssize_t resid;
 	int seqcount;
-	int blkoffset, error, flags, ioflag, resid, size, xfersize;
+	int blkoffset, error, flags, ioflag, size, xfersize;
 
 	vp = ap->a_vp;
 	uio = ap->a_uio;
@@ -871,7 +879,8 @@ ffs_extread(struct vnode *vp, struct uio *uio, int ioflag)
 	ufs_lbn_t lbn, nextlbn;
 	off_t bytesinfile;
 	long size, xfersize, blkoffset;
-	int error, orig_resid;
+	ssize_t orig_resid;
+	int error;
 
 	ip = VTOI(vp);
 	fs = ip->i_fs;
@@ -1024,7 +1033,8 @@ ffs_extwrite(struct vnode *vp, struct uio *uio, int ioflag, struct ucred *ucred)
 	struct buf *bp;
 	ufs_lbn_t lbn;
 	off_t osize;
-	int blkoffset, error, flags, resid, size, xfersize;
+	ssize_t resid;
+	int blkoffset, error, flags, size, xfersize;
 
 	ip = VTOI(vp);
 	fs = ip->i_fs;

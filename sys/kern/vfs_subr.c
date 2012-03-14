@@ -2657,6 +2657,8 @@ vgonel(struct vnode *vp)
 			vinactive(vp, td);
 		VI_UNLOCK(vp);
 	}
+	if (vp->v_type == VSOCK)
+		vfs_unp_reclaim(vp);
 	/*
 	 * Reclaim the vnode.
 	 */
@@ -2940,6 +2942,7 @@ DB_SHOW_COMMAND(mount, db_show_mount)
 	MNT_KERN_FLAG(MNTK_REFEXPIRE);
 	MNT_KERN_FLAG(MNTK_EXTENDED_SHARED);
 	MNT_KERN_FLAG(MNTK_SHARED_WRITES);
+	MNT_KERN_FLAG(MNTK_NOASYNC);
 	MNT_KERN_FLAG(MNTK_UNMOUNT);
 	MNT_KERN_FLAG(MNTK_MWAIT);
 	MNT_KERN_FLAG(MNTK_SUSPEND);
@@ -2992,7 +2995,6 @@ DB_SHOW_COMMAND(mount, db_show_mount)
 	db_printf("    mnt_gen = %d\n", mp->mnt_gen);
 	db_printf("    mnt_nvnodelistsize = %d\n", mp->mnt_nvnodelistsize);
 	db_printf("    mnt_writeopcount = %d\n", mp->mnt_writeopcount);
-	db_printf("    mnt_noasync = %u\n", mp->mnt_noasync);
 	db_printf("    mnt_maxsymlinklen = %d\n", mp->mnt_maxsymlinklen);
 	db_printf("    mnt_iosize_max = %d\n", mp->mnt_iosize_max);
 	db_printf("    mnt_hashseed = %u\n", mp->mnt_hashseed);

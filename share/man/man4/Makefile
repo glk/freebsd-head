@@ -328,6 +328,7 @@ MAN=	aac.4 \
 	${_nvram.4} \
 	${_nvram2env.4} \
 	${_nxge.4} \
+	oce.4 \
 	ohci.4 \
 	orm.4 \
 	${_padlock.4} \
@@ -413,6 +414,7 @@ MAN=	aac.4 \
 	snd_fm801.4 \
 	snd_gusc.4 \
 	snd_hda.4 \
+	snd_hdspe.4 \
 	snd_ich.4 \
 	snd_maestro3.4 \
 	snd_maestro.4 \

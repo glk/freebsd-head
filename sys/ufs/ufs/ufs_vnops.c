@@ -68,8 +68,6 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm.h>
 #include <vm/vm_extern.h>
 
-#include <fs/fifofs/fifo.h>
-
 #include <ufs/ufs/acl.h>
 #include <ufs/ufs/extattr.h>
 #include <ufs/ufs/quota.h>
@@ -1534,8 +1532,15 @@ relock:
 	 * ufs_lookup_ino() and then VFS_VGET(), another thread might do a
 	 * normal lookup of the from name just before the VFS_VGET() call,
 	 * causing the cache entry to be re-instantiated.
+	 *
+	 * The same issue also applies to tvp if it exists as
+	 * otherwise we may have a stale name cache entry for the new
+	 * name that references the old i-node if it has other links
+	 * or open file descriptors.
 	 */
 	cache_purge(fvp);
+	if (tvp)
+		cache_purge(tvp);
 
 unlockout:
 	vput(fdvp);
