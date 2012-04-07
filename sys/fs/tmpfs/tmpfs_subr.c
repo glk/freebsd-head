@@ -62,7 +62,6 @@ __FBSDID("$FreeBSD$");
 
 static __inline int tmpfs_dirtree_cmp(struct tmpfs_dirent *a,
     struct tmpfs_dirent *b);
-RB_PROTOTYPE_STATIC(tmpfs_dir, tmpfs_dirent, td_entries, tmpfs_dirtree_cmp);
 
 SYSCTL_NODE(_vfs, OID_AUTO, tmpfs, CTLFLAG_RW, 0, "tmpfs file system");
 
@@ -91,6 +90,8 @@ sysctl_mem_reserved(SYSCTL_HANDLER_ARGS)
 
 SYSCTL_PROC(_vfs_tmpfs, OID_AUTO, memory_reserved, CTLTYPE_LONG|CTLFLAG_RW,
     &tmpfs_pages_reserved, 0, sysctl_mem_reserved, "L", "reserved memory");
+
+RB_PROTOTYPE_STATIC(tmpfs_dir, tmpfs_dirent, td_entries, tmpfs_dirtree_cmp);
 
 size_t
 tmpfs_mem_avail(void)
@@ -1556,10 +1557,10 @@ tmpfs_dirtree_cmp(struct tmpfs_dirent *a, struct tmpfs_dirent *b)
 
 	rv = (a->td_namehash - b->td_namehash);
 	if (rv != 0)
-		return rv;
+		return (rv);
 	rv = (a->td_namelen - b->td_namelen);
 	if (rv != 0)
-		return rv;
+		return (rv);
 	/* td_name == NULL iff de is synthetic key and td_namelen == 0 */
 	rv = memcmp(a->td_name, b->td_name, a->td_namelen);
 

@@ -455,7 +455,7 @@ int	tmpfs_truncate(struct vnode *, off_t);
 #define TMPFS_VALIDATE_DIR(node) do { \
 	MPASS((node)->tn_type == VDIR); \
 	MPASS((node)->tn_size % sizeof(struct tmpfs_dirent) == 0); \
-    } while (0)
+} while (0)
 
 /* --------------------------------------------------------------------- */
 
