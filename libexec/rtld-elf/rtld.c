@@ -351,7 +351,8 @@ _rtld(Elf_Addr *sp, func_ptr_type *exit_proc, Obj_Entry **objp)
     main_argc = argc;
     main_argv = argv;
 
-    if (aux_info[AT_CANARY]->a_un.a_ptr != NULL) {
+    if (aux_info[AT_CANARY] != NULL &&
+	aux_info[AT_CANARY]->a_un.a_ptr != NULL) {
 	    i = aux_info[AT_CANARYLEN]->a_un.a_val;
 	    if (i > sizeof(__stack_chk_guard))
 		    i = sizeof(__stack_chk_guard);
@@ -2585,7 +2586,9 @@ dlopen_object(const char *name, int fd, Obj_Entry *refobj, int lo_flags,
 	name);
     GDB_STATE(RT_CONSISTENT,obj ? &obj->linkmap : NULL);
 
-    map_stacks_exec(&lockstate);
+    if (!(lo_flags & RTLD_LO_EARLY)) {
+	map_stacks_exec(&lockstate);
+    }
 
     if (initlist_objects_ifunc(&initlist, (mode & RTLD_MODEMASK) == RTLD_NOW,
       (lo_flags & RTLD_LO_EARLY) ? SYMLOOK_EARLY : 0,

@@ -61,7 +61,6 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/taskqueue.h>
-#include <machine/atomic.h>
 
 /*
  * SCSI structures and definitions are used from here, but no linking
@@ -149,19 +148,19 @@ struct mfi_aen {
 };
 
 struct mfi_skinny_dma_info {
-	bus_dma_tag_t	dmat[514];
-	bus_dmamap_t	dmamap[514];
-	uint32_t	mem[514];
-	int		noofmaps;
+	bus_dma_tag_t			dmat[514];
+	bus_dmamap_t			dmamap[514];
+	uint32_t			mem[514];
+	int				noofmaps;
+};
+
+struct megasas_sge
+{
+	bus_addr_t			phys_addr;
+	uint32_t			length;
 };
 
 struct mfi_cmd_tbolt;
-typedef struct {
-	volatile unsigned int val;
-} atomic_t;
-
-#define	atomic_read(v)	((v)->val)
-#define	atomic_set(v,i)	((v)->val - (i))
 
 struct mfi_softc {
 	device_t			mfi_dev;
@@ -240,7 +239,6 @@ struct mfi_softc {
 	struct intr_config_hook		mfi_ich;
 	eventhandler_tag		eh;
 	/* OCR flags */
-	atomic_t fw_reset_no_pci_access;
 	uint8_t adpreset;
 	uint8_t issuepend_done;
 	uint8_t disableOnlineCtrlReset;
@@ -582,7 +580,7 @@ SYSCTL_DECL(_hw_mfi);
 #define MFI_CMD_TIMEOUT 30
 #define MFI_SYS_PD_IO	0
 #define MFI_LD_IO	1
-#define SKINNY_MEMORY 0x02000000
+#define MFI_SKINNY_MEMORY 0x02000000
 #define MFI_MAXPHYS (128 * 1024)
 
 #ifdef MFI_DEBUG
