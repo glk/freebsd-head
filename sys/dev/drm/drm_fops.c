@@ -72,13 +72,6 @@ int drm_open_helper(struct cdev *kdev, int flags, int fmt, DRM_STRUCTPROC *p,
 	/* for compatibility root is always authenticated */
 	priv->authenticated	= DRM_SUSER(p);
 
-	INIT_LIST_HEAD(&priv->fbs);
-	INIT_LIST_HEAD(&priv->event_list);
-	priv->event_space = 4096; /* set aside 4k for event buffer */
-
-	if (dev->driver->driver_features & DRIVER_GEM)
-		drm_gem_open(dev, priv);
-
 	if (dev->driver->open) {
 		/* shared code returns -errno */
 		retcode = -dev->driver->open(dev, priv);
@@ -99,104 +92,16 @@ int drm_open_helper(struct cdev *kdev, int flags, int fmt, DRM_STRUCTPROC *p,
 	return 0;
 }
 
-static bool
-drm_dequeue_event(struct drm_device *dev, struct drm_file *file_priv,
-    struct uio *uio, struct drm_pending_event **out)
+
+/* The drm_read and drm_poll are stubs to prevent spurious errors
+ * on older X Servers (4.3.0 and earlier) */
+
+int drm_read(struct cdev *kdev, struct uio *uio, int ioflag)
 {
-	struct drm_pending_event *e;
-
-	if (list_empty(&file_priv->event_list))
-		return (false);
-	e = list_first_entry(&file_priv->event_list,
-	    struct drm_pending_event, link);
-	if (e->event->length > uio->uio_resid)
-		return (false);
-
-	file_priv->event_space += e->event->length;
-	list_del(&e->link);
-	*out = e;
-	return (true);
+	return 0;
 }
 
-int
-drm_read(struct cdev *kdev, struct uio *uio, int ioflag)
+int drm_poll(struct cdev *kdev, int events, DRM_STRUCTPROC *p)
 {
-	struct drm_file *file_priv;
-	struct drm_device *dev;
-	struct drm_pending_event *e;
-	int error;
-
-	error = devfs_get_cdevpriv((void **)&file_priv);
-	if (error != 0) {
-		DRM_ERROR("can't find authenticator\n");
-		return (EINVAL);
-	}
-	dev = drm_get_device_from_kdev(kdev);
-	mtx_lock(&dev->event_lock);
-	while (list_empty(&file_priv->event_list)) {
-		if ((ioflag & O_NONBLOCK) != 0) {
-			error = EAGAIN;
-			goto out;
-		}
-		error = msleep(&file_priv->event_space, &dev->event_lock,
-	           PCATCH, "drmrea", 0);
-	       if (error != 0)
-		       goto out;
-	}
-	while (drm_dequeue_event(dev, file_priv, uio, &e)) {
-		mtx_unlock(&dev->event_lock);
-		error = uiomove(e->event, e->event->length, uio);
-		CTR3(KTR_DRM, "drm_event_dequeued %d %d %d", curproc->p_pid,
-		    e->event->type, e->event->length);
-		e->destroy(e);
-		if (error != 0)
-			return (error);
-		mtx_lock(&dev->event_lock);
-	}
-out:
-	mtx_unlock(&dev->event_lock);
-	return (error);
-}
-
-void
-drm_event_wakeup(struct drm_pending_event *e)
-{
-	struct drm_file *file_priv;
-	struct drm_device *dev;
-
-	file_priv = e->file_priv;
-	dev = file_priv->dev;
-	mtx_assert(&dev->event_lock, MA_OWNED);
-
-	wakeup(&file_priv->event_space);
-	selwakeup(&file_priv->event_poll);
-}
-
-int
-drm_poll(struct cdev *kdev, int events, struct thread *td)
-{
-	struct drm_file *file_priv;
-	struct drm_device *dev;
-	int error, revents;
-
-	error = devfs_get_cdevpriv((void **)&file_priv);
-	if (error != 0) {
-		DRM_ERROR("can't find authenticator\n");
-		return (EINVAL);
-	}
-	dev = drm_get_device_from_kdev(kdev);
-
-	revents = 0;
-	mtx_lock(&dev->event_lock);
-	if ((events & (POLLIN | POLLRDNORM)) != 0) {
-		if (list_empty(&file_priv->event_list)) {
-			CTR0(KTR_DRM, "drm_poll empty list");
-			selrecord(td, &file_priv->event_poll);
-		} else {
-			revents |= events & (POLLIN | POLLRDNORM);
-			CTR1(KTR_DRM, "drm_poll revents %x", revents);
-		}
-	}
-	mtx_unlock(&dev->event_lock);
-	return (revents);
+	return 0;
 }
