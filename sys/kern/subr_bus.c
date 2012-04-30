@@ -2472,13 +2472,12 @@ device_disable(device_t dev)
 void
 device_busy(device_t dev)
 {
-	if (dev->state < DS_ATTACHING)
+	if (dev->state < DS_ATTACHED)
 		panic("device_busy: called for unattached device");
 	if (dev->busy == 0 && dev->parent)
 		device_busy(dev->parent);
 	dev->busy++;
-	if (dev->state == DS_ATTACHED)
-		dev->state = DS_BUSY;
+	dev->state = DS_BUSY;
 }
 
 /**
@@ -2487,16 +2486,14 @@ device_busy(device_t dev)
 void
 device_unbusy(device_t dev)
 {
-	if (dev->busy != 0 && dev->state != DS_BUSY &&
-	    dev->state != DS_ATTACHING)
+	if (dev->state != DS_BUSY)
 		panic("device_unbusy: called for non-busy device %s",
 		    device_get_nameunit(dev));
 	dev->busy--;
 	if (dev->busy == 0) {
 		if (dev->parent)
 			device_unbusy(dev->parent);
-		if (dev->state == DS_BUSY)
-			dev->state = DS_ATTACHED;
+		dev->state = DS_ATTACHED;
 	}
 }
 
@@ -2732,7 +2729,6 @@ device_attach(device_t dev)
 	device_sysctl_init(dev);
 	if (!device_is_quiet(dev))
 		device_print_child(dev->parent, dev);
-	dev->state = DS_ATTACHING;
 	if ((error = DEVICE_ATTACH(dev)) != 0) {
 		printf("device_attach: %s%d attach returned %d\n",
 		    dev->driver->name, dev->unit, error);
@@ -2740,18 +2736,13 @@ device_attach(device_t dev)
 			devclass_delete_device(dev->devclass, dev);
 		(void)device_set_driver(dev, NULL);
 		device_sysctl_fini(dev);
-		KASSERT(dev->busy == 0, ("attach failed but busy"));
 		dev->state = DS_NOTPRESENT;
 		return (error);
 	}
 	device_sysctl_update(dev);
-	if (dev->busy)
-		dev->state = DS_BUSY;
-	else
-		dev->state = DS_ATTACHED;
+	dev->state = DS_ATTACHED;
 	dev->flags &= ~DF_DONENOMATCH;
 	devadded(dev);
-	DEVICE_AFTER_ATTACH(dev);
 	return (0);
 }
 

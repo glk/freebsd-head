@@ -76,14 +76,6 @@ struct pagerops devicepagerops = {
 	.pgo_haspage =	dev_pager_haspage,
 };
 
-struct pagerops mgtdevicepagerops = {
-	.pgo_alloc =	dev_pager_alloc,
-	.pgo_dealloc =	dev_pager_dealloc,
-	.pgo_getpages =	dev_pager_getpages,
-	.pgo_putpages =	dev_pager_putpages,
-	.pgo_haspage =	dev_pager_haspage,
-};
-
 static int old_dev_pager_ctor(void *handle, vm_ooffset_t size, vm_prot_t prot,
     vm_ooffset_t foff, struct ucred *cred, u_short *color);
 static void old_dev_pager_dtor(void *handle);
@@ -123,7 +115,7 @@ cdev_pager_allocate(void *handle, enum obj_type tp, struct cdev_pager_ops *ops,
 	vm_pindex_t pindex;
 	u_short color;
 
-	if (tp != OBJT_DEVICE && tp != OBJT_MGTDEVICE)
+	if (tp != OBJT_DEVICE)
 		return (NULL);
 
 	/*
@@ -248,11 +240,6 @@ dev_pager_getpages(vm_object_t object, vm_page_t *ma, int count, int reqpage)
 	}
 
 	if (error == VM_PAGER_OK) {
-		KASSERT((object->type == OBJT_DEVICE &&
-		     (ma[reqpage]->oflags & VPO_UNMANAGED) != 0) ||
-		    (object->type == OBJT_MGTDEVICE &&
-		     (ma[reqpage]->oflags & VPO_UNMANAGED) == 0),
-		    ("Wrong page type %p %p", ma[reqpage], object));
 		TAILQ_INSERT_TAIL(&object->un_pager.devp.devp_pglist,
 		    ma[reqpage], pageq);
 	}
