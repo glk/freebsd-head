@@ -459,10 +459,10 @@ nfs_mountroot(struct mount *mp)
 		sin.sin_len = sizeof(sin);
                 /* XXX MRT use table 0 for this sort of thing */
 		CURVNET_SET(TD_TO_VNET(td));
-		error = rtrequest(RTM_ADD, (struct sockaddr *)&sin,
+		error = rtrequest_fib(RTM_ADD, (struct sockaddr *)&sin,
 		    (struct sockaddr *)&nd->mygateway,
 		    (struct sockaddr *)&mask,
-		    RTF_UP | RTF_GATEWAY, NULL);
+		    RTF_UP | RTF_GATEWAY, NULL, RT_DEFAULT_FIB);
 		CURVNET_RESTORE();
 		if (error)
 			panic("nfs_mountroot: RTM_ADD: %d", error);
@@ -1508,24 +1508,21 @@ nfs_sync(struct mount *mp, int waitfor)
 		MNT_IUNLOCK(mp);
 		return (EBADF);
 	}
+	MNT_IUNLOCK(mp);
 
 	/*
 	 * Force stale buffer cache information to be flushed.
 	 */
 loop:
-	MNT_VNODE_FOREACH(vp, mp, mvp) {
-		VI_LOCK(vp);
-		MNT_IUNLOCK(mp);
+	MNT_VNODE_FOREACH_ALL(vp, mp, mvp) {
 		/* XXX Racy bv_cnt check. */
 		if (NFSVOPISLOCKED(vp) || vp->v_bufobj.bo_dirty.bv_cnt == 0 ||
 		    waitfor == MNT_LAZY) {
 			VI_UNLOCK(vp);
-			MNT_ILOCK(mp);
 			continue;
 		}
 		if (vget(vp, LK_EXCLUSIVE | LK_INTERLOCK, td)) {
-			MNT_ILOCK(mp);
-			MNT_VNODE_FOREACH_ABORT_ILOCKED(mp, mvp);
+			MNT_VNODE_FOREACH_ALL_ABORT(mp, mvp);
 			goto loop;
 		}
 		error = VOP_FSYNC(vp, waitfor, td);
@@ -1533,10 +1530,7 @@ loop:
 			allerror = error;
 		NFSVOPUNLOCK(vp, 0);
 		vrele(vp);
-
-		MNT_ILOCK(mp);
 	}
-	MNT_IUNLOCK(mp);
 	return (allerror);
 }
 
