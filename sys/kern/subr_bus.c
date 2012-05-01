@@ -2751,7 +2751,6 @@ device_attach(device_t dev)
 		dev->state = DS_ATTACHED;
 	dev->flags &= ~DF_DONENOMATCH;
 	devadded(dev);
-	DEVICE_AFTER_ATTACH(dev);
 	return (0);
 }
 

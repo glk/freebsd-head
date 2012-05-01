@@ -230,32 +230,6 @@ int drm_getstats(struct drm_device *dev, void *data, struct drm_file *file_priv)
 	return 0;
 }
 
-int drm_getcap(struct drm_device *dev, void *data, struct drm_file *file_priv)
-{
-	struct drm_get_cap *req = data;
-
-	req->value = 0;
-	switch (req->capability) {
-	case DRM_CAP_DUMB_BUFFER:
-		if (dev->driver->dumb_create)
-			req->value = 1;
-		break;
-	case DRM_CAP_VBLANK_HIGH_CRTC:
-		req->value = 1;
-		break;
-	case DRM_CAP_DUMB_PREFERRED_DEPTH:
-		req->value = dev->mode_config.preferred_depth;
-		break;
-	case DRM_CAP_DUMB_PREFER_SHADOW:
-		req->value = dev->mode_config.prefer_shadow;
-		break;
-	default:
-		return EINVAL;
-	}
-	return 0;
-}
-
-
 #define DRM_IF_MAJOR	1
 #define DRM_IF_MINOR	2
 
@@ -274,15 +248,6 @@ int drm_setversion(struct drm_device *dev, void *data,
 	sv->drm_di_minor = DRM_IF_MINOR;
 	sv->drm_dd_major = dev->driver->major;
 	sv->drm_dd_minor = dev->driver->minor;
-
-	DRM_DEBUG("ver.drm_di_major %d ver.drm_di_minor %d "
-	    "ver.drm_dd_major %d ver.drm_dd_minor %d\n",
-	    ver.drm_di_major, ver.drm_di_minor, ver.drm_dd_major,
-	    ver.drm_dd_minor);
-	DRM_DEBUG("sv->drm_di_major %d sv->drm_di_minor %d "
-	    "sv->drm_dd_major %d sv->drm_dd_minor %d\n",
-	    sv->drm_di_major, sv->drm_di_minor, sv->drm_dd_major,
-	    sv->drm_dd_minor);
 
 	if (ver.drm_di_major != -1) {
 		if (ver.drm_di_major != DRM_IF_MAJOR ||

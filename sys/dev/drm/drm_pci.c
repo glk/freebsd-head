@@ -71,8 +71,10 @@ drm_pci_alloc(struct drm_device *dev, size_t size,
 	if (dmah == NULL)
 		return NULL;
 
-	/* Make sure we aren't holding mutexes here */
-	DRM_NONSLEEPABLE_UNLOCK_ASSERT(dev);
+	/* Make sure we aren't holding locks here */
+	mtx_assert(&dev->dev_lock, MA_NOTOWNED);
+	if (mtx_owned(&dev->dev_lock))
+	    DRM_ERROR("called while holding dev_lock\n");
 	mtx_assert(&dev->dma_lock, MA_NOTOWNED);
 	if (mtx_owned(&dev->dma_lock))
 	    DRM_ERROR("called while holding dma_lock\n");

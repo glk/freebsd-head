@@ -43,10 +43,6 @@ INTERFACE device;
 # Default implementations of some methods.
 #
 CODE {
-	static void null_after_attach(device_t dev)
-	{
-	}
-
 	static int null_shutdown(device_t dev)
 	{
 	    return 0;
@@ -201,21 +197,6 @@ STATICMETHOD void identify {
 METHOD int attach {
 	device_t dev;
 };
-
-/**
- * @brief Notify the driver that device is in attached state
- *
- * Called after driver is successfully attached to the device and
- * corresponding device_t is fully operational. Driver now may expose
- * the device to the consumers, e.g. create devfs nodes.
- *
- * @param dev		the device to probe
- *
- * @see DEVICE_ATTACH()
- */
-METHOD void after_attach {
-	device_t dev;
-} DEFAULT null_after_attach;
 
 /**
  * @brief Detach a driver from a device.
