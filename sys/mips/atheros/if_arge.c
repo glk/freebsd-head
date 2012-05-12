@@ -101,7 +101,16 @@ typedef enum {
 	ARGE_DBG_RX	=	0x00000008,
 	ARGE_DBG_ERR	=	0x00000010,
 	ARGE_DBG_RESET	=	0x00000020,
+	ARGE_DBG_PLL	=	0x00000040,
 } arge_debug_flags;
+
+static const char * arge_miicfg_str[] = {
+	"NONE",
+	"GMII",
+	"MII",
+	"RGMII",
+	"RMII"
+};
 
 #ifdef ARGE_DEBUG
 #define	ARGEDEBUG(_sc, _m, ...) 					\
@@ -323,6 +332,34 @@ arge_reset_miibus(struct arge_softc *sc)
 	DELAY(100);
 }
 
+static void
+arge_fetch_pll_config(struct arge_softc *sc)
+{
+	long int val;
+
+	if (resource_long_value(device_get_name(sc->arge_dev),
+	    device_get_unit(sc->arge_dev),
+	    "pll_10", &val) == 0) {
+		sc->arge_pllcfg.pll_10 = val;
+		device_printf(sc->arge_dev, "%s: pll_10 = 0x%x\n",
+		    __func__, (int) val);
+	}
+	if (resource_long_value(device_get_name(sc->arge_dev),
+	    device_get_unit(sc->arge_dev),
+	    "pll_100", &val) == 0) {
+		sc->arge_pllcfg.pll_100 = val;
+		device_printf(sc->arge_dev, "%s: pll_100 = 0x%x\n",
+		    __func__, (int) val);
+	}
+	if (resource_long_value(device_get_name(sc->arge_dev),
+	    device_get_unit(sc->arge_dev),
+	    "pll_1000", &val) == 0) {
+		sc->arge_pllcfg.pll_1000 = val;
+		device_printf(sc->arge_dev, "%s: pll_1000 = 0x%x\n",
+		    __func__, (int) val);
+	}
+}
+
 static int
 arge_attach(device_t dev)
 {
@@ -333,6 +370,7 @@ arge_attach(device_t dev)
 	int			is_base_mac_empty, i;
 	uint32_t		hint;
 	long			eeprom_mac_addr = 0;
+	int			miicfg = 0;
 
 	sc = device_get_softc(dev);
 	sc->arge_dev = dev;
@@ -361,6 +399,22 @@ arge_attach(device_t dev)
 
 	KASSERT(((sc->arge_mac_unit == 0) || (sc->arge_mac_unit == 1)),
 	    ("if_arge: Only MAC0 and MAC1 supported"));
+
+	/*
+	 * Fetch the PLL configuration.
+	 */
+	arge_fetch_pll_config(sc);
+
+	/*
+	 * Get the MII configuration, if applicable.
+	 */
+	if (resource_int_value(device_get_name(dev), device_get_unit(dev),
+	    "miimode", &miicfg) == 0) {
+		/* XXX bounds check? */
+		device_printf(dev, "%s: overriding MII mode to '%s'\n",
+		    __func__, arge_miicfg_str[miicfg]);
+		sc->arge_miicfg = miicfg;
+	}
 
 	/*
 	 *  Get which PHY of 5 available we should use for this unit
@@ -496,6 +550,10 @@ arge_attach(device_t dev)
 	arge_reset_mac(sc);
 	arge_reset_miibus(sc);
 #endif
+
+	/* Configure MII mode, just for convienence */
+	if (sc->arge_miicfg != 0)
+		ar71xx_device_set_mii_if(sc->arge_mac_unit, sc->arge_miicfg);
 
 	/*
 	 * Set all Ethernet address registers to the same initial values
@@ -776,10 +834,13 @@ arge_update_link_locked(struct arge_softc *sc)
 	if (mii->mii_media_status & IFM_ACTIVE) {
 
 		media = IFM_SUBTYPE(mii->mii_media_active);
-
 		if (media != IFM_NONE) {
 			sc->arge_link_status = 1;
 			duplex = mii->mii_media_active & IFM_GMASK;
+			ARGEDEBUG(sc, ARGE_DBG_MII, "%s: media=%d, duplex=%d\n",
+			    __func__,
+			    media,
+			    duplex);
 			arge_set_pll(sc, media, duplex);
 		}
 	} else {
@@ -791,10 +852,10 @@ static void
 arge_set_pll(struct arge_softc *sc, int media, int duplex)
 {
 	uint32_t		cfg, ifcontrol, rx_filtmask;
-	uint32_t		fifo_tx;
+	uint32_t		fifo_tx, pll;
 	int if_speed;
 
-	ARGEDEBUG(sc, ARGE_DBG_MII, "set_pll(%04x, %s)\n", media,
+	ARGEDEBUG(sc, ARGE_DBG_PLL, "set_pll(%04x, %s)\n", media,
 	    duplex == IFM_FDX ? "full" : "half");
 	cfg = ARGE_READ(sc, AR71XX_MAC_CFG2);
 	cfg &= ~(MAC_CFG2_IFACE_MODE_1000
@@ -832,6 +893,8 @@ arge_set_pll(struct arge_softc *sc, int media, int duplex)
 		    "Unknown media %d\n", media);
 	}
 
+	ARGEDEBUG(sc, ARGE_DBG_PLL, "%s: if_speed=%d\n", __func__, if_speed);
+
 	switch (ar71xx_soc) {
 		case AR71XX_SOC_AR7240:
 		case AR71XX_SOC_AR7241:
@@ -852,8 +915,36 @@ arge_set_pll(struct arge_softc *sc, int media, int duplex)
 	    rx_filtmask);
 	ARGE_WRITE(sc, AR71XX_MAC_FIFO_TX_THRESHOLD, fifo_tx);
 
-	/* set PLL registers */
-	ar71xx_device_set_pll_ge(sc->arge_mac_unit, if_speed);
+	/* fetch PLL registers */
+	pll = ar71xx_device_get_eth_pll(sc->arge_mac_unit, if_speed);
+	ARGEDEBUG(sc, ARGE_DBG_PLL, "%s: pll=0x%x\n", __func__, pll);
+
+	/* Override if required by platform data */
+	if (if_speed == 10 && sc->arge_pllcfg.pll_10 != 0)
+		pll = sc->arge_pllcfg.pll_10;
+	else if (if_speed == 100 && sc->arge_pllcfg.pll_100 != 0)
+		pll = sc->arge_pllcfg.pll_100;
+	else if (if_speed == 1000 && sc->arge_pllcfg.pll_1000 != 0)
+		pll = sc->arge_pllcfg.pll_1000;
+	ARGEDEBUG(sc, ARGE_DBG_PLL, "%s: final pll=0x%x\n", __func__, pll);
+
+	/* XXX ensure pll != 0 */
+	ar71xx_device_set_pll_ge(sc->arge_mac_unit, if_speed, pll);
+
+	/* set MII registers */
+	/*
+	 * This was introduced to match what the Linux ag71xx ethernet
+	 * driver does.  For the AR71xx case, it does set the port
+	 * MII speed.  However, if this is done, non-gigabit speeds
+	 * are not at all reliable when speaking via RGMII through
+	 * 'bridge' PHY port that's pretending to be a local PHY.
+	 *
+	 * Until that gets root caused, and until an AR71xx + normal
+	 * PHY board is tested, leave this disabled.
+	 */
+#if 0
+	ar71xx_device_set_mii_speed(sc->arge_mac_unit, if_speed);
+#endif
 }
 
 
