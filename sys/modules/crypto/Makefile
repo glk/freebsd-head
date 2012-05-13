@@ -8,7 +8,6 @@
 .PATH:	${.CURDIR}/../../crypto/sha2
 .PATH:	${.CURDIR}/../../crypto/camellia
 .PATH:	${.CURDIR}/../../crypto/hmac
-.PATH:	${.CURDIR}/../../crypto/salsa20
 
 KMOD	= crypto
 SRCS	= crypto.c cryptodev_if.c
@@ -21,5 +20,4 @@ SRCS	+= opt_param.h cryptodev_if.h bus_if.h device_if.h
 SRCS	+= opt_ddb.h opt_kdtrace.h
 SRCS	+= camellia.c camellia-api.c
 SRCS	+= hmac_sha512.c
-SRCS	+= salsa20.c
 .include <bsd.kmod.mk>
