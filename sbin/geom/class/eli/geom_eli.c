@@ -48,8 +48,8 @@ __FBSDID("$FreeBSD$");
 #include <strings.h>
 #include <unistd.h>
 
+#include <crypto/pkcs5v2/pkcs5v2.h>
 #include <geom/eli/g_eli.h>
-#include <geom/eli/pkcs5v2.h>
 
 #include "core/geom.h"
 #include "misc/subr.h"

@@ -44,11 +44,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/uio.h>
 #include <sys/vnode.h>
 
+#include <crypto/pkcs5v2/pkcs5v2.h>
 #include <vm/uma.h>
 
 #include <geom/geom.h>
 #include <geom/eli/g_eli.h>
-#include <geom/eli/pkcs5v2.h>
 
 /*
  * Code paths:

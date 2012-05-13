@@ -1,6 +1,8 @@
 # $FreeBSD$
 
-.PATH: ${.CURDIR}/../../misc ${.CURDIR}/../../../../sys/geom/eli ${.CURDIR}/../../../../sys/crypto/sha2
+.PATH: ${.CURDIR}/../../misc ${.CURDIR}/../../../../sys/geom/eli
+.PATH: ${.CURDIR}/../../../../sys/crypto/pkcs5v2
+.PATH: ${.CURDIR}/../../../../sys/crypto/sha2
 
 GEOM_CLASS=	eli
 SRCS=	g_eli_crypto.c
