@@ -96,7 +96,7 @@ test_mount() {
 		mount -t tmpfs tmpfs ${Work_Dir} || die
 	fi
 	pefs mount "${Work_Dir}" "${Work_Dir}" || die
-	echo "password" | pefs addkey -p -a salsa20-256 -k - "${Work_Dir}" || die
+	echo "password" | pefs addkey -p -k - "${Work_Dir}" || die
 	pefs showkeys -t ${Work_Dir} || die
 	cd ${Work_Dir}
 }
