@@ -48,10 +48,7 @@ hmac_sha512_init(struct hmac_sha512_ctx *ctx, const uint8_t *hkey,
 	else if (hkeylen <= SHA512_BLOCK_LENGTH)
 		bcopy(hkey, ctx->k_opad, hkeylen);
 	else {
-		/*
-		 * If key is longer than SHA512_BLOCK_LENGTH bytes
-		 * reset it to key = SHA512(key).
-		 */
+		/* If key is longer than 128 bytes reset it to key = SHA512(key). */
 		SHA512_Init(&ctx->shactx);
 		SHA512_Update(&ctx->shactx, hkey, hkeylen);
 		SHA512_Final(ctx->k_opad, &ctx->shactx);

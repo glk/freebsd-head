@@ -47,6 +47,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/uio.h>
 #include <sys/vnode.h>
 
+#include <crypto/hmac/hmac_sha512.h>
 #include <crypto/pkcs5v2/pkcs5v2.h>
 #include <vm/uma.h>
 
@@ -953,7 +954,7 @@ g_eli_destroy_geom(struct gctl_req *req __unused,
 }
 
 static int
-g_eli_keyfiles_load(struct hmac_ctx *ctx, const char *provider)
+g_eli_keyfiles_load(struct hmac_sha512_ctx *ctx, const char *provider)
 {
 	u_char *keyfile, *data;
 	char *file, name[64];
@@ -985,7 +986,7 @@ g_eli_keyfiles_load(struct hmac_ctx *ctx, const char *provider)
 		}
 		G_ELI_DEBUG(1, "Loaded keyfile %s for %s (type: %s).", file,
 		    provider, name);
-		g_eli_crypto_hmac_update(ctx, data, size);
+		hmac_sha512_update(ctx, data, size);
 	}
 }
 
@@ -1018,7 +1019,7 @@ g_eli_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 {
 	struct g_eli_metadata md;
 	struct g_geom *gp;
-	struct hmac_ctx ctx;
+	struct hmac_sha512_ctx ctx;
 	char passphrase[256];
 	u_char key[G_ELI_USERKEYLEN], mkey[G_ELI_DATAIVKEYLEN];
 	u_int i, nkey, nkeyfiles, tries;
@@ -1062,7 +1063,7 @@ g_eli_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 	}
 
 	for (i = 0; i < tries; i++) {
-		g_eli_crypto_hmac_init(&ctx, NULL, 0);
+		hmac_sha512_init(&ctx, NULL, 0);
 
 		/*
 		 * Load all key files.
@@ -1094,9 +1095,9 @@ g_eli_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 		 * Prepare Derived-Key from the user passphrase.
 		 */
 		if (md.md_iterations == 0) {
-			g_eli_crypto_hmac_update(&ctx, md.md_salt,
+			hmac_sha512_update(&ctx, md.md_salt,
 			    sizeof(md.md_salt));
-			g_eli_crypto_hmac_update(&ctx, passphrase,
+			hmac_sha512_update(&ctx, passphrase,
 			    strlen(passphrase));
 			bzero(passphrase, sizeof(passphrase));
 		} else if (md.md_iterations > 0) {
@@ -1105,11 +1106,11 @@ g_eli_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 			pkcs5v2_genkey(dkey, sizeof(dkey), md.md_salt,
 			    sizeof(md.md_salt), passphrase, md.md_iterations);
 			bzero(passphrase, sizeof(passphrase));
-			g_eli_crypto_hmac_update(&ctx, dkey, sizeof(dkey));
+			hmac_sha512_update(&ctx, dkey, sizeof(dkey));
 			bzero(dkey, sizeof(dkey));
 		}
 
-		g_eli_crypto_hmac_final(&ctx, key, 0);
+		hmac_sha512_final(&ctx, key, 0);
 
 		/*
 		 * Decrypt Master-Key.

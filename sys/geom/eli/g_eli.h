@@ -597,19 +597,6 @@ int g_eli_crypto_encrypt(u_int algo, u_char *data, size_t datasize,
 int g_eli_crypto_decrypt(u_int algo, u_char *data, size_t datasize,
     const u_char *key, size_t keysize);
 
-struct hmac_ctx {
-	SHA512_CTX	shactx;
-	u_char		k_opad[128];
-};
-
-void g_eli_crypto_hmac_init(struct hmac_ctx *ctx, const uint8_t *hkey,
-    size_t hkeylen);
-void g_eli_crypto_hmac_update(struct hmac_ctx *ctx, const uint8_t *data,
-    size_t datasize);
-void g_eli_crypto_hmac_final(struct hmac_ctx *ctx, uint8_t *md, size_t mdsize);
-void g_eli_crypto_hmac(const uint8_t *hkey, size_t hkeysize,
-    const uint8_t *data, size_t datasize, uint8_t *md, size_t mdsize);
-
 #ifdef _KERNEL
 void g_eli_key_init(struct g_eli_softc *sc);
 void g_eli_key_destroy(struct g_eli_softc *sc);
