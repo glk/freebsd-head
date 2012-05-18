@@ -300,8 +300,8 @@ sctp_process_init(struct sctp_init_chunk *cp, struct sctp_tcb *stcb)
 				asoc->send_queue_cnt--;
 				if (chk->data != NULL) {
 					sctp_free_bufspace(stcb, asoc, chk, 1);
-					sctp_ulp_notify(SCTP_NOTIFY_DG_FAIL, stcb,
-					    SCTP_NOTIFY_DATAGRAM_UNSENT, chk, SCTP_SO_NOT_LOCKED);
+					sctp_ulp_notify(SCTP_NOTIFY_UNSENT_DG_FAIL, stcb,
+					    0, chk, SCTP_SO_NOT_LOCKED);
 					if (chk->data) {
 						sctp_m_freem(chk->data);
 						chk->data = NULL;
@@ -318,8 +318,7 @@ sctp_process_init(struct sctp_init_chunk *cp, struct sctp_tcb *stcb)
 					TAILQ_REMOVE(&outs->outqueue, sp, next);
 					asoc->stream_queue_cnt--;
 					sctp_ulp_notify(SCTP_NOTIFY_SPECIAL_SP_FAIL,
-					    stcb, SCTP_NOTIFY_DATAGRAM_UNSENT,
-					    sp, SCTP_SO_NOT_LOCKED);
+					    stcb, 0, sp, SCTP_SO_NOT_LOCKED);
 					if (sp->data) {
 						sctp_m_freem(sp->data);
 						sp->data = NULL;
@@ -632,7 +631,7 @@ sctp_handle_heartbeat_ack(struct sctp_heartbeat_chunk *cp,
 	if (!(r_net->dest_state & SCTP_ADDR_REACHABLE)) {
 		r_net->dest_state |= SCTP_ADDR_REACHABLE;
 		sctp_ulp_notify(SCTP_NOTIFY_INTERFACE_UP, stcb,
-		    SCTP_HEARTBEAT_SUCCESS, (void *)r_net, SCTP_SO_NOT_LOCKED);
+		    0, (void *)r_net, SCTP_SO_NOT_LOCKED);
 	}
 	if (r_net->dest_state & SCTP_ADDR_PF) {
 		r_net->dest_state &= ~SCTP_ADDR_PF;
@@ -782,7 +781,7 @@ sctp_handle_abort(struct sctp_abort_chunk *abort,
 	/* stop any receive timers */
 	sctp_timer_stop(SCTP_TIMER_TYPE_RECV, stcb->sctp_ep, stcb, net, SCTP_FROM_SCTP_INPUT + SCTP_LOC_6);
 	/* notify user of the abort and clean up... */
-	sctp_abort_notification(stcb, error, abort, SCTP_SO_NOT_LOCKED);
+	sctp_abort_notification(stcb, 1, error, abort, SCTP_SO_NOT_LOCKED);
 	/* free the tcb */
 	SCTP_STAT_INCR_COUNTER32(sctps_aborted);
 	if ((SCTP_GET_STATE(&stcb->asoc) == SCTP_STATE_OPEN) ||
@@ -1006,7 +1005,7 @@ sctp_handle_shutdown_ack(struct sctp_shutdown_ack_chunk *cp SCTP_UNUSED,
 	if (!TAILQ_EMPTY(&asoc->send_queue) ||
 	    !TAILQ_EMPTY(&asoc->sent_queue) ||
 	    !stcb->asoc.ss_functions.sctp_ss_is_empty(stcb, asoc)) {
-		sctp_report_all_outbound(stcb, 0, SCTP_SO_NOT_LOCKED);
+		sctp_report_all_outbound(stcb, 0, 0, SCTP_SO_NOT_LOCKED);
 	}
 	/* stop the timer */
 	sctp_timer_stop(SCTP_TIMER_TYPE_SHUTDOWN, stcb->sctp_ep, stcb, net, SCTP_FROM_SCTP_INPUT + SCTP_LOC_9);
@@ -1112,7 +1111,7 @@ sctp_handle_error(struct sctp_chunkhdr *ch,
 {
 	int chklen;
 	struct sctp_paramhdr *phdr;
-	uint16_t error_type;
+	uint16_t error, error_type;
 	uint16_t error_len;
 	struct sctp_association *asoc;
 	int adjust;
@@ -1127,6 +1126,7 @@ sctp_handle_error(struct sctp_chunkhdr *ch,
 	phdr = (struct sctp_paramhdr *)((caddr_t)ch +
 	    sizeof(struct sctp_chunkhdr));
 	chklen = ntohs(ch->chunk_length) - sizeof(struct sctp_chunkhdr);
+	error = 0;
 	while ((size_t)chklen >= sizeof(struct sctp_paramhdr)) {
 		/* Process an Error Cause */
 		error_type = ntohs(phdr->param_type);
@@ -1136,6 +1136,10 @@ sctp_handle_error(struct sctp_chunkhdr *ch,
 			SCTPDBG(SCTP_DEBUG_INPUT1, "Bogus length in error param- chunk left:%d errorlen:%d\n",
 			    chklen, error_len);
 			return (0);
+		}
+		if (error == 0) {
+			/* report the first error cause */
+			error = error_type;
 		}
 		switch (error_type) {
 		case SCTP_CAUSE_INVALID_STREAM:
@@ -1173,7 +1177,7 @@ sctp_handle_error(struct sctp_chunkhdr *ch,
 				asoc->stale_cookie_count++;
 				if (asoc->stale_cookie_count >
 				    asoc->max_init_times) {
-					sctp_abort_notification(stcb, 0, NULL, SCTP_SO_NOT_LOCKED);
+					sctp_abort_notification(stcb, 0, 0, NULL, SCTP_SO_NOT_LOCKED);
 					/* now free the asoc */
 #if defined (__APPLE__) || defined(SCTP_SO_LOCK_TESTING)
 					so = SCTP_INP_SO(stcb->sctp_ep);
@@ -1253,6 +1257,7 @@ sctp_handle_error(struct sctp_chunkhdr *ch,
 		chklen -= adjust;
 		phdr = (struct sctp_paramhdr *)((caddr_t)phdr + adjust);
 	}
+	sctp_ulp_notify(SCTP_NOTIFY_REMOTE_ERROR, stcb, error, ch, SCTP_SO_NOT_LOCKED);
 	return (0);
 }
 
@@ -1889,7 +1894,7 @@ sctp_process_cookie_existing(struct mbuf *m, int iphlen, int offset,
 		/* send up all the data */
 		SCTP_TCB_SEND_LOCK(stcb);
 
-		sctp_report_all_outbound(stcb, 1, SCTP_SO_NOT_LOCKED);
+		sctp_report_all_outbound(stcb, 0, 1, SCTP_SO_NOT_LOCKED);
 		for (i = 0; i < stcb->asoc.streamoutcnt; i++) {
 			stcb->asoc.strmout[i].stream_no = i;
 			stcb->asoc.strmout[i].next_sequence_sent = 0;
@@ -3176,7 +3181,7 @@ sctp_handle_shutdown_complete(struct sctp_shutdown_complete_chunk *cp SCTP_UNUSE
 		if (!TAILQ_EMPTY(&asoc->send_queue) ||
 		    !TAILQ_EMPTY(&asoc->sent_queue) ||
 		    !stcb->asoc.ss_functions.sctp_ss_is_empty(stcb, asoc)) {
-			sctp_report_all_outbound(stcb, 0, SCTP_SO_NOT_LOCKED);
+			sctp_report_all_outbound(stcb, 0, 0, SCTP_SO_NOT_LOCKED);
 		}
 	}
 	/* stop the timer */
