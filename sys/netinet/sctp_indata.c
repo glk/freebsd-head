@@ -3194,8 +3194,7 @@ sctp_strike_gap_ack_chunks(struct sctp_tcb *stcb, struct sctp_association *asoc,
 				if (timevalcmp(&now, &tp1->rec.data.timetodrop, >)) {
 					/* Yes so drop it */
 					if (tp1->data != NULL) {
-						(void)sctp_release_pr_sctp_chunk(stcb, tp1,
-						    (SCTP_RESPONSE_TO_USER_REQ | SCTP_NOTIFY_DATAGRAM_SENT),
+						(void)sctp_release_pr_sctp_chunk(stcb, tp1, 1,
 						    SCTP_SO_NOT_LOCKED);
 					}
 					continue;
@@ -3452,8 +3451,7 @@ sctp_strike_gap_ack_chunks(struct sctp_tcb *stcb, struct sctp_association *asoc,
 				if (tp1->snd_count > tp1->rec.data.timetodrop.tv_sec) {
 					/* Yes, so drop it */
 					if (tp1->data != NULL) {
-						(void)sctp_release_pr_sctp_chunk(stcb, tp1,
-						    (SCTP_RESPONSE_TO_USER_REQ | SCTP_NOTIFY_DATAGRAM_SENT),
+						(void)sctp_release_pr_sctp_chunk(stcb, tp1, 1,
 						    SCTP_SO_NOT_LOCKED);
 					}
 					/* Make sure to flag we had a FR */
@@ -3632,8 +3630,7 @@ sctp_try_advance_peer_ack_point(struct sctp_tcb *stcb,
 				/* Yes so drop it */
 				if (tp1->data) {
 					(void)sctp_release_pr_sctp_chunk(stcb, tp1,
-					    (SCTP_RESPONSE_TO_USER_REQ | SCTP_NOTIFY_DATAGRAM_SENT),
-					    SCTP_SO_NOT_LOCKED);
+					    1, SCTP_SO_NOT_LOCKED);
 				}
 			} else {
 				/*
@@ -4024,7 +4021,7 @@ sctp_express_handle_sack(struct sctp_tcb *stcb, uint32_t cumack,
 					/* addr came good */
 					net->dest_state |= SCTP_ADDR_REACHABLE;
 					sctp_ulp_notify(SCTP_NOTIFY_INTERFACE_UP, stcb,
-					    SCTP_RECEIVED_SACK, (void *)net, SCTP_SO_NOT_LOCKED);
+					    0, (void *)net, SCTP_SO_NOT_LOCKED);
 				}
 				if (net == stcb->asoc.primary_destination) {
 					if (stcb->asoc.alternate) {
@@ -4831,7 +4828,7 @@ sctp_handle_sack(struct mbuf *m, int offset_seg, int offset_dup,
 					/* addr came good */
 					net->dest_state |= SCTP_ADDR_REACHABLE;
 					sctp_ulp_notify(SCTP_NOTIFY_INTERFACE_UP, stcb,
-					    SCTP_RECEIVED_SACK, (void *)net, SCTP_SO_NOT_LOCKED);
+					    0, (void *)net, SCTP_SO_NOT_LOCKED);
 				}
 				if (net == stcb->asoc.primary_destination) {
 					if (stcb->asoc.alternate) {

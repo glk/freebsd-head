@@ -3815,8 +3815,7 @@ sctp_handle_no_route(struct sctp_tcb *stcb,
 			if ((net->dest_state & SCTP_ADDR_REACHABLE) && stcb) {
 				SCTPDBG(SCTP_DEBUG_OUTPUT1, "no route takes interface %p down\n", net);
 				sctp_ulp_notify(SCTP_NOTIFY_INTERFACE_DOWN,
-				    stcb,
-				    SCTP_FAILED_THRESHOLD,
+				    stcb, 0,
 				    (void *)net,
 				    so_locked);
 				net->dest_state &= ~SCTP_ADDR_REACHABLE;
@@ -6092,14 +6091,14 @@ sctp_prune_prsctp(struct sctp_tcb *stcb,
 						 * if the mbuf is here
 						 */
 						int ret_spc;
-						int cause;
+						uint8_t sent;
 
 						if (chk->sent > SCTP_DATAGRAM_UNSENT)
-							cause = SCTP_RESPONSE_TO_USER_REQ | SCTP_NOTIFY_DATAGRAM_SENT;
+							sent = 1;
 						else
-							cause = SCTP_RESPONSE_TO_USER_REQ | SCTP_NOTIFY_DATAGRAM_UNSENT;
+							sent = 0;
 						ret_spc = sctp_release_pr_sctp_chunk(stcb, chk,
-						    cause,
+						    sent,
 						    SCTP_SO_LOCKED);
 						freed_spc += ret_spc;
 						if (freed_spc >= dataout) {
@@ -6122,8 +6121,7 @@ sctp_prune_prsctp(struct sctp_tcb *stcb,
 						int ret_spc;
 
 						ret_spc = sctp_release_pr_sctp_chunk(stcb, chk,
-						    SCTP_RESPONSE_TO_USER_REQ | SCTP_NOTIFY_DATAGRAM_UNSENT,
-						    SCTP_SO_LOCKED);
+						    0, SCTP_SO_LOCKED);
 
 						freed_spc += ret_spc;
 						if (freed_spc >= dataout) {
@@ -13612,8 +13610,7 @@ skip_preblock:
 dataless_eof:
 	/* EOF thing ? */
 	if ((srcv->sinfo_flags & SCTP_EOF) &&
-	    (got_all_of_the_send == 1) &&
-	    (stcb->sctp_ep->sctp_flags & SCTP_PCB_FLAGS_UDPTYPE)) {
+	    (got_all_of_the_send == 1)) {
 		int cnt;
 
 		SCTP_STAT_INCR(sctps_sends_with_eof);
