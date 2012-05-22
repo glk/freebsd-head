@@ -119,13 +119,13 @@ struct ostat {
 };
 
 struct freebsd9_stat {
-	__dev_t   st_dev;		/* inode's device */
+	__uint32_t st_dev;		/* inode's device */
 	__uint32_t st_ino;		/* inode's number */
 	mode_t	  st_mode;		/* inode protection mode */
 	__uint16_t st_nlink;		/* number of hard links */
 	uid_t	  st_uid;		/* user ID of the file's owner */
 	gid_t	  st_gid;		/* group ID of the file's group */
-	__dev_t   st_rdev;		/* device type */
+	__uint32_t st_rdev;		/* device type */
 	struct	timespec st_atim;	/* time of last access */
 	struct	timespec st_mtim;	/* time of last data modification */
 	struct	timespec st_ctim;	/* time of last file status change */
@@ -150,14 +150,14 @@ struct freebsd9_stat {
 #endif /* __BSD_VISIBLE */
 
 struct stat {
+	dev_t     st_dev;		/* inode's device */
 	ino_t	  st_ino;		/* inode's number */
 	nlink_t	  st_nlink;		/* number of hard links */
-	__dev_t   st_dev;		/* inode's device */
 	mode_t	  st_mode;		/* inode protection mode */
 	__int16_t st_padding0;
 	uid_t	  st_uid;		/* user ID of the file's owner */
 	gid_t	  st_gid;		/* group ID of the file's group */
-	__dev_t   st_rdev;		/* device type */
+	dev_t     st_rdev;		/* device type */
 	struct	timespec st_atim;	/* time of last access */
 	struct	timespec st_mtim;	/* time of last data modification */
 	struct	timespec st_ctim;	/* time of last file status change */
@@ -182,13 +182,13 @@ struct stat {
 
 #if __BSD_VISIBLE
 struct nstat {
-	__dev_t   st_dev;		/* inode's device */
+	__uint32_t st_dev;		/* inode's device */
 	__uint32_t st_ino;		/* inode's number */
 	__uint32_t st_mode;		/* inode protection mode */
 	__uint32_t st_nlink;		/* number of hard links */
 	uid_t	  st_uid;		/* user ID of the file's owner */
 	gid_t	  st_gid;		/* group ID of the file's group */
-	__dev_t   st_rdev;		/* device type */
+	__uint32_t st_rdev;		/* device type */
 	struct	timespec st_atim;	/* time of last access */
 	struct	timespec st_mtim;	/* time of last data modification */
 	struct	timespec st_ctim;	/* time of last file status change */

@@ -200,7 +200,7 @@ struct audit_record {
 	int			ar_arg_atfd2;
 	int			ar_arg_fflags;
 	mode_t			ar_arg_mode;
-	int			ar_arg_dev;
+	dev_t			ar_arg_dev;
 	long			ar_arg_value;
 	void *			ar_arg_addr;
 	int			ar_arg_len;

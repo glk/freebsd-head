@@ -90,7 +90,7 @@ typedef	__ct_rune_t	__rune_t;	/* rune_t (see above) */
 typedef	__ct_rune_t	__wchar_t;	/* wchar_t (see above) */
 typedef	__ct_rune_t	__wint_t;	/* wint_t (see above) */
 
-typedef	__uint32_t	__dev_t;	/* device number */
+typedef	__uint64_t	__dev_t;	/* device number */
 
 typedef	__uint32_t	__fixpt_t;	/* fixed point number */
 

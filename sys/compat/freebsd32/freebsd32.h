@@ -147,9 +147,9 @@ struct msghdr32 {
 };
 
 struct stat32 {
+	dev_t	st_dev;
 	ino_t	st_ino;
 	nlink_t	st_nlink;
-	dev_t	st_dev;
 	mode_t	st_mode;
 	u_int16_t st_padding0;
 	uid_t	st_uid;
@@ -168,13 +168,13 @@ struct stat32 {
 	unsigned int :(8 / 2) * (16 - (int)sizeof(struct timespec32));
 };
 struct freebsd9_stat32 {
-	dev_t	st_dev;
+	u_int32_t st_dev;
 	u_int32_t st_ino;
 	mode_t	st_mode;
 	u_int16_t st_nlink;
 	uid_t	st_uid;
 	gid_t	st_gid;
-	dev_t	st_rdev;
+	u_int32_t st_rdev;
 	struct timespec32 st_atim;
 	struct timespec32 st_mtim;
 	struct timespec32 st_ctim;
@@ -303,7 +303,7 @@ struct kinfo_proc32 {
 	pid_t	ki_tsid;
 	short	ki_jobc;
 	short	ki_spare_short1;
-	dev_t	ki_tdev;
+	uint32_t ki_tdev_freebsd9;
 	sigset_t ki_siglist;
 	sigset_t ki_sigmask;
 	sigset_t ki_sigignore;
@@ -350,6 +350,8 @@ struct kinfo_proc32 {
 	char	ki_loginclass[LOGINCLASSLEN+1];
 	char	ki_sparestrings[50];
 	int	ki_spareints[KI_NSPARE_INT];
+	uint64_t ki_tdev;
+	int	ki_spareint0;
 	u_int	ki_cr_flags;
 	int	ki_jid;
 	int	ki_numthreads;

@@ -333,7 +333,7 @@ audit_arg_mode(mode_t mode)
 }
 
 void
-audit_arg_dev(int dev)
+audit_arg_dev(dev_t dev)
 {
 	struct kaudit_record *ar;
 

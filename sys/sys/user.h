@@ -83,7 +83,7 @@
  * it in two places: function fill_kinfo_proc in sys/kern/kern_proc.c and
  * function kvm_proclist in lib/libkvm/kvm_proc.c .
  */
-#define	KI_NSPARE_INT	9
+#define	KI_NSPARE_INT	6
 #define	KI_NSPARE_LONG	12
 #define	KI_NSPARE_PTR	6
 
@@ -134,7 +134,7 @@ struct kinfo_proc {
 	pid_t	ki_tsid;		/* Terminal session ID */
 	short	ki_jobc;		/* job control counter */
 	short	ki_spare_short1;	/* unused (just here for alignment) */
-	dev_t	ki_tdev;		/* controlling tty dev */
+	uint32_t ki_tdev_freebsd9;	/* controlling tty dev */
 	sigset_t ki_siglist;		/* Signals arrived but not delivered */
 	sigset_t ki_sigmask;		/* Current signal mask */
 	sigset_t ki_sigignore;		/* Signals being ignored */
@@ -186,6 +186,8 @@ struct kinfo_proc {
 	 */
 	char	ki_sparestrings[50];	/* spare string space */
 	int	ki_spareints[KI_NSPARE_INT];	/* spare room for growth */
+	uint64_t ki_tdev;		/* controlling tty dev */
+	int	ki_spareint0;		/* spare room for growth */
 	u_int	ki_cr_flags;		/* Credential flags */
 	int	ki_jid;			/* Process jail ID */
 	int	ki_numthreads;		/* XXXKSE number of threads in total */
@@ -357,9 +359,9 @@ struct kinfo_file {
 			/* File size. */
 			uint64_t	kf_file_size;
 			/* Vnode filesystem id. */
-			uint32_t	kf_file_fsid;
+			uint32_t	kf_file_fsid_freebsd9;
 			/* File device. */
-			uint32_t	kf_file_rdev;
+			uint32_t	kf_file_rdev_freebsd9;
 			/* File mode. */
 			uint16_t	kf_file_mode;
 			/* Round to 64 bit alignment. */
@@ -374,9 +376,11 @@ struct kinfo_file {
 			uint32_t	kf_pipe_pad0[3];
 		} kf_pipe;
 		struct {
-			uint32_t	kf_pts_dev;
+			uint32_t	kf_pts_dev_freebsd9;
+			uint32_t	kf_pts_pad0;
+			uint64_t	kf_pts_dev;
 			/* Round to 64 bit alignment. */
-			uint32_t	kf_pts_pad0[7];
+			uint32_t	kf_pts_pad1[4];
 		} kf_pts;
 		struct {
 			pid_t		kf_pid;
@@ -386,7 +390,14 @@ struct kinfo_file {
 	uint16_t	kf_pad1;		/* Round to 32 bit alignment. */
 	int		_kf_ispare0;		/* Space for more stuff. */
 	cap_rights_t	kf_cap_rights;		/* Capability rights. */
-	int		_kf_ispare[4];		/* Space for more stuff. */
+	union {
+		struct {
+			/* Vnode filesystem id. */
+			uint64_t	kf_file_fsid;
+			/* File device. */
+			uint64_t	kf_file_rdev;
+		} kf_file;
+	} kf_un2;
 	/* Truncated before copyout in sysctl */
 	char		kf_path[PATH_MAX];	/* Path to file, if any. */
 };
@@ -436,8 +447,9 @@ struct kinfo_ovmentry {
 	void	*_kve_pspare[8];		/* Space for more stuff. */
 	off_t	 kve_offset;			/* Mapping offset in object */
 	uint64_t kve_fileid;			/* inode number if vnode */
-	dev_t	 kve_fsid;			/* dev_t of vnode location */
-	int	 _kve_ispare[3];		/* Space for more stuff. */
+	uint32_t kve_fsid_freebsd9;		/* dev_t of vnode location */
+	uint32_t _kve_pad0;			/* Space for more stuff. */
+	uint64_t kve_fsid;			/* dev_t of vnode location */
 };
 
 #if defined(__amd64__) || defined(__i386__)
@@ -451,7 +463,7 @@ struct kinfo_vmentry {
 	uint64_t kve_end;			/* Finishing address. */
 	uint64_t kve_offset;			/* Mapping offset in object */
 	uint64_t kve_vn_fileid;			/* inode number if vnode */
-	uint32_t kve_vn_fsid;			/* dev_t of vnode location */
+	uint32_t kve_vn_fsid_freebsd9;		/* dev_t of vnode location */
 	int	 kve_flags;			/* Flags on map entry. */
 	int	 kve_resident;			/* Number of resident pages. */
 	int	 kve_private_resident;		/* Number of private pages. */
@@ -460,10 +472,12 @@ struct kinfo_vmentry {
 	int	 kve_shadow_count;		/* VM obj shadow count. */
 	int	 kve_vn_type;			/* Vnode type. */
 	uint64_t kve_vn_size;			/* File size. */
-	uint32_t kve_vn_rdev;			/* Device id if device. */
+	uint32_t kve_vn_rdev_freebsd9;		/* Device id if device. */
 	uint16_t kve_vn_mode;			/* File mode. */
 	uint16_t kve_status;			/* Status flags. */
-	int	 _kve_ispare[12];		/* Space for more stuff. */
+	uint64_t kve_vn_fsid;			/* dev_t of vnode location */
+	uint64_t kve_vn_rdev;			/* Device id if device. */
+	int	 _kve_ispare[8];		/* Space for more stuff. */
 	/* Truncated before copyout in sysctl */
 	char	 kve_path[PATH_MAX];		/* Path to VM obj, if any. */
 };

@@ -1475,34 +1475,13 @@ ocreat(td, uap)
 /*
  * Create a special file.
  */
-#ifndef _SYS_SYSPROTO_H_
-struct mknod_args {
-	char	*path;
-	int	mode;
-	int	dev;
-};
-#endif
 int
-sys_mknod(td, uap)
-	struct thread *td;
-	register struct mknod_args /* {
-		char *path;
-		int mode;
-		int dev;
-	} */ *uap;
+sys_mknod(struct thread *td, struct mknod_args *uap)
 {
 
 	return (kern_mknod(td, uap->path, UIO_USERSPACE, uap->mode, uap->dev));
 }
 
-#ifndef _SYS_SYSPROTO_H_
-struct mknodat_args {
-	int	fd;
-	char	*path;
-	mode_t	mode;
-	dev_t	dev;
-};
-#endif
 int
 sys_mknodat(struct thread *td, struct mknodat_args *uap)
 {
@@ -1511,9 +1490,30 @@ sys_mknodat(struct thread *td, struct mknodat_args *uap)
 	    uap->dev));
 }
 
+#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
+    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
+    defined(COMPAT_FREEBSD9)
+int
+freebsd9_mknod(struct thread *td,
+    struct freebsd9_mknod_args *uap)
+{
+
+	return (kern_mknod(td, uap->path, UIO_USERSPACE, uap->mode, uap->dev));
+}
+
+int
+freebsd9_mknodat(struct thread *td,
+    struct freebsd9_mknodat_args *uap)
+{
+
+	return (kern_mknodat(td, uap->fd, uap->path, UIO_USERSPACE, uap->mode,
+	    uap->dev));
+}
+#endif /* COMPAT_FREEBSD9 */
+
 int
 kern_mknod(struct thread *td, char *path, enum uio_seg pathseg, int mode,
-    int dev)
+    dev_t dev)
 {
 
 	return (kern_mknodat(td, AT_FDCWD, path, pathseg, mode, dev));
@@ -1521,7 +1521,7 @@ kern_mknod(struct thread *td, char *path, enum uio_seg pathseg, int mode,
 
 int
 kern_mknodat(struct thread *td, int fd, char *path, enum uio_seg pathseg,
-    int mode, int dev)
+    int mode, dev_t dev)
 {
 	struct vnode *vp;
 	struct mount *mp;

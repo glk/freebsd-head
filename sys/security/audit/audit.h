@@ -88,7 +88,7 @@ void	 audit_arg_login(char *login);
 void	 audit_arg_ctlname(int *name, int namelen);
 void	 audit_arg_mask(int mask);
 void	 audit_arg_mode(mode_t mode);
-void	 audit_arg_dev(int dev);
+void	 audit_arg_dev(dev_t dev);
 void	 audit_arg_value(long value);
 void	 audit_arg_owner(uid_t uid, gid_t gid);
 void	 audit_arg_pid(pid_t pid);

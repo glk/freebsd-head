@@ -79,7 +79,7 @@
 11	AUE_NULL	OBSOL	execv
 12	AUE_CHDIR	STD	{ int chdir(char *path); }
 13	AUE_FCHDIR	STD	{ int fchdir(int fd); }
-14	AUE_MKNOD	STD	{ int mknod(char *path, int mode, int dev); }
+14	AUE_MKNOD	COMPAT9	{ int mknod(char *path, int mode, int dev); }
 15	AUE_CHMOD	STD	{ int chmod(char *path, int mode); }
 16	AUE_CHOWN	STD	{ int chown(char *path, int uid, int gid); }
 17	AUE_NULL	STD	{ int obreak(char *nsize); } break \
@@ -892,8 +892,8 @@
 				    char *path2, int flag); }
 496	AUE_MKDIRAT	STD	{ int mkdirat(int fd, char *path, mode_t mode); }
 497	AUE_MKFIFOAT	STD	{ int mkfifoat(int fd, char *path, mode_t mode); }
-498	AUE_MKNODAT	STD	{ int mknodat(int fd, char *path, mode_t mode, \
-				    dev_t dev); }
+498	AUE_MKNODAT	COMPAT9	{ int mknodat(int fd, char *path, mode_t mode, \
+				    uint32_t dev); }
 ; XXX: see the comment for open
 499	AUE_OPENAT_RWTC	STD	{ int openat(int fd, char *path, int flag, \
 				    mode_t mode); }
@@ -973,5 +973,8 @@
 541	AUE_FSTATFS	STD	{ int fstatfs(int fd, struct statfs *buf); }
 542	AUE_FHSTATFS	STD	{ int fhstatfs(const struct fhandle *u_fhp, \
 				    struct statfs *buf); }
+543	AUE_MKNOD	STD	{ int mknod(char *path, int mode, dev_t dev); }
+544	AUE_MKNODAT	STD	{ int mknodat(int fd, char *path, mode_t mode, \
+				    dev_t dev); }
 ; Please copy any additions and changes to the following compatability tables:
 ; sys/compat/freebsd32/syscalls.master

@@ -118,7 +118,7 @@ CTASSERT(sizeof(struct kevent32) == 20);
 CTASSERT(sizeof(struct iovec32) == 8);
 CTASSERT(sizeof(struct msghdr32) == 28);
 #ifndef __mips__
-CTASSERT(sizeof(struct stat32) == 104);
+CTASSERT(sizeof(struct stat32) == 112);
 CTASSERT(sizeof(struct freebsd9_stat32) == 96);
 #endif
 CTASSERT(sizeof(struct sigaction32) == 24);
@@ -393,6 +393,27 @@ freebsd32_fexecve(struct thread *td, struct freebsd32_fexecve_args *uap)
 	}
 	return (error);
 }
+
+#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
+    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
+    defined(COMPAT_FREEBSD9)
+int
+freebsd9_freebsd32_mknod(struct thread *td,
+    struct freebsd9_freebsd32_mknod_args *uap)
+{
+
+	return (kern_mknod(td, uap->path, UIO_USERSPACE, uap->mode, uap->dev));
+}
+
+int
+freebsd9_freebsd32_mknodat(struct thread *td,
+    struct freebsd9_freebsd32_mknodat_args *uap)
+{
+
+	return (kern_mknodat(td, uap->fd, uap->path, UIO_USERSPACE, uap->mode,
+	    uap->dev));
+}
+#endif /* COMPAT_FREEBSD9 */
 
 #ifdef __ia64__
 static int
