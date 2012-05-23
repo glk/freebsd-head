@@ -1476,13 +1476,6 @@ ocreat(td, uap)
  * Create a special file.
  */
 int
-sys_mknod(struct thread *td, struct mknod_args *uap)
-{
-
-	return (kern_mknod(td, uap->path, UIO_USERSPACE, uap->mode, uap->dev));
-}
-
-int
 sys_mknodat(struct thread *td, struct mknodat_args *uap)
 {
 

@@ -1023,6 +1023,5 @@
 541	AUE_FSTATFS	NOPROTO	{ int fstatfs(int fd, struct statfs *buf); }
 542	AUE_FHSTATFS	NOPROTO	{ int fhstatfs(const struct fhandle *u_fhp, \
 				    struct statfs *buf); }
-543	AUE_MKNOD	NOPROTO	{ int mknod(char *path, int mode, dev_t dev); }
-544	AUE_MKNODAT	NOPROTO	{ int mknodat(int fd, char *path, mode_t mode, \
+543	AUE_MKNODAT	NOPROTO	{ int mknodat(int fd, char *path, mode_t mode, \
 				    dev_t dev); }
