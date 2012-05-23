@@ -60,6 +60,9 @@ __sym_compat(fhstatfs, freebsd9_fhstatfs, FBSD_1.0);
 __sym_compat(fstatfs, freebsd9_fstatfs, FBSD_1.0);
 __sym_compat(statfs, freebsd9_statfs, FBSD_1.0);
 
+__sym_compat(mknod, freebsd9_mknod, FBSD_1.0);
+__sym_compat(mknodat, freebsd9_mknodat, FBSD_1.1);
+
 #undef __sym_compat
 
 #endif	/* __LIBC_COMPAT_H__ */

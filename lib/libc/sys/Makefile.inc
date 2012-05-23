@@ -16,6 +16,7 @@
 .sinclude "${.CURDIR}/${LIBC_ARCH}/sys/Makefile.inc"
 
 # Sources common to both syscall interfaces:
+SRCS+=	mknod.c
 SRCS+=	stack_protector.c stack_protector_compat.c __error.c
 .if !defined(WITHOUT_SYSCALL_COMPAT)
 SYSCALL_COMPAT_SRCS=	fcntl.c ftruncate.c lseek.c mmap.c pread.c \

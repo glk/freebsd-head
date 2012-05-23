@@ -166,7 +166,6 @@ FBSD_1.0 {
 	minherit;
 	mkdir;
 	mkfifo;
-	mknod;
 	mlock;
 	mlockall;
 	modfind;
@@ -335,7 +334,6 @@ FBSD_1.1 {
 	lpathconf;
 	mkdirat;
 	mkfifoat;
-	mknodat;
 	msgctl;
 	openat;
 	readlinkat;
@@ -377,6 +375,8 @@ FBSD_1.3 {
 	getdirentries;
 	getfsstat;
 	lstat;
+	mknod;
+	mknodat;
 	posix_fadvise;
 	stat;
 	statfs;

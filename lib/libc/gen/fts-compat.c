@@ -98,7 +98,7 @@ static int	 fts_ufslinks(FTS *, const FTSENT *);
 struct _fts_private {
 	FTS		ftsp_fts;
 	struct freebsd9_statfs	ftsp_statfs;
-	dev_t		ftsp_dev;
+	uint32_t	ftsp_dev;
 	int		ftsp_linksreliable;
 };
 
@@ -907,7 +907,7 @@ fts_stat(sp, p, follow)
 	int follow;
 {
 	FTSENT *t;
-	dev_t dev;
+	uint32_t dev;
 	uint32_t ino;
 	struct freebsd9_stat *sbp, sb;
 	int saved_errno;

@@ -41,7 +41,7 @@ typedef struct {
 	struct _ftsent *fts_cur;	/* current node */
 	struct _ftsent *fts_child;	/* linked list of children */
 	struct _ftsent **fts_array;	/* sort array */
-	dev_t fts_dev;			/* starting device # */
+	uint32_t fts_dev;		/* starting device # */
 	char *fts_path;			/* path for this descent */
 	int fts_rfd;			/* fd for root */
 	int fts_pathlen;		/* sizeof(path) */
@@ -87,7 +87,7 @@ typedef struct _ftsent {
 	u_short fts_namelen;		/* strlen(fts_name) */
 
 	uint32_t fts_ino;		/* inode */
-	dev_t fts_dev;			/* device */
+	uint32_t fts_dev;		/* device */
 	uint16_t fts_nlink;		/* link count */
 
 #define	FTS_ROOTPARENTLEVEL	-1

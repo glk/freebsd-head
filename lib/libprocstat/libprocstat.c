@@ -1061,12 +1061,12 @@ procstat_get_vnode_info_sysctl(struct filestat *fst, struct vnstat *vn,
 	struct statfs stbuf;
 	struct kinfo_file *kif;
 	struct kinfo_vmentry *kve;
+	char *name, *path;
 	uint64_t fileid;
 	uint64_t size;
-	char *name, *path;
-	uint32_t fsid;
+	uint64_t fsid;
+	uint64_t rdev;
 	uint16_t mode;
-	uint32_t rdev;
 	int vntype;
 	int status;
 
@@ -1088,10 +1088,10 @@ procstat_get_vnode_info_sysctl(struct filestat *fst, struct vnstat *vn,
 	} else {
 		kif = fst->fs_typedep;
 		fileid = kif->kf_un.kf_file.kf_file_fileid;
-		fsid = kif->kf_un.kf_file.kf_file_fsid;
+		fsid = kif->kf_un2.kf_file.kf_file_fsid;
 		mode = kif->kf_un.kf_file.kf_file_mode;
 		path = kif->kf_path;
-		rdev = kif->kf_un.kf_file.kf_file_rdev;
+		rdev = kif->kf_un2.kf_file.kf_file_rdev;
 		size = kif->kf_un.kf_file.kf_file_size;
 		vntype = kinfo_vtype2fst(kif->kf_vnode_type);
 		status = kif->kf_status;
