@@ -1007,6 +1007,10 @@ _gperf=		gnu/usr.bin/gperf
 _groff=		gnu/usr.bin/groff
 .endif
 
+.if ${BOOTSTRAPPING} < 800022
+_ar=		usr.bin/ar
+.endif
+
 .if ${BOOTSTRAPPING} < 800013
 _mklocale=	usr.bin/mklocale
 .endif
@@ -1017,6 +1021,9 @@ _sed=		usr.bin/sed
 
 .if ${BOOTSTRAPPING} < 900006
 _lex=		usr.bin/lex
+.endif
+
+.if ${BOOTSTRAPPING} < 1000013
 _yacc=		usr.bin/yacc
 .endif
 
@@ -1069,6 +1076,7 @@ bootstrap-tools:
     ${_strfile} \
     ${_gperf} \
     ${_groff} \
+    ${_ar} \
     ${_dtc} \
     ${_awk} \
     usr.bin/lorder \
@@ -1076,8 +1084,8 @@ bootstrap-tools:
     ${_mklocale} \
     usr.bin/rpcgen \
     ${_sed} \
-    ${_lex} \
     ${_yacc} \
+    ${_lex} \
     usr.bin/xinstall \
     ${_gensnmptree} \
     usr.sbin/config

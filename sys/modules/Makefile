@@ -87,6 +87,7 @@ SUBDIR=	${_3dfx} \
 	${_dpms} \
 	${_dpt} \
 	${_drm} \
+	${_drm2} \
 	${_dtrace} \
 	dummynet \
 	${_ed} \
@@ -462,6 +463,7 @@ _cyclic=	cyclic
 .endif
 _dpms=		dpms
 _drm=		drm
+_drm2=		drm2
 .if ${MK_CDDL} != "no" || defined(ALL_MODULES)
 _dtrace=	dtrace
 .endif
@@ -631,6 +633,7 @@ _cyclic=	cyclic
 .endif
 _dpms=		dpms
 _drm=		drm
+_drm2=		drm2
 .if ${MK_CDDL} != "no" || defined(ALL_MODULES)
 _dtrace=	dtrace
 .endif
