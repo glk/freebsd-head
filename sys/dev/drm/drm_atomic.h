@@ -89,5 +89,3 @@ find_first_zero_bit(volatile void *p, int max)
 	}
 	return max;
 }
-
-#define	BITS_TO_LONGS(x) (howmany((x), NBBY * sizeof(long)))
