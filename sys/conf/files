@@ -712,6 +712,8 @@ dev/ath/if_ath_ahb.c		optional ath_ahb \
 #
 dev/ath/if_ath.c		optional ath \
 	compile-with "${NORMAL_C} -I$S/dev/ath"
+dev/ath/if_ath_beacon.c		optional ath \
+	compile-with "${NORMAL_C} -I$S/dev/ath"
 dev/ath/if_ath_debug.c		optional ath \
 	compile-with "${NORMAL_C} -I$S/dev/ath"
 dev/ath/if_ath_keycache.c	optional ath \
@@ -722,7 +724,11 @@ dev/ath/if_ath_tx.c		optional ath \
 	compile-with "${NORMAL_C} -I$S/dev/ath"
 dev/ath/if_ath_tx_ht.c		optional ath \
 	compile-with "${NORMAL_C} -I$S/dev/ath"
+dev/ath/if_ath_tdma.c		optional ath \
+	compile-with "${NORMAL_C} -I$S/dev/ath"
 dev/ath/if_ath_sysctl.c		optional ath \
+	compile-with "${NORMAL_C} -I$S/dev/ath"
+dev/ath/if_ath_rx.c		optional ath \
 	compile-with "${NORMAL_C} -I$S/dev/ath"
 dev/ath/ah_osdep.c		optional ath \
 	compile-with "${NORMAL_C} -I$S/dev/ath"
@@ -1219,6 +1225,7 @@ dev/fatm/if_fatm.c		optional fatm pci
 dev/fb/splash.c			optional splash
 dev/fdt/fdt_common.c		optional fdt
 dev/fdt/fdt_pci.c		optional fdt pci
+dev/fdt/fdt_slicer.c		optional fdt cfi | fdt nand
 dev/fdt/fdt_static_dtb.S	optional fdt fdt_dtb_static
 dev/fdt/fdtbus.c		optional fdt
 dev/fdt/simplebus.c		optional fdt
@@ -2384,6 +2391,7 @@ geom/geom_disk.c		standard
 geom/geom_dump.c		standard
 geom/geom_event.c		standard
 geom/geom_fox.c			optional geom_fox
+geom/geom_flashmap.c		optional fdt cfi | fdt nand
 geom/geom_io.c			standard
 geom/geom_kern.c		standard
 geom/geom_map.c			optional geom_map
