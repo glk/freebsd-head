@@ -20,6 +20,6 @@ SRCS	+= sha1.c sha2.c
 SRCS	+= opt_param.h cryptodev_if.h bus_if.h device_if.h
 SRCS	+= opt_ddb.h opt_kdtrace.h
 SRCS	+= camellia.c camellia-api.c
-SRCS	+= hmac_sha512.c
+SRCS	+= hmac.c
 SRCS	+= pkcs5v2.c
 .include <bsd.kmod.mk>

@@ -31,7 +31,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mman.h>
 #include <sys/sysctl.h>
 #include <sys/resource.h>
-#include <crypto/hmac/hmac_sha512.h>
+#include <crypto/hmac/hmac.h>
 #include <crypto/pkcs5v2/pkcs5v2.h>
 #include <opencrypto/cryptodev.h>
 
@@ -359,7 +359,7 @@ eli_is_attached(const char *prov)
 
 static int
 eli_genkey_files(struct gctl_req *req, bool new, const char *type,
-    struct hmac_sha512_ctx *ctxp, char *passbuf, size_t passbufsize)
+    struct hmac_ctx *ctxp, char *passbuf, size_t passbufsize)
 {
 	char *p, buf[MAXPHYS], argname[16];
 	const char *file;
@@ -395,7 +395,7 @@ eli_genkey_files(struct gctl_req *req, bool new, const char *type,
 		}
 		if (strcmp(type, "keyfile") == 0) {
 			while ((done = read(fd, buf, sizeof(buf))) > 0)
-				hmac_sha512_update(ctxp, buf, done);
+				hmac_update(ctxp, buf, done);
 		} else /* if (strcmp(type, "passfile") == 0) */ {
 			while ((done = read(fd, buf, sizeof(buf) - 1)) > 0) {
 				buf[done] = '\0';
@@ -473,7 +473,7 @@ eli_genkey_passphrase_prompt(struct gctl_req *req, bool new, char *passbuf,
 
 static int
 eli_genkey_passphrase(struct gctl_req *req, struct g_eli_metadata *md, bool new,
-    struct hmac_sha512_ctx *ctxp)
+    struct hmac_ctx *ctxp)
 {
 	char passbuf[MAXPHYS];
 	bool nopassphrase;
@@ -526,15 +526,15 @@ eli_genkey_passphrase(struct gctl_req *req, struct g_eli_metadata *md, bool new,
 	 * If md_iterations is equal to 0, user doesn't want PKCS#5v2.
 	 */
 	if (md->md_iterations == 0) {
-		hmac_sha512_update(ctxp, md->md_salt,
+		hmac_update(ctxp, md->md_salt,
 		    sizeof(md->md_salt));
-		hmac_sha512_update(ctxp, passbuf, strlen(passbuf));
+		hmac_update(ctxp, passbuf, strlen(passbuf));
 	} else /* if (md->md_iterations > 0) */ {
 		unsigned char dkey[G_ELI_USERKEYLEN];
 
 		pkcs5v2_genkey(dkey, sizeof(dkey), md->md_salt,
 		    sizeof(md->md_salt), passbuf, md->md_iterations);
-		hmac_sha512_update(ctxp, dkey, sizeof(dkey));
+		hmac_update(ctxp, dkey, sizeof(dkey));
 		bzero(dkey, sizeof(dkey));
 	}
 	bzero(passbuf, sizeof(passbuf));
@@ -546,14 +546,14 @@ static unsigned char *
 eli_genkey(struct gctl_req *req, struct g_eli_metadata *md, unsigned char *key,
     bool new)
 {
-	struct hmac_sha512_ctx ctx;
+	struct hmac_ctx ctx;
 	bool nopassphrase;
 	int nfiles;
 
 	nopassphrase =
 	    gctl_get_int(req, new ? "nonewpassphrase" : "nopassphrase");
 
-	hmac_sha512_init(&ctx, NULL, 0);
+	hmac_init(&ctx, CRYPTO_SHA2_512_HMAC, NULL, 0);
 
 	nfiles = eli_genkey_files(req, new, "keyfile", &ctx, NULL, 0);
 	if (nfiles == -1)
@@ -566,7 +566,7 @@ eli_genkey(struct gctl_req *req, struct g_eli_metadata *md, unsigned char *key,
 	if (eli_genkey_passphrase(req, md, new, &ctx) == -1)
 		return (NULL);
 
-	hmac_sha512_final(&ctx, key, 0);
+	hmac_final(&ctx, key, G_ELI_USERKEYLEN);
 
 	return (key);
 }

@@ -8,7 +8,7 @@
 GEOM_CLASS=	eli
 SRCS=	g_eli_crypto.c
 SRCS+=	g_eli_key.c
-SRCS+=	hmac_sha512.c
+SRCS+=	hmac.c
 SRCS+=	pkcs5v2.c
 SRCS+=	sha2.c
 
