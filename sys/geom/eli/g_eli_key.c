@@ -41,6 +41,8 @@ __FBSDID("$FreeBSD$");
 #include <errno.h>
 #endif
 
+#include <crypto/hmac/hmac.h>
+
 #include <geom/eli/g_eli.h>
 
 #ifdef _KERNEL
@@ -61,13 +63,13 @@ g_eli_mkey_verify(const unsigned char *mkey, const unsigned char *key)
 	/*
 	 * The key for HMAC calculations is: hmkey = HMAC_SHA512(Derived-Key, 0)
 	 */
-	g_eli_crypto_hmac(key, G_ELI_USERKEYLEN, "\x00", 1, hmkey, 0);
+	hmac(CRYPTO_SHA2_512_HMAC, key, G_ELI_USERKEYLEN, "\x00", 1, hmkey, 0);
 
 	odhmac = mkey + G_ELI_DATAIVKEYLEN;
 
 	/* Calculate HMAC from Data-Key and IV-Key. */
-	g_eli_crypto_hmac(hmkey, sizeof(hmkey), mkey, G_ELI_DATAIVKEYLEN,
-	    chmac, 0);
+	hmac(CRYPTO_SHA2_512_HMAC, hmkey, sizeof(hmkey),
+	    mkey, G_ELI_DATAIVKEYLEN, chmac, 0);
 
 	bzero(hmkey, sizeof(hmkey));
 
@@ -90,12 +92,12 @@ g_eli_mkey_hmac(unsigned char *mkey, const unsigned char *key)
 	/*
 	 * The key for HMAC calculations is: hmkey = HMAC_SHA512(Derived-Key, 0)
 	 */
-	g_eli_crypto_hmac(key, G_ELI_USERKEYLEN, "\x00", 1, hmkey, 0);
+	hmac(CRYPTO_SHA2_512_HMAC, key, G_ELI_USERKEYLEN, "\x00", 1, hmkey, 0);
 
 	odhmac = mkey + G_ELI_DATAIVKEYLEN;
 	/* Calculate HMAC from Data-Key and IV-Key. */
-	g_eli_crypto_hmac(hmkey, sizeof(hmkey), mkey, G_ELI_DATAIVKEYLEN,
-	    odhmac, 0);
+	hmac(CRYPTO_SHA2_512_HMAC, hmkey, sizeof(hmkey),
+	    mkey, G_ELI_DATAIVKEYLEN, odhmac, 0);
 
 	bzero(hmkey, sizeof(hmkey));
 }
@@ -120,7 +122,7 @@ g_eli_mkey_decrypt(const struct g_eli_metadata *md, const unsigned char *key,
 	/*
 	 * The key for encryption is: enckey = HMAC_SHA512(Derived-Key, 1)
 	 */
-	g_eli_crypto_hmac(key, G_ELI_USERKEYLEN, "\x01", 1, enckey, 0);
+	hmac(CRYPTO_SHA2_512_HMAC, key, G_ELI_USERKEYLEN, "\x01", 1, enckey, 0);
 
 	mmkey = md->md_mkeys;
 	for (nkey = 0; nkey < G_ELI_MAXMKEYS; nkey++, mmkey += G_ELI_MKEYLEN) {
@@ -168,7 +170,7 @@ g_eli_mkey_encrypt(unsigned algo, const unsigned char *key, unsigned keylen,
 	/*
 	 * The key for encryption is: enckey = HMAC_SHA512(Derived-Key, 1)
 	 */
-	g_eli_crypto_hmac(key, G_ELI_USERKEYLEN, "\x01", 1, enckey, 0);
+	hmac(CRYPTO_SHA2_512_HMAC, key, G_ELI_USERKEYLEN, "\x01", 1, enckey, 0);
 	/*
 	 * Encrypt the Master-Key and HMAC() result with the given key (this
 	 * time only 'keylen' bits from the key are used).
@@ -200,7 +202,7 @@ g_eli_mkey_propagate(struct g_eli_softc *sc, const unsigned char *mkey)
 	 * The authentication key is: akey = HMAC_SHA512(Master-Key, 0x11)
 	 */
 	if ((sc->sc_flags & G_ELI_FLAG_AUTH) != 0) {
-		g_eli_crypto_hmac(mkey, G_ELI_MAXKEYLEN, "\x11", 1,
+		hmac(CRYPTO_SHA2_512_HMAC, mkey, G_ELI_MAXKEYLEN, "\x11", 1,
 		    sc->sc_akey, 0);
 	} else {
 		arc4rand(sc->sc_akey, sizeof(sc->sc_akey), 0);

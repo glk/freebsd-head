@@ -13,9 +13,4 @@ SRCS+=	pefs_aesni.c
 CFLAGS+= -DPEFS_AESNI
 .endif
 
-DEBUG_FLAGS+= -g
-#DEBUG_FLAGS+= -DPEFS_DEBUG
-#DEBUG_FLAGS+= -DPEFS_DEBUG_EXTRA
-
 .include <bsd.kmod.mk>
-

@@ -35,6 +35,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/tree.h>
 
+#include <crypto/hmac/hmac.h>
+
 #include <geom/geom.h>
 
 #include <geom/eli/g_eli.h>
@@ -98,8 +100,8 @@ g_eli_key_fill(struct g_eli_softc *sc, struct g_eli_key *key, uint64_t keyno)
 
 	bcopy("ekey", hmacdata.magic, 4);
 	le64enc(hmacdata.keyno, keyno);
-	g_eli_crypto_hmac(sc->sc_mkey, G_ELI_MAXKEYLEN, (uint8_t *)&hmacdata,
-	    sizeof(hmacdata), key->gek_key, 0);
+	hmac(CRYPTO_SHA2_512_HMAC, sc->sc_mkey, G_ELI_MAXKEYLEN,
+	    (uint8_t *)&hmacdata, sizeof(hmacdata), key->gek_key, 0);
 	key->gek_keyno = keyno;
 	key->gek_count = 0;
 	key->gek_magic = G_ELI_KEY_MAGIC;
@@ -202,8 +204,8 @@ g_eli_key_init(struct g_eli_softc *sc)
 			/*
 			 * The encryption key is: ekey = HMAC_SHA512(Master-Key, 0x10)
 			 */
-			g_eli_crypto_hmac(mkey, G_ELI_MAXKEYLEN, "\x10", 1,
-			    sc->sc_ekey, 0);
+			hmac(CRYPTO_SHA2_512_HMAC, mkey, G_ELI_MAXKEYLEN,
+			    "\x10", 1, sc->sc_ekey, 0);
 		}
 	} else {
 		off_t mediasize;

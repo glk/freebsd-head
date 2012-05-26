@@ -47,11 +47,12 @@ __FBSDID("$FreeBSD$");
 #include <sys/uio.h>
 #include <sys/vnode.h>
 
+#include <crypto/hmac/hmac.h>
+#include <crypto/pkcs5v2/pkcs5v2.h>
 #include <vm/uma.h>
 
 #include <geom/geom.h>
 #include <geom/eli/g_eli.h>
-#include <geom/eli/pkcs5v2.h>
 
 FEATURE(geom_eli, "GEOM crypto module");
 
@@ -985,7 +986,7 @@ g_eli_keyfiles_load(struct hmac_ctx *ctx, const char *provider)
 		}
 		G_ELI_DEBUG(1, "Loaded keyfile %s for %s (type: %s).", file,
 		    provider, name);
-		g_eli_crypto_hmac_update(ctx, data, size);
+		hmac_update(ctx, data, size);
 	}
 }
 
@@ -1062,7 +1063,7 @@ g_eli_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 	}
 
 	for (i = 0; i < tries; i++) {
-		g_eli_crypto_hmac_init(&ctx, NULL, 0);
+		hmac_init(&ctx, CRYPTO_SHA2_512_HMAC, NULL, 0);
 
 		/*
 		 * Load all key files.
@@ -1094,10 +1095,8 @@ g_eli_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 		 * Prepare Derived-Key from the user passphrase.
 		 */
 		if (md.md_iterations == 0) {
-			g_eli_crypto_hmac_update(&ctx, md.md_salt,
-			    sizeof(md.md_salt));
-			g_eli_crypto_hmac_update(&ctx, passphrase,
-			    strlen(passphrase));
+			hmac_update(&ctx, md.md_salt, sizeof(md.md_salt));
+			hmac_update(&ctx, passphrase, strlen(passphrase));
 			bzero(passphrase, sizeof(passphrase));
 		} else if (md.md_iterations > 0) {
 			u_char dkey[G_ELI_USERKEYLEN];
@@ -1105,11 +1104,11 @@ g_eli_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 			pkcs5v2_genkey(dkey, sizeof(dkey), md.md_salt,
 			    sizeof(md.md_salt), passphrase, md.md_iterations);
 			bzero(passphrase, sizeof(passphrase));
-			g_eli_crypto_hmac_update(&ctx, dkey, sizeof(dkey));
+			hmac_update(&ctx, dkey, sizeof(dkey));
 			bzero(dkey, sizeof(dkey));
 		}
 
-		g_eli_crypto_hmac_final(&ctx, key, 0);
+		hmac_final(&ctx, key, sizeof(key));
 
 		/*
 		 * Decrypt Master-Key.
