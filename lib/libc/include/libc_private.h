@@ -36,6 +36,8 @@
 #define _LIBC_PRIVATE_H_
 #include <sys/_pthreadtypes.h>
 
+struct stat;
+
 /*
  * This global flag is non-zero when a process has created one
  * or more threads. It is used to avoid calling locking functions
@@ -244,6 +246,8 @@ extern void *	__sys_freebsd6_mmap(void *, __size_t, int, int, int, int, __off_t)
 
 /* Without back-compat translation */
 extern int	__sys_fcntl(int, int, ...);
+
+extern int	__sys_fstatat(int, const char *, struct stat *, int);
 
 /* execve() with PATH processing to implement posix_spawnp() */
 int _execvpe(const char *, char * const *, char * const *);
