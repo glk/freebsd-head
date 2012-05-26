@@ -96,8 +96,8 @@ int	kern_fstatfs(struct thread *td, int fd, struct statfs *buf);
 int	kern_ftruncate(struct thread *td, int fd, off_t length);
 int	kern_futimes(struct thread *td, int fd, struct timeval *tptr,
 	    enum uio_seg tptrseg);
-int	kern_getdirentries(struct thread *td, int fd, char *buf, u_int count,
-	    long *basep, ssize_t *residp, enum uio_seg bufseg);
+int	kern_getdirentries(struct thread *td, int fd, char *buf, size_t count,
+	    off_t *basep, ssize_t *residp, enum uio_seg bufseg);
 int	kern_getfsstat(struct thread *td, struct statfs **buf, size_t bufsize,
 	    enum uio_seg bufseg, int flags);
 int	kern_getgroups(struct thread *td, u_int *ngrp, gid_t *groups);

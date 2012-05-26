@@ -2657,31 +2657,8 @@ freebsd9_fstatat(struct thread *td, struct freebsd9_fstatat_args* uap)
 #endif	/* COMPAT_FREEBSD9 */
 
 /*
- * Get file status; this version follows links.
+ * Get file status
  */
-#ifndef _SYS_SYSPROTO_H_
-struct stat_args {
-	char	*path;
-	struct stat *ub;
-};
-#endif
-int
-sys_stat(td, uap)
-	struct thread *td;
-	register struct stat_args /* {
-		char *path;
-		struct stat *ub;
-	} */ *uap;
-{
-	struct stat sb;
-	int error;
-
-	error = kern_stat(td, uap->path, UIO_USERSPACE, &sb);
-	if (error == 0)
-		error = copyout(&sb, uap->ub, sizeof (sb));
-	return (error);
-}
-
 #ifndef _SYS_SYSPROTO_H_
 struct fstatat_args {
 	int	fd;
@@ -2756,32 +2733,6 @@ kern_statat_vnhook(struct thread *td, int flag, int fd, char *path,
 		ktrstat(&sb);
 #endif
 	return (0);
-}
-
-/*
- * Get file status; this version does not follow links.
- */
-#ifndef _SYS_SYSPROTO_H_
-struct lstat_args {
-	char	*path;
-	struct stat *ub;
-};
-#endif
-int
-sys_lstat(td, uap)
-	struct thread *td;
-	register struct lstat_args /* {
-		char *path;
-		struct stat *ub;
-	} */ *uap;
-{
-	struct stat sb;
-	int error;
-
-	error = kern_lstat(td, uap->path, UIO_USERSPACE, &sb);
-	if (error == 0)
-		error = copyout(&sb, uap->ub, sizeof (sb));
-	return (error);
 }
 
 int
@@ -4276,6 +4227,7 @@ freebsd9_kern_getdirentries(struct thread *td, int fd, char *ubuf, u_int count,
 	struct freebsd9_dirent dstdp;
 	struct dirent *dp, *edp;
 	char *dirbuf;
+	off_t base;
 	ssize_t resid, ucount;
 	int error;
 
@@ -4284,10 +4236,12 @@ freebsd9_kern_getdirentries(struct thread *td, int fd, char *ubuf, u_int count,
 
 	dirbuf = malloc(count, M_TEMP, M_WAITOK);
 
-	error = kern_getdirentries(td, fd, dirbuf, count, basep, &resid,
+	error = kern_getdirentries(td, fd, dirbuf, count, &base, &resid,
 	    UIO_SYSSPACE);
 	if (error != 0)
 		goto done;
+	if (basep != NULL)
+		*basep = base;
 
 	ucount = 0;
 	for (dp = (struct dirent *)dirbuf,
@@ -4438,25 +4392,10 @@ freebsd9_getdents(struct thread *td, struct freebsd9_getdents_args *uap)
 /*
  * Read a block of directory entries in a filesystem independent format.
  */
-#ifndef _SYS_SYSPROTO_H_
-struct getdirentries_args {
-	int	fd;
-	char	*buf;
-	u_int	count;
-	long	*basep;
-};
-#endif
 int
-sys_getdirentries(td, uap)
-	struct thread *td;
-	register struct getdirentries_args /* {
-		int fd;
-		char *buf;
-		u_int count;
-		long *basep;
-	} */ *uap;
+sys_getdirentries(struct thread *td, struct getdirentries_args *uap)
 {
-	long base;
+	off_t base;
 	int error;
 
 	error = kern_getdirentries(td, uap->fd, uap->buf, uap->count, &base,
@@ -4464,20 +4403,20 @@ sys_getdirentries(td, uap)
 	if (error)
 		return (error);
 	if (uap->basep != NULL)
-		error = copyout(&base, uap->basep, sizeof(long));
+		error = copyout(&base, uap->basep, sizeof(off_t));
 	return (error);
 }
 
 int
-kern_getdirentries(struct thread *td, int fd, char *buf, u_int count,
-    long *basep, ssize_t *residp, enum uio_seg bufseg)
+kern_getdirentries(struct thread *td, int fd, char *buf, size_t count,
+    off_t *basep, ssize_t *residp, enum uio_seg bufseg)
 {
 	struct vnode *vp;
 	struct file *fp;
 	struct uio auio;
 	struct iovec aiov;
+	off_t loff;
 	int vfslocked;
-	long loff;
 	int error, eofflag;
 
 	AUDIT_ARG_FD(fd);
@@ -4543,30 +4482,6 @@ unionread:
 fail:
 	fdrop(fp, td);
 	return (error);
-}
-
-#ifndef _SYS_SYSPROTO_H_
-struct getdents_args {
-	int fd;
-	char *buf;
-	size_t count;
-};
-#endif
-int
-sys_getdents(td, uap)
-	struct thread *td;
-	register struct getdents_args /* {
-		int fd;
-		char *buf;
-		u_int count;
-	} */ *uap;
-{
-	struct getdirentries_args ap;
-	ap.fd = uap->fd;
-	ap.buf = uap->buf;
-	ap.count = uap->count;
-	ap.basep = NULL;
-	return (sys_getdirentries(td, &ap));
 }
 
 /*

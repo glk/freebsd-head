@@ -498,7 +498,7 @@
 270	AUE_NULL	UNIMPL	nosys
 271	AUE_NULL	UNIMPL	nosys
 272	AUE_O_GETDENTS	COMPAT9	{ int getdents(int fd, char *buf, \
-				    size_t count); }
+				    int count); }
 273	AUE_NULL	UNIMPL	nosys
 274	AUE_LCHMOD	STD	{ int lchmod(char *path, mode_t mode); }
 275	AUE_LCHOWN	NOPROTO	{ int lchown(char *path, uid_t uid, \
@@ -955,25 +955,21 @@
 				    off_t offset, off_t len); }
 531	AUE_NULL	STD	{ int posix_fadvise(int fd, off_t offset, \
 				    off_t len, int advice); }
-532	AUE_STAT	STD	{ int stat(char *path, struct stat *ub); }
-533	AUE_FSTAT	STD	{ int fstat(int fd, struct stat *sb); }
-534	AUE_LSTAT	STD	{ int lstat(char *path, struct stat *ub); }
-535	AUE_FHSTAT	STD	{ int fhstat(const struct fhandle *u_fhp, \
-				    struct stat *sb); }
-536	AUE_FSTATAT	STD	{ int fstatat(int fd, char *path, \
+532	AUE_FSTAT	STD	{ int fstat(int fd, struct stat *sb); }
+533	AUE_FSTATAT	STD	{ int fstatat(int fd, char *path, \
 				    struct stat *buf, int flag); }
-537	AUE_O_GETDENTS	STD	{ int getdents(int fd, char *buf, \
-				    size_t count); }
-538	AUE_GETDIRENTRIES	STD	{ int getdirentries(int fd, char *buf, \
-				    u_int count, long *basep); }
-539	AUE_GETFSSTAT	STD	{ int getfsstat(struct statfs *buf, \
-				    long bufsize, int flags); }
-540	AUE_STATFS	STD	{ int statfs(char *path, \
-				    struct statfs *buf); }
-541	AUE_FSTATFS	STD	{ int fstatfs(int fd, struct statfs *buf); }
-542	AUE_FHSTATFS	STD	{ int fhstatfs(const struct fhandle *u_fhp, \
-				    struct statfs *buf); }
-543	AUE_MKNODAT	STD	{ int mknodat(int fd, char *path, mode_t mode, \
+534	AUE_FHSTAT	STD	{ int fhstat(const struct fhandle *u_fhp, \
+				    struct stat *sb); }
+535	AUE_GETDIRENTRIES	STD	{ ssize_t getdirentries(int fd, char *buf, \
+				    size_t count, off_t *basep); }
+536	AUE_MKNODAT	STD	{ int mknodat(int fd, char *path, mode_t mode, \
 				    dev_t dev); }
+537	AUE_GETFSSTAT	STD	{ int getfsstat(struct statfs *buf, \
+				    long bufsize, int flags); }
+538	AUE_STATFS	STD	{ int statfs(char *path, \
+				    struct statfs *buf); }
+539	AUE_FSTATFS	STD	{ int fstatfs(int fd, struct statfs *buf); }
+540	AUE_FHSTATFS	STD	{ int fhstatfs(const struct fhandle *u_fhp, \
+				    struct statfs *buf); }
 ; Please copy any additions and changes to the following compatability tables:
 ; sys/compat/freebsd32/syscalls.master
