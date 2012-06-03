@@ -4116,14 +4116,8 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 #if defined(SCTP_WITH_NO_CSUM)
 				SCTP_STAT_INCR(sctps_sendnocrc);
 #else
-				if (!(SCTP_BASE_SYSCTL(sctp_no_csum_on_loopback) &&
-				    (stcb) &&
-				    (stcb->asoc.loopback_scope))) {
-					sctphdr->checksum = sctp_calculate_cksum(m, sizeof(struct ip) + sizeof(struct udphdr));
-					SCTP_STAT_INCR(sctps_sendswcrc);
-				} else {
-					SCTP_STAT_INCR(sctps_sendnocrc);
-				}
+				sctphdr->checksum = sctp_calculate_cksum(m, sizeof(struct ip) + sizeof(struct udphdr));
+				SCTP_STAT_INCR(sctps_sendswcrc);
 #endif
 				if (V_udp_cksum) {
 					SCTP_ENABLE_UDP_CSUM(o_pak);
@@ -4474,14 +4468,8 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 #if defined(SCTP_WITH_NO_CSUM)
 				SCTP_STAT_INCR(sctps_sendnocrc);
 #else
-				if (!(SCTP_BASE_SYSCTL(sctp_no_csum_on_loopback) &&
-				    (stcb) &&
-				    (stcb->asoc.loopback_scope))) {
-					sctphdr->checksum = sctp_calculate_cksum(m, sizeof(struct ip6_hdr) + sizeof(struct udphdr));
-					SCTP_STAT_INCR(sctps_sendswcrc);
-				} else {
-					SCTP_STAT_INCR(sctps_sendnocrc);
-				}
+				sctphdr->checksum = sctp_calculate_cksum(m, sizeof(struct ip6_hdr) + sizeof(struct udphdr));
+				SCTP_STAT_INCR(sctps_sendswcrc);
 #endif
 				if ((udp->uh_sum = in6_cksum(o_pak, IPPROTO_UDP, sizeof(struct ip6_hdr), packet_length - sizeof(struct ip6_hdr))) == 0) {
 					udp->uh_sum = 0xffff;
@@ -4490,7 +4478,7 @@ sctp_lowlevel_chunk_output(struct sctp_inpcb *inp,
 #if defined(SCTP_WITH_NO_CSUM)
 				SCTP_STAT_INCR(sctps_sendnocrc);
 #else
-				m->m_pkthdr.csum_flags = CSUM_SCTP;
+				m->m_pkthdr.csum_flags = CSUM_SCTP_IPV6;
 				m->m_pkthdr.csum_data = 0;
 				SCTP_STAT_INCR(sctps_sendhwcrc);
 #endif
@@ -10935,7 +10923,7 @@ sctp_send_shutdown_complete2(struct mbuf *m, struct sctphdr *sh,
 		iph_out->ip_tos = (u_char)0;
 		iph_out->ip_id = 0;
 		iph_out->ip_off = 0;
-		iph_out->ip_ttl = MAXTTL;
+		iph_out->ip_ttl = MODULE_GLOBAL(ip_defttl);
 		if (port) {
 			iph_out->ip_p = IPPROTO_UDP;
 		} else {
@@ -11059,11 +11047,8 @@ sctp_send_shutdown_complete2(struct mbuf *m, struct sctphdr *sh,
 #endif
 #ifdef INET6
 	if (ip6_out != NULL) {
-		struct route_in6 ro;
 		int ret;
-		struct ifnet *ifp = NULL;
 
-		bzero(&ro, sizeof(ro));
 		mlen = SCTP_BUF_LEN(mout);
 #ifdef  SCTP_PACKET_LOGGING
 		if (SCTP_BASE_SYSCTL(sctp_logging_level) & SCTP_LAST_PACKET_TRACING)
@@ -11084,16 +11069,12 @@ sctp_send_shutdown_complete2(struct mbuf *m, struct sctphdr *sh,
 #if defined(SCTP_WITH_NO_CSUM)
 			SCTP_STAT_INCR(sctps_sendnocrc);
 #else
-			mout->m_pkthdr.csum_flags = CSUM_SCTP;
+			mout->m_pkthdr.csum_flags = CSUM_SCTP_IPV6;
 			mout->m_pkthdr.csum_data = 0;
 			SCTP_STAT_INCR(sctps_sendhwcrc);
 #endif
 		}
-		SCTP_IP6_OUTPUT(ret, o_pak, &ro, &ifp, NULL, vrf_id);
-
-		/* Free the route if we got one back */
-		if (ro.ro_rt)
-			RTFREE(ro.ro_rt);
+		SCTP_IP6_OUTPUT(ret, o_pak, NULL, NULL, NULL, vrf_id);
 	}
 #endif
 	SCTP_STAT_INCR(sctps_sendpackets);
@@ -12011,7 +11992,7 @@ sctp_send_abort(struct mbuf *m, int iphlen, struct sctphdr *sh, uint32_t vtag,
 		iph_out->ip_tos = (u_char)0;
 		iph_out->ip_id = 0;
 		iph_out->ip_off = 0;
-		iph_out->ip_ttl = MAXTTL;
+		iph_out->ip_ttl = MODULE_GLOBAL(ip_defttl);
 		if (port) {
 			iph_out->ip_p = IPPROTO_UDP;
 		} else {
@@ -12160,12 +12141,8 @@ sctp_send_abort(struct mbuf *m, int iphlen, struct sctphdr *sh, uint32_t vtag,
 #endif
 #ifdef INET6
 	if (ip6_out != NULL) {
-		struct route_in6 ro;
 		int ret;
-		struct ifnet *ifp = NULL;
 
-		/* zap the stack pointer to the route */
-		bzero(&ro, sizeof(ro));
 		if (port) {
 			udp->uh_ulen = htons(len - sizeof(struct ip6_hdr));
 		}
@@ -12191,16 +12168,12 @@ sctp_send_abort(struct mbuf *m, int iphlen, struct sctphdr *sh, uint32_t vtag,
 #if defined(SCTP_WITH_NO_CSUM)
 			SCTP_STAT_INCR(sctps_sendnocrc);
 #else
-			mout->m_pkthdr.csum_flags = CSUM_SCTP;
+			mout->m_pkthdr.csum_flags = CSUM_SCTP_IPV6;
 			mout->m_pkthdr.csum_data = 0;
 			SCTP_STAT_INCR(sctps_sendhwcrc);
 #endif
 		}
-		SCTP_IP6_OUTPUT(ret, o_pak, &ro, &ifp, NULL, vrf_id);
-
-		/* Free the route if we got one back */
-		if (ro.ro_rt)
-			RTFREE(ro.ro_rt);
+		SCTP_IP6_OUTPUT(ret, o_pak, NULL, NULL, NULL, vrf_id);
 	}
 #endif
 	SCTP_STAT_INCR(sctps_sendpackets);
@@ -12282,7 +12255,7 @@ sctp_send_operr_to(struct mbuf *m, int iphlen, struct mbuf *scm, uint32_t vtag,
 		iph_out->ip_tos = (u_char)0;
 		iph_out->ip_id = 0;
 		iph_out->ip_off = 0;
-		iph_out->ip_ttl = MAXTTL;
+		iph_out->ip_ttl = MODULE_GLOBAL(ip_defttl);
 		if (port) {
 			iph_out->ip_p = IPPROTO_UDP;
 		} else {
@@ -12426,12 +12399,8 @@ sctp_send_operr_to(struct mbuf *m, int iphlen, struct mbuf *scm, uint32_t vtag,
 #endif
 #ifdef INET6
 	if (ip6_out != NULL) {
-		struct route_in6 ro;
 		int ret;
-		struct ifnet *ifp = NULL;
 
-		/* zap the stack pointer to the route */
-		bzero(&ro, sizeof(ro));
 		if (port) {
 			udp->uh_ulen = htons(len - sizeof(struct ip6_hdr));
 		}
@@ -12455,16 +12424,12 @@ sctp_send_operr_to(struct mbuf *m, int iphlen, struct mbuf *scm, uint32_t vtag,
 #if defined(SCTP_WITH_NO_CSUM)
 			SCTP_STAT_INCR(sctps_sendnocrc);
 #else
-			mout->m_pkthdr.csum_flags = CSUM_SCTP;
+			mout->m_pkthdr.csum_flags = CSUM_SCTP_IPV6;
 			mout->m_pkthdr.csum_data = 0;
 			SCTP_STAT_INCR(sctps_sendhwcrc);
 #endif
 		}
-		SCTP_IP6_OUTPUT(ret, o_pak, &ro, &ifp, NULL, vrf_id);
-
-		/* Free the route if we got one back */
-		if (ro.ro_rt)
-			RTFREE(ro.ro_rt);
+		SCTP_IP6_OUTPUT(ret, o_pak, NULL, NULL, NULL, vrf_id);
 	}
 #endif
 	SCTP_STAT_INCR(sctps_sendpackets);

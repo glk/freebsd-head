@@ -134,7 +134,9 @@ cam/scsi/scsi_low_pisa.c	optional ct | ncv | nsp | stg
 cam/scsi/scsi_pass.c		optional pass
 cam/scsi/scsi_pt.c		optional pt
 cam/scsi/scsi_sa.c		optional sa
-cam/scsi/scsi_ses.c		optional ses
+cam/scsi/scsi_enc.c		optional ses
+cam/scsi/scsi_enc_ses.c		optional ses
+cam/scsi/scsi_enc_safte.c	optional ses
 cam/scsi/scsi_sg.c		optional sg
 cam/scsi/scsi_targ_bh.c		optional targbh
 cam/scsi/scsi_target.c		optional targ
@@ -1522,7 +1524,7 @@ dev/ixgb/if_ixgb.c		optional ixgb
 dev/ixgb/ixgb_ee.c		optional ixgb
 dev/ixgb/ixgb_hw.c		optional ixgb
 dev/ixgbe/ixgbe.c		optional ixgbe inet \
-	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
+	compile-with "${NORMAL_C} -I$S/dev/ixgbe -DSMP -DIXGBE_FDIR"
 dev/ixgbe/ixv.c			optional ixgbe inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
 dev/ixgbe/ixgbe_phy.c		optional ixgbe inet \
@@ -2561,6 +2563,7 @@ kern/kern_priv.c		standard
 kern/kern_proc.c		standard
 kern/kern_prot.c		standard
 kern/kern_racct.c		standard
+kern/kern_rangelock.c		standard
 kern/kern_rctl.c		standard
 kern/kern_resource.c		standard
 kern/kern_rmlock.c		standard

@@ -238,7 +238,6 @@ struct ath_buf {
 		int bfs_txpower;	/* tx power */
 		int bfs_txantenna;	/* TX antenna config */
 		enum ieee80211_protmode bfs_protmode;
-		HAL_11N_RATE_SERIES bfs_rc11n[ATH_RC_NUM];	/* 11n TX series */
 		int bfs_ctsrate;	/* CTS rate */
 		int bfs_ctsduration;	/* CTS duration (pre-11n NICs) */
 		struct ath_rc_series bfs_rc[ATH_RC_NUM];	/* non-11n TX series */
@@ -994,6 +993,14 @@ void	ath_intr(void *);
 	((*(_ah)->ah_gpioGet)((_ah), (_gpio)))
 #define	ath_hal_gpiosetintr(_ah, _gpio, _b) \
 	((*(_ah)->ah_gpioSetIntr)((_ah), (_gpio), (_b)))
+
+/*
+ * PCIe suspend/resume/poweron/poweroff related macros
+ */
+#define	ath_hal_enablepcie(_ah, _restore, _poweroff) \
+	((*(_ah)->ah_configPCIE)((_ah), (_restore), (_poweroff)))
+#define	ath_hal_disablepcie(_ah) \
+	((*(_ah)->ah_disablePCIE)((_ah)))
 
 /*
  * This is badly-named; you need to set the correct parameters
