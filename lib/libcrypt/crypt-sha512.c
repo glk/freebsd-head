@@ -58,6 +58,8 @@ static const char sha512_rounds_prefix[] = "rounds=";
 #define ROUNDS_MIN 1000
 /* Maximum number of rounds. */
 #define ROUNDS_MAX 999999999
+/* Random number of rounds increment, set 0 to disable. */
+#define ROUNDS_INCRANDOM (ROUNDS_DEFAULT / 10)
 
 static char *
 crypt_sha512_r(const char *key, const char *salt, char *buffer, int buflen)
@@ -69,7 +71,7 @@ crypt_sha512_r(const char *key, const char *salt, char *buffer, int buflen)
 	size_t salt_len, key_len, cnt, rounds;
 	char *cp, *copied_key, *copied_salt, *p_bytes, *s_bytes, *endp;
 	const char *num;
-	bool rounds_custom;
+	bool rounds_custom, has_salt_prefix;
 
 	copied_key = NULL;
 	copied_salt = NULL;
@@ -80,9 +82,12 @@ crypt_sha512_r(const char *key, const char *salt, char *buffer, int buflen)
 
 	/* Find beginning of salt string. The prefix should normally always
 	 * be present. Just in case it is not. */
-	if (strncmp(sha512_salt_prefix, salt, sizeof(sha512_salt_prefix) - 1) == 0)
+	if (strncmp(sha512_salt_prefix, salt, sizeof(sha512_salt_prefix) - 1)
+	    == 0) {
 		/* Skip salt prefix. */
 		salt += sizeof(sha512_salt_prefix) - 1;
+		has_salt_prefix = true;
+	}
 
 	if (strncmp(salt, sha512_rounds_prefix, sizeof(sha512_rounds_prefix) - 1)
 	    == 0) {
@@ -94,6 +99,9 @@ crypt_sha512_r(const char *key, const char *salt, char *buffer, int buflen)
 			rounds = MAX(ROUNDS_MIN, MIN(srounds, ROUNDS_MAX));
 			rounds_custom = true;
 		}
+	} else if (!has_salt_prefix && ROUNDS_INCRANDOM != 0) {
+			rounds += arc4random() % ROUNDS_INCRANDOM;
+			rounds_custom = true;
 	}
 
 	salt_len = MIN(strcspn(salt, "$"), SALT_LEN_MAX);
