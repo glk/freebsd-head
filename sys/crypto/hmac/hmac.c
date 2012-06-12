@@ -42,8 +42,8 @@ __FBSDID("$FreeBSD$");
 #include <crypto/hmac/hmac.h>
 
 #ifndef _KERNEL
-#define	panic(fmt, ...)	do {						\
-	fprintf(stderr, fmt, ## __VA_ARGS__);				\
+#define	panic(...)	do {						\
+	fprintf(stderr, __VA_ARGS__);					\
 	abort();							\
 } while (0)
 #endif
@@ -125,14 +125,12 @@ hmac_init(struct hmac_ctx *ctx, int algo, const uint8_t *hkey, size_t hkeylen)
 	/* Perform inner SHA512. */
 	hash->init(&ctx->hash_ctx);
 	/* XOR key ipad value. */
-	for (i = 0; i < hash->block_len; i++) {
+	for (i = 0; i < hash->block_len; i++)
 		ctx->k_opad[i] ^= 0x36;
-	}
 	hash->update(&ctx->hash_ctx, ctx->k_opad, hash->block_len);
 	/* XOR key opad value. */
-	for (i = 0; i < hash->block_len; i++) {
+	for (i = 0; i < hash->block_len; i++)
 		ctx->k_opad[i] ^= 0x36 ^ 0x5c;
-	}
 }
 
 void
@@ -150,7 +148,7 @@ hmac_final(struct hmac_ctx *ctx, uint8_t *md, size_t mdsize)
 	u_char digest[HMAC_DIGEST_LENGTH_MAX];
 
 	if (mdsize == 0 || mdsize > hash->digest_len) {
-		panic("HMAC: invalid digest buffer size: %zd (digest length %d).",
+		panic("HMAC: invalid digest buffer size: %zu (digest length %u).",
 		    mdsize, hash->digest_len);
 		return;
 	}
