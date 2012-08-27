@@ -39,6 +39,9 @@
 #define	SORT_HEAPSORT	3
 #define	SORT_RADIXSORT  4
 
+#define DEFAULT_SORT_ALGORITHM SORT_HEAPSORT
+#define DEFAULT_SORT_FUNC heapsort
+
 /*
  * List of data to be sorted.
  */
@@ -83,6 +86,9 @@ struct file0_reader
 
 extern unsigned long long free_memory;
 extern unsigned long long available_free_memory;
+
+/* Are we using mmap ? */
+extern bool use_mmap;
 
 /* temporary file dir */
 

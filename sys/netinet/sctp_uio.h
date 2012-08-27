@@ -523,10 +523,10 @@ union sctp_notification {
 	struct sctp_pdapi_event sn_pdapi_event;
 	struct sctp_authkey_event sn_auth_event;
 	struct sctp_sender_dry_event sn_sender_dry_event;
+	struct sctp_send_failed_event sn_send_failed_event;
 	struct sctp_stream_reset_event sn_strreset_event;
 	struct sctp_assoc_reset_event sn_assocreset_event;
 	struct sctp_stream_change_event sn_strchange_event;
-
 };
 
 /* notification types */
@@ -1124,12 +1124,8 @@ struct sctpstat {
 #define SCTP_STAT_DECR_GAUGE32(_x) SCTP_STAT_DECR(_x)
 
 union sctp_sockstore {
-#if defined(INET) || !defined(_KERNEL)
 	struct sockaddr_in sin;
-#endif
-#if defined(INET6) || !defined(_KERNEL)
 	struct sockaddr_in6 sin6;
-#endif
 	struct sockaddr sa;
 };
 

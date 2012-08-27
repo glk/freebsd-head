@@ -5,7 +5,8 @@
 # Modules that include binary-only blobs of microcode should be selectable by
 # MK_SOURCELESS_UCODE option (see below).
 
-SUBDIR=	${_3dfx} \
+SUBDIR=	\
+	${_3dfx} \
 	${_3dfx_linux} \
 	${_aac} \
 	accf_data \
@@ -71,6 +72,7 @@ SUBDIR=	${_3dfx} \
 	${_coff} \
 	${_coretemp} \
 	${_cp} \
+	${_cpsw} \
 	${_cpuctl} \
 	${_cpufreq} \
 	${_crypto} \
@@ -105,6 +107,7 @@ SUBDIR=	${_3dfx} \
 	fdc \
 	fdescfs \
 	${_fe} \
+	filemon \
 	firewire \
 	firmware \
 	${_fxp} \
@@ -313,6 +316,7 @@ SUBDIR=	${_3dfx} \
 	${_ti} \
 	tl \
 	tmpfs \
+	${_toecore} \
 	${_tpm} \
 	trm \
 	${_twa} \
@@ -339,6 +343,7 @@ SUBDIR=	${_3dfx} \
 	vx \
 	${_vxge} \
 	wb \
+	${_wbwd} \
 	${_wi} \
 	wlan \
 	wlan_acl \
@@ -386,6 +391,7 @@ _random=	random
 .if (${MK_INET_SUPPORT} != "no" || ${MK_INET6_SUPPORT} != "no") || \
 	defined(ALL_MODULES)
 _carp=	carp
+_toecore=	toecore
 .endif
 
 .if ${MK_INET_SUPPORT} != "no" || defined(ALL_MODULES)
@@ -522,6 +528,7 @@ _stg=		stg
 _streams=	streams
 _svr4=		svr4
 _vxge=  	vxge
+_wbwd=		wbwd
 _wi=		wi
 _xe=		xe
 .if ${MK_ZFS} != "no" || defined(ALL_MODULES)
@@ -717,6 +724,7 @@ _viawd=		viawd
 _virtio=	virtio
 _vxge=  	vxge
 _x86bios=	x86bios
+_wbwd=		wbwd
 _wi=		wi
 _wpi=		wpi
 .if ${MK_SOURCELESS_UCODE} != "no"
@@ -729,6 +737,7 @@ _zfs=		zfs
 
 .if ${MACHINE_CPUARCH} == "arm"
 _cfi=		cfi
+_cpsw=		cpsw
 .endif
 
 .if ${MACHINE_CPUARCH} == "ia64"

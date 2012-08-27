@@ -77,6 +77,7 @@ __FBSDID("$FreeBSD$");
 #endif
 
 #include <vm/vm.h>
+#include <vm/vm_param.h>
 #include <vm/vm_extern.h>
 #include <vm/pmap.h>
 #include <vm/vm_map.h>
@@ -724,9 +725,7 @@ sess_release(struct session *s)
 	}
 }
 
-#include "opt_ddb.h"
 #ifdef DDB
-#include <ddb/ddb.h>
 
 DB_SHOW_COMMAND(pgrpdump, pgrpdump)
 {
@@ -1136,6 +1135,7 @@ freebsd32_kinfo_proc_out(const struct kinfo_proc *ki, struct kinfo_proc32 *ki32)
 	CP(*ki, *ki32, ki_estcpu);
 	CP(*ki, *ki32, ki_slptime);
 	CP(*ki, *ki32, ki_swtime);
+	CP(*ki, *ki32, ki_cow);
 	CP(*ki, *ki32, ki_runtime);
 	TV_CP(*ki, *ki32, ki_start);
 	TV_CP(*ki, *ki32, ki_childtime);
@@ -2188,6 +2188,10 @@ sysctl_kern_proc_vmmap(SYSCTL_HANDLER_ARGS)
 			kve->kve_flags |= KVME_FLAG_NEEDS_COPY;
 		if (entry->eflags & MAP_ENTRY_NOCOREDUMP)
 			kve->kve_flags |= KVME_FLAG_NOCOREDUMP;
+		if (entry->eflags & MAP_ENTRY_GROWS_UP)
+			kve->kve_flags |= KVME_FLAG_GROWS_UP;
+		if (entry->eflags & MAP_ENTRY_GROWS_DOWN)
+			kve->kve_flags |= KVME_FLAG_GROWS_DOWN;
 
 		last_timestamp = map->timestamp;
 		vm_map_unlock_read(map);

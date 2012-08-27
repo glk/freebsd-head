@@ -39,6 +39,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/lock.h>
 #include <sys/mutex.h>
 #include <sys/proc.h>
+#include <sys/rangelock.h>
 #include <sys/resourcevar.h>
 #include <sys/sdt.h>
 #include <sys/smp.h>
@@ -205,6 +206,7 @@ thread_init(void *mem, int size, int flags)
 
 	td->td_sleepqueue = sleepq_alloc();
 	td->td_turnstile = turnstile_alloc();
+	td->td_rlqe = NULL;
 	EVENTHANDLER_INVOKE(thread_init, td);
 	td->td_sched = (struct td_sched *)&td[1];
 	umtx_thread_init(td);
@@ -222,6 +224,7 @@ thread_fini(void *mem, int size)
 
 	td = (struct thread *)mem;
 	EVENTHANDLER_INVOKE(thread_fini, td);
+	rlqentry_free(td->td_rlqe);
 	turnstile_free(td->td_turnstile);
 	sleepq_free(td->td_sleepqueue);
 	umtx_thread_fini(td);
@@ -266,7 +269,11 @@ threadinit(void)
 {
 
 	mtx_init(&tid_lock, "TID lock", NULL, MTX_DEF);
-	/* leave one number for thread0 */
+
+	/*
+	 * pid_max cannot be greater than PID_MAX.
+	 * leave one number for thread0.
+	 */
 	tid_unrhdr = new_unrhdr(PID_MAX + 2, INT_MAX, &tid_lock);
 
 	thread_zone = uma_zcreate("THREAD", sched_sizeof_thread(),

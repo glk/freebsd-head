@@ -41,8 +41,6 @@
 
 #define	VERSION	"2.3-FreeBSD"
 
-#define	UNUSED_ARG(A) do { A=A; } while(0)
-
 #ifdef WITHOUT_NLS
 #define	getstr(n)	 nlsstr[n]
 #else
@@ -55,6 +53,7 @@ extern nl_catd catalog;
 extern const char *nlsstr[];
 
 #if defined(SORT_THREADS)
+#define MT_SORT_THRESHOLD (10000)
 extern size_t ncpu;
 extern size_t nthreads;
 #endif

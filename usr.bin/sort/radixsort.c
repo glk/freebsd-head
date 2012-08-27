@@ -45,6 +45,8 @@ __FBSDID("$FreeBSD$");
 #include "coll.h"
 #include "radixsort.h"
 
+#define DEFAULT_SORT_FUNC_RADIXSORT mergesort
+
 #define TINY_NODE(sl) ((sl)->tosort_num < 65)
 #define SMALL_NODE(sl) ((sl)->tosort_num < 5)
 
@@ -349,7 +351,7 @@ run_sort_level_next(struct sort_level *sl)
 					/* NOTREACHED */
 					err(2, "Radix sort error 3");
 			} else
-				qsort(sl->leaves, sl->leaves_num,
+				DEFAULT_SORT_FUNC_RADIXSORT(sl->leaves, sl->leaves_num,
 				    sizeof(struct sort_list_item *),
 				    (int(*)(const void *, const void *)) func);
 
@@ -389,12 +391,12 @@ run_sort_level_next(struct sort_level *sl)
 				    sizeof(struct sort_list_item *),
 				    (int(*)(const void *, const void *)) list_coll);
 			} else {
-				qsort(sl->leaves, sl->leaves_num,
+				DEFAULT_SORT_FUNC_RADIXSORT(sl->leaves, sl->leaves_num,
 				    sizeof(struct sort_list_item *),
 				    (int(*)(const void *, const void *)) list_coll);
 			}
 		} else if (!sort_opts_vals.sflag && sort_opts_vals.complex_sort) {
-			qsort(sl->leaves, sl->leaves_num,
+			DEFAULT_SORT_FUNC_RADIXSORT(sl->leaves, sl->leaves_num,
 			    sizeof(struct sort_list_item *),
 			    (int(*)(const void *, const void *)) list_coll_by_str_only);
 		}
@@ -541,12 +543,12 @@ run_top_sort_level(struct sort_level *sl)
 				    sizeof(struct sort_list_item *),
 				    (int(*)(const void *, const void *)) list_coll);
 			} else {
-				qsort(sl->leaves, sl->leaves_num,
+				DEFAULT_SORT_FUNC_RADIXSORT(sl->leaves, sl->leaves_num,
 				    sizeof(struct sort_list_item *),
 				    (int(*)(const void *, const void *)) list_coll);
 			}
 		} else if (!sort_opts_vals.sflag && sort_opts_vals.complex_sort) {
-			qsort(sl->leaves, sl->leaves_num,
+			DEFAULT_SORT_FUNC_RADIXSORT(sl->leaves, sl->leaves_num,
 			    sizeof(struct sort_list_item *),
 			    (int(*)(const void *, const void *)) list_coll_by_str_only);
 		}
@@ -609,7 +611,17 @@ run_top_sort_level(struct sort_level *sl)
 			pthread_attr_setdetachstate(&attr,
 			    PTHREAD_DETACHED);
 
-			pthread_create(&pth, &attr, sort_thread, NULL);
+			for (;;) {
+				int res = pthread_create(&pth, &attr,
+				    sort_thread, NULL);
+				if (res >= 0)
+					break;
+				if (errno == EAGAIN) {
+					pthread_yield();
+					continue;
+				}
+				err(2, NULL);
+			}
 
 			pthread_attr_destroy(&attr);
 		}
@@ -626,6 +638,10 @@ run_sort(struct sort_list_item **base, size_t nmemb)
 	struct sort_level *sl;
 
 #if defined(SORT_THREADS)
+	size_t nthreads_save = nthreads;
+	if (nmemb < MT_SORT_THRESHOLD)
+		nthreads = 1;
+
 	if (nthreads > 1) {
 		pthread_mutexattr_t mattr;
 
@@ -663,6 +679,7 @@ run_sort(struct sort_list_item **base, size_t nmemb)
 		pthread_mutex_destroy(&g_ls_mutex);
 		pthread_mutex_destroy(&sort_left_mutex);
 	}
+	nthreads = nthreads_save;
 #endif
 }
 
