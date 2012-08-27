@@ -57,6 +57,7 @@ avilla [label="Alberto Villa\navilla@FreeBSD.org\n2010/01/24"]
 avl [label="Alexander Logvinov\navl@FreeBSD.org\n2009/05/27"]
 az [label="Andrej Zverev\naz@FreeBSD.org\n2005/10/03"]
 bapt [label="Baptiste Daroussin\nbapt@FreeBSD.org\n2010/07/27"]
+bdrewery [label="Bryan Drewery\nbdrewery@FreeBSD.org\n2012/07/31"]
 beat [label="Beat Gaetzi\nbeat@FreeBSD.org\n2009/01/28"]
 beech [label="Beech Rintoul\nbeech@FreeBSD.org\n2007/05/30"]
 bf [label="Brendan Fabeny\nbf@FreeBSD.org\n2010/06/02"]
@@ -93,6 +94,7 @@ gabor [label="Gabor Kovesdan\ngabor@FreeBSD.org\n2006/12/05"]
 gahr [label="Pietro Cerutti\ngahr@FreeBSD.org\n2008/02/20"]
 garga [label="Renato Botelho\ngarga@FreeBSD.org\n2005/07/11"]
 gerald [label="Gerald Pfeifer\ngerald@FreeBSD.org\n2002/04/03"]
+gjb [label="Glen Barber\ngjb@FreeBSD.org\n2012/06/19"]
 glarkin [label="Greg Larkin\nglarkin@FreeBSD.org\n2008/07/17"]
 glewis [label="Greg Lewis\nglewis@FreeBSD.org\n2002/04/08"]
 hq [label="Herve Quiroz\nhq@FreeBSD.org\n2004/08/05"]
@@ -197,6 +199,7 @@ wen [label="Wen Heping\nwen@FreeBSD.org\n2010/12/13"]
 wxs [label="Wesley Shields\nwxs@FreeBSD.org\n2008/01/03"]
 xride [label="Soeren Straarup\nxride@FreeBSD.org\n2006/09/27"]
 yzlin [label="Yi-Jheng Lin\nyzlin@FreeBSD.org\n2009/07/19"]
+zeising [label="Niclas Zeising\nzeising@FreeBSD.org\n2012/07/03"]
 zi [label="Ryan Steinmetz\nzi@FreeBSD.org\n2011/07/14"]
 znerd [label="Ernst de Haan\nznerd@FreeBSD.org\n2001/11/15"]
 
@@ -224,6 +227,7 @@ asami -> obrien
 
 avilla -> rakuco
 
+bapt -> bdrewery
 bapt -> eadler
 bapt -> jlaffaye
 
@@ -245,6 +249,7 @@ clement -> lawrance
 clsung -> lwhsu
 clsung -> tabthorpe
 
+crees -> gjb
 crees -> jgh
 crees -> madpilot
 
@@ -260,6 +265,8 @@ delphij -> rafan
 demon -> mat
 
 eadler -> ak
+eadler -> bdrewery
+eadler -> gjb
 eadler -> tj
 
 edwin -> cperciva
@@ -342,6 +349,7 @@ krion -> sem
 krion -> sergei
 
 kwm -> jsa
+kwm -> zeising
 
 lawrance -> itetcu
 
@@ -390,6 +398,7 @@ miwi -> sylvio
 miwi -> tabthorpe
 miwi -> trasz
 miwi -> wen
+miwi -> zeising
 
 mnag -> jmelo
 

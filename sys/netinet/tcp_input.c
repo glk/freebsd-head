@@ -105,6 +105,9 @@ __FBSDID("$FreeBSD$");
 #ifdef TCPDEBUG
 #include <netinet/tcp_debug.h>
 #endif /* TCPDEBUG */
+#ifdef TCP_OFFLOAD
+#include <netinet/tcp_offload.h>
+#endif
 
 #ifdef IPSEC
 #include <netipsec/ipsec.h>
@@ -512,6 +515,8 @@ tcp6_input(struct mbuf **mp, int *offp, int proto)
 			    (caddr_t)&ip6->ip6_dst - (caddr_t)ip6);
 		return IPPROTO_DONE;
 	}
+	if (ia6)
+		ifa_free(&ia6->ia_ifa);
 
 	tcp_input(m, *offp);
 	return IPPROTO_DONE;
@@ -904,7 +909,7 @@ findpcb:
 	/*
 	 * A previous connection in TIMEWAIT state is supposed to catch stray
 	 * or duplicate segments arriving late.  If this segment was a
-	 * legitimate new connection attempt the old INPCB gets removed and
+	 * legitimate new connection attempt, the old INPCB gets removed and
 	 * we can try again to find a listening socket.
 	 *
 	 * At this point, due to earlier optimism, we may hold only an inpcb
@@ -955,6 +960,14 @@ relocked:
 		rstreason = BANDLIM_RST_CLOSEDPORT;
 		goto dropwithreset;
 	}
+
+#ifdef TCP_OFFLOAD
+	if (tp->t_flags & TF_TOE) {
+		tcp_offload_input(tp, m);
+		m = NULL;	/* consumed by the TOE driver */
+		goto dropunlock;
+	}
+#endif
 
 	/*
 	 * We've identified a valid inpcb, but it could be that we need an
@@ -1240,7 +1253,8 @@ relocked:
 				rstreason = BANDLIM_RST_OPENPORT;
 				goto dropwithreset;
 			}
-			ifa_free(&ia6->ia_ifa);
+			if (ia6)
+				ifa_free(&ia6->ia_ifa);
 		}
 #endif /* INET6 */
 		/*
@@ -1317,7 +1331,7 @@ relocked:
 			    (void *)tcp_saveipgen, &tcp_savetcp, 0);
 #endif
 		tcp_dooptions(&to, optp, optlen, TO_SYN);
-		syncache_add(&inc, &to, th, inp, &so, m);
+		syncache_add(&inc, &to, th, inp, &so, m, NULL, NULL);
 		/*
 		 * Entry added to syncache and mbuf consumed.
 		 * Everything already unlocked by syncache_add().
@@ -1424,15 +1438,8 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	/*
 	 * If this is either a state-changing packet or current state isn't
 	 * established, we require a write lock on tcbinfo.  Otherwise, we
-	 * allow either a read lock or a write lock, as we may have acquired
-	 * a write lock due to a race.
-	 *
-	 * Require a global write lock for SYN/FIN/RST segments or
-	 * non-established connections; otherwise accept either a read or
-	 * write lock, as we may have conservatively acquired a write lock in
-	 * certain cases in tcp_input() (is this still true?).  Currently we
-	 * will never enter with no lock, so we try to drop it quickly in the
-	 * common pure ack/pure data cases.
+	 * allow the tcbinfo to be in either alocked or unlocked, as the
+	 * caller may have unnecessarily acquired a write lock due to a race.
 	 */
 	if ((thflags & (TH_SYN | TH_FIN | TH_RST)) != 0 ||
 	    tp->t_state != TCPS_ESTABLISHED) {
@@ -2407,6 +2414,16 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 						}
 					} else
 						tp->snd_cwnd += tp->t_maxseg;
+					if ((thflags & TH_FIN) &&
+					    (TCPS_HAVERCVDFIN(tp->t_state) == 0)) {
+						/* 
+						 * If its a fin we need to process
+						 * it to avoid a race where both
+						 * sides enter FIN-WAIT and send FIN|ACK
+						 * at the same time.
+						 */
+						break;
+					}
 					(void) tcp_output(tp);
 					goto drop;
 				} else if (tp->t_dupacks == tcprexmtthresh) {
@@ -2446,6 +2463,16 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 					}
 					tp->snd_nxt = th->th_ack;
 					tp->snd_cwnd = tp->t_maxseg;
+					if ((thflags & TH_FIN) &&
+					    (TCPS_HAVERCVDFIN(tp->t_state) == 0)) {
+						/* 
+						 * If its a fin we need to process
+						 * it to avoid a race where both
+						 * sides enter FIN-WAIT and send FIN|ACK
+						 * at the same time.
+						 */
+						break;
+					}
 					(void) tcp_output(tp);
 					KASSERT(tp->snd_limited <= 2,
 					    ("%s: tp->snd_limited too big",
@@ -2472,6 +2499,16 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 					    (tp->snd_nxt - tp->snd_una) +
 					    (tp->t_dupacks - tp->snd_limited) *
 					    tp->t_maxseg;
+					if ((thflags & TH_FIN) &&
+					    (TCPS_HAVERCVDFIN(tp->t_state) == 0)) {
+						/* 
+						 * If its a fin we need to process
+						 * it to avoid a race where both
+						 * sides enter FIN-WAIT and send FIN|ACK
+						 * at the same time.
+						 */
+						break;
+					}
 					(void) tcp_output(tp);
 					sent = tp->snd_max - oldsndmax;
 					if (sent > tp->t_maxseg) {
