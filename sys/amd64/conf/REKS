@@ -28,9 +28,7 @@ options 	NFSCL			# New Network Filesystem Client
 options 	NFSD			# New Network Filesystem Server
 options 	NFSLOCKD		# Network Lock Manager
 #options 	NFS_ROOT		# NFS usable as /, requires NFSCLIENT
-options         SMBFS                   #SMB/CIFS filesystem
 options 	MSDOSFS			# MSDOS Filesystem
-options         NTFS                    #NT File System
 options 	CD9660			# ISO 9660 Filesystem
 options         UDF                     #Universal Disk Format
 options 	EXT2FS
@@ -40,7 +38,6 @@ options 	PSEUDOFS		# Pseudo-filesystem framework
 
 options         CD9660_ICONV
 options         MSDOSFS_ICONV
-options         NTFS_ICONV
 options         UDF_ICONV
 
 #options 	GEOM_BDE
@@ -95,8 +92,6 @@ options 	INVARIANT_SUPPORT	# Extra sanity checks of internal structures, require
 #options 	DEADLKRES
 
 options 	KTRACE			# ktrace(1) support
-
-options         NETSMB                  #SMB/CIFS requester
 
 options         LIBMCHAIN 		# mchain library. 
 options         LIBICONV
