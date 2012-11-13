@@ -457,14 +457,11 @@ static __inline void
 pefs_node_free(struct pefs_node *pn)
 {
 	struct vnode *lowervp;
-	int vfslocked;
 
 	lowervp = pn->pn_lowervp_dead;
 	uma_zfree(pefs_node_zone, pn);
 	if (lowervp != NULL) {
-		vfslocked = VFS_LOCK_GIANT(lowervp->v_mount);
 		vrele(lowervp);
-		VFS_UNLOCK_GIANT(vfslocked);
 	}
 }
 
