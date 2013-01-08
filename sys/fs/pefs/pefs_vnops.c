@@ -435,36 +435,31 @@ pefs_flushkey(struct mount *mp, struct thread *td, int flags,
 	int error;
 
 	vflush(mp, 0, 0, td);
-	MNT_ILOCK(mp);
 	rootvp = VFS_TO_PEFS(mp)->pm_rootvp;
 loop:
-	MNT_VNODE_FOREACH(vp, mp, mvp) {
-		if ((vp->v_type != VREG && vp->v_type != VDIR) || vp == rootvp)
+	MNT_VNODE_FOREACH_ACTIVE(vp, mp, mvp) {
+		if ((vp->v_type != VREG && vp->v_type != VDIR) ||
+		    vp == rootvp) {
+			VI_UNLOCK(vp);
 			continue;
-		VI_LOCK(vp);
-		pn = VP_TO_PN(vp);
-		if (((pn->pn_flags & PN_HASKEY) &&
-		    ((flags & PEFS_FLUSHKEY_ALL) ||
-		    pn->pn_tkey.ptk_key == pk)) ||
-		    ((pn->pn_flags & PN_HASKEY) == 0 && pk == NULL)) {
-			vholdl(vp);
-			MNT_IUNLOCK(mp);
-			error = vn_lock(vp, LK_INTERLOCK | LK_EXCLUSIVE);
-			if (error != 0) {
-				vdrop(vp);
-				MNT_ILOCK(mp);
-				MNT_VNODE_FOREACH_ABORT_ILOCKED(mp, mvp);
+		}
+		error = vget(vp, LK_EXCLUSIVE | LK_INTERLOCK, td);
+		if (error != 0) {
+			if (error == ENOENT) {
+				MNT_VNODE_FOREACH_ACTIVE_ABORT(mp, mvp);
 				goto loop;
 			}
-			PEFSDEBUG("pefs_flushkey: pk=%p, vp=%p\n", pk, vp);
+			continue;
+		}
+		pn = VP_TO_PN(vp);
+		if (((pn->pn_flags & PN_HASKEY) != 0 &&
+		    ((flags & PEFS_FLUSHKEY_ALL) != 0 ||
+		    pn->pn_tkey.ptk_key == pk)) ||
+		    ((pn->pn_flags & PN_HASKEY) == 0 && pk == NULL)) {
 			vgone(vp);
-			VOP_UNLOCK(vp, 0);
-			vdrop(vp);
-			MNT_ILOCK(mp);
-		} else
-			VI_UNLOCK(vp);
+		}
+		vput(vp);
 	}
-	MNT_IUNLOCK(mp);
 
 	cache_purgevfs(mp);
 	return (0);
