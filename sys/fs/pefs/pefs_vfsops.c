@@ -56,7 +56,7 @@ struct pefs_opt_descr {
 static const struct pefs_opt_descr pefs_opt_support[] = {
 	{
 		.fs = "zfs",
-		.initial = PM_DIRCACHE | PM_ASYNCRECLAIM,
+		.initial = PM_DIRCACHE,
 		.forbid = 0
 	},
 	{	/* default flags */
