@@ -46,6 +46,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/namei.h>
 #include <sys/priv.h>
+#include <sys/rwlock.h>
 #include <sys/sf_buf.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
@@ -1224,9 +1225,9 @@ pefs_inactive(struct vop_inactive_args *ap)
 			PEFSDEBUG("pefs_inactive: vobject has dirty pages: "
 			    "vp=%p count=%d\n",
 			    vp, vp->v_object->resident_page_count);
-		VM_OBJECT_LOCK(vp->v_object);
+		VM_OBJECT_WLOCK(vp->v_object);
 		vm_object_page_clean(vp->v_object, 0, 0, OBJPC_SYNC);
-		VM_OBJECT_UNLOCK(vp->v_object);
+		VM_OBJECT_WUNLOCK(vp->v_object);
 	}
 
 	if ((pn->pn_flags & PN_WANTRECYCLE) || (pn->pn_flags & PN_HASKEY) == 0)
@@ -1771,7 +1772,8 @@ pefs_ismapped(struct vnode *vp)
 	if (object == NULL)
 		return (0);
 
-	if (object->resident_page_count > 0 || object->cache != NULL)
+	if (object->resident_page_count > 0 ||
+	    !vm_object_cache_is_empty(object))
 		return (1);
 	return (0);
 }
@@ -1790,7 +1792,7 @@ pefs_readmapped(struct vnode *vp, struct uio *uio, ssize_t bsize,
 	moffset = uio->uio_offset & PEFS_SECTOR_MASK;
 	msize = bsize - moffset;
 
-	VM_OBJECT_LOCK(vp->v_object);
+	VM_OBJECT_WLOCK(vp->v_object);
 lookupvpg:
 	m = vm_page_lookup(vp->v_object,
 	    OFF_TO_IDX(uio->uio_offset));
@@ -1806,14 +1808,14 @@ lookupvpg:
 			goto lookupvpg;
 		}
 		vm_page_busy(m);
-		VM_OBJECT_UNLOCK(vp->v_object);
+		VM_OBJECT_WUNLOCK(vp->v_object);
 		PEFSDEBUG("pefs_read: mapped: "
 		    "offset=0x%jx moffset=0x%jx msize=0x%jx\n",
 		    uio->uio_offset, (intmax_t)moffset, (intmax_t)msize);
 		error = uiomove_fromphys(&m, moffset, msize, uio);
-		VM_OBJECT_LOCK(vp->v_object);
+		VM_OBJECT_WLOCK(vp->v_object);
 		vm_page_wakeup(m);
-		VM_OBJECT_UNLOCK(vp->v_object);
+		VM_OBJECT_WUNLOCK(vp->v_object);
 		if (error != 0) {
 			MPASS(error != EJUSTRETURN);
 			return (error);
@@ -1834,7 +1836,7 @@ lookupvpg:
 		vm_page_busy(m);
 		*mp = m;
 	}
-	VM_OBJECT_UNLOCK(vp->v_object);
+	VM_OBJECT_WUNLOCK(vp->v_object);
 	return (0);
 }
 
@@ -1953,15 +1955,15 @@ pefs_read_int(struct vnode *vp, struct uio *uio, int ioflag, struct ucred *cred,
 			uio->uio_resid -= done;
 			sf_buf_free(sf);
 			sched_unpin();
-			VM_OBJECT_LOCK(vp->v_object);
+			VM_OBJECT_WLOCK(vp->v_object);
 			vm_page_wakeup(m);
-			VM_OBJECT_UNLOCK(vp->v_object);
+			VM_OBJECT_WUNLOCK(vp->v_object);
 		}
 	}
 	if (nocopy != 0) {
-		VM_OBJECT_LOCK(vp->v_object);
+		VM_OBJECT_WLOCK(vp->v_object);
 		vm_page_wakeup(m);
-		VM_OBJECT_UNLOCK(vp->v_object);
+		VM_OBJECT_WUNLOCK(vp->v_object);
 	}
 	pefs_chunk_free(&pc, pn);
 
@@ -1982,7 +1984,7 @@ pefs_writemapped(struct vnode *vp, struct uio *uio,
 	MPASS(bsize <= PEFS_SECTOR_SIZE);
 	moffset = uio->uio_offset & PEFS_SECTOR_MASK;
 
-	VM_OBJECT_LOCK(vp->v_object);
+	VM_OBJECT_WLOCK(vp->v_object);
 lookupvpg:
 	idx = OFF_TO_IDX(uio->uio_offset);
 	m = vm_page_lookup(vp->v_object, idx);
@@ -1999,7 +2001,7 @@ lookupvpg:
 		}
 		vm_page_busy(m);
 		vm_page_undirty(m);
-		VM_OBJECT_UNLOCK(vp->v_object);
+		VM_OBJECT_WUNLOCK(vp->v_object);
 		PEFSDEBUG("pefs_write: mapped: "
 		    "offset=0x%jx moffset=0x%jx bsize=0x%zx\n",
 		    uio->uio_offset, (intmax_t)moffset, bsize);
@@ -2010,24 +2012,23 @@ lookupvpg:
 		memcpy(pagebuf, ma, bsize);
 		sf_buf_free(sf);
 		sched_unpin();
-		VM_OBJECT_LOCK(vp->v_object);
+		VM_OBJECT_WLOCK(vp->v_object);
 		vm_page_wakeup(m);
-		VM_OBJECT_UNLOCK(vp->v_object);
+		VM_OBJECT_WUNLOCK(vp->v_object);
 		if (error != 0) {
 			MPASS(error != EJUSTRETURN);
 			return (error);
 		}
 		return (EJUSTRETURN);
 	}
-	if (__predict_false(vp->v_object->cache != NULL)) {
+	if (vm_page_is_cached(vp->v_object, idx)) {
 		PEFSDEBUG("pefs_write: free cache: 0x%jx\n",
 		    uio->uio_offset - moffset);
-		vm_page_cache_free(vp->v_object, idx,
-		    idx + 1);
+		vm_page_cache_free(vp->v_object, idx, idx + 1);
 	}
 	MPASS(m == NULL ||
 	    !vm_page_is_valid(m, moffset, bsize - moffset));
-	VM_OBJECT_UNLOCK(vp->v_object);
+	VM_OBJECT_WUNLOCK(vp->v_object);
 	return (0);
 }
 
