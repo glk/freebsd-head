@@ -1,4 +1,4 @@
-/*	$NetBSD: var.c,v 1.171 2012/06/12 19:21:51 joerg Exp $	*/
+/*	$NetBSD: var.c,v 1.173 2013/02/24 19:43:37 christos Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,14 +69,14 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: var.c,v 1.171 2012/06/12 19:21:51 joerg Exp $";
+static char rcsid[] = "$NetBSD: var.c,v 1.173 2013/02/24 19:43:37 christos Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)var.c	8.3 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: var.c,v 1.171 2012/06/12 19:21:51 joerg Exp $");
+__RCSID("$NetBSD: var.c,v 1.173 2013/02/24 19:43:37 christos Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -309,7 +309,6 @@ static char *VarGetPattern(GNode *, Var_Parse_State *,
 			   int, const char **, int, int *, int *,
 			   VarPattern *);
 static char *VarQuote(char *);
-static char *VarChangeCase(char *, int);
 static char *VarHash(char *);
 static char *VarModify(GNode *, Var_Parse_State *,
     const char *,
@@ -2350,37 +2349,6 @@ VarHash(char *str)
    return Buf_Destroy(&buf, FALSE);
 }
 
-/*-
- *-----------------------------------------------------------------------
- * VarChangeCase --
- *      Change the string to all uppercase or all lowercase
- *
- * Input:
- *	str		String to modify
- *	upper		TRUE -> uppercase, else lowercase
- *
- * Results:
- *      The string with case changed
- *
- * Side Effects:
- *      None.
- *
- *-----------------------------------------------------------------------
- */
-static char *
-VarChangeCase(char *str, int upper)
-{
-   Buffer         buf;
-   int            (*modProc)(int);
-
-   modProc = (upper ? toupper : tolower);
-   Buf_Init(&buf, 0);
-   for (; *str ; str++) {
-       Buf_AddByte(&buf, modProc(*str));
-   }
-   return Buf_Destroy(&buf, FALSE);
-}
-
 static char *
 VarStrftime(const char *fmt, int zulu)
 {
@@ -2567,7 +2535,8 @@ ApplyModifiers(char *nstr, const char *tstr,
 	}
     apply_mods:
 	if (DEBUG(VAR)) {
-	    fprintf(debug_file, "Applying :%c to \"%s\"\n", *tstr, nstr);
+	    fprintf(debug_file, "Applying[%s] :%c to \"%s\"\n", v->name,
+		*tstr, nstr);
 	}
 	newStr = var_Error;
 	switch ((modifier = *tstr)) {
@@ -3056,8 +3025,16 @@ ApplyModifiers(char *nstr, const char *tstr,
 					       VarRealpath, NULL);
 			    cp = tstr + 2;
 			    termc = *cp;
-			} else if (tstr[1] == 'u' || tstr[1] == 'l') {
-			    newStr = VarChangeCase(nstr, (tstr[1] == 'u'));
+			} else if (tstr[1] == 'u') {
+			    char *dp = bmake_strdup(nstr);
+			    for (newStr = dp; *dp; dp++)
+				*dp = toupper((unsigned char)*dp);
+			    cp = tstr + 2;
+			    termc = *cp;
+			} else if (tstr[1] == 'l') {
+			    char *dp = bmake_strdup(nstr);
+			    for (newStr = dp; *dp; dp++)
+				*dp = tolower((unsigned char)*dp);
 			    cp = tstr + 2;
 			    termc = *cp;
 			} else if (tstr[1] == 'W' || tstr[1] == 'w') {
@@ -3167,8 +3144,8 @@ ApplyModifiers(char *nstr, const char *tstr,
 		    free(cp2);
 		}
 		if (DEBUG(VAR))
-		    fprintf(debug_file, "Pattern for [%s] is [%s]\n", nstr,
-			pattern);
+		    fprintf(debug_file, "Pattern[%s] for [%s] is [%s]\n",
+			v->name, nstr, pattern);
 		if (*tstr == 'M') {
 		    newStr = VarModify(ctxt, &parsestate, nstr, VarMatch,
 				       pattern);
@@ -3523,7 +3500,8 @@ ApplyModifiers(char *nstr, const char *tstr,
 	    }
 	}
 	if (DEBUG(VAR)) {
-	    fprintf(debug_file, "Result of :%c is \"%s\"\n", modifier, newStr);
+	    fprintf(debug_file, "Result[%s] of :%c is \"%s\"\n",
+		v->name, modifier, newStr);
 	}
 
 	if (newStr != nstr) {

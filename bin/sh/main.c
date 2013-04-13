@@ -80,7 +80,7 @@ struct jmploc main_handler;
 int localeisutf8, initial_localeisutf8;
 
 static void cmdloop(int);
-static void read_profile(char *);
+static void read_profile(const char *);
 static char *find_dot_file(char *);
 
 /*
@@ -139,7 +139,7 @@ main(int argc, char *argv[])
 #endif
 	rootpid = getpid();
 	rootshell = 1;
-	init();
+	initvar();
 	setstackmark(&smark);
 	setstackmark(&smark2);
 	procargs(argc, argv);
@@ -196,7 +196,7 @@ cmdloop(int top)
 	TRACE(("cmdloop(%d) called\n", top));
 	setstackmark(&smark);
 	for (;;) {
-		if (pendingsigs)
+		if (pendingsig)
 			dotrap();
 		inter = 0;
 		if (iflag && top) {
@@ -239,7 +239,7 @@ cmdloop(int top)
  */
 
 static void
-read_profile(char *name)
+read_profile(const char *name)
 {
 	int fd;
 	const char *expandedname;

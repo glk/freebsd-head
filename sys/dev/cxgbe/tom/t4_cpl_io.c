@@ -88,7 +88,7 @@ send_flowc_wr(struct toepcb *toep, struct flowc_tx_params *ftxp)
 
 	flowclen = sizeof(*flowc) + nparams * sizeof(struct fw_flowc_mnemval);
 
-	wr = alloc_wrqe(roundup(flowclen, 16), toep->ofld_txq);
+	wr = alloc_wrqe(roundup2(flowclen, 16), toep->ofld_txq);
 	if (wr == NULL) {
 		/* XXX */
 		panic("%s: allocation failure.", __func__);
@@ -632,7 +632,7 @@ unlocked:
 
 			/* Immediate data tx */
 
-			wr = alloc_wrqe(roundup(sizeof(*txwr) + plen, 16),
+			wr = alloc_wrqe(roundup2(sizeof(*txwr) + plen, 16),
 					toep->ofld_txq);
 			if (wr == NULL) {
 				/* XXX: how will we recover from this? */
@@ -651,7 +651,7 @@ unlocked:
 
 			wr_len = sizeof(*txwr) + sizeof(struct ulptx_sgl) +
 			    ((3 * (nsegs - 1)) / 2 + ((nsegs - 1) & 1)) * 8;
-			wr = alloc_wrqe(roundup(wr_len, 16), toep->ofld_txq);
+			wr = alloc_wrqe(roundup2(wr_len, 16), toep->ofld_txq);
 			if (wr == NULL) {
 				/* XXX: how will we recover from this? */
 				toep->flags |= TPF_TX_SUSPENDED;
@@ -1018,8 +1018,7 @@ do_abort_req(struct sge_iq *iq, const struct rss_header *rss, struct mbuf *m)
 
 	KASSERT(toep->tid == tid, ("%s: toep tid mismatch", __func__));
 
-	if (cpl->status == CPL_ERR_RTX_NEG_ADVICE ||
-	    cpl->status == CPL_ERR_PERSIST_NEG_ADVICE) {
+	if (negative_advice(cpl->status)) {
 		CTR4(KTR_CXGBE, "%s: negative advice %d for tid %d (0x%x)",
 		    __func__, cpl->status, tid, toep->flags);
 		return (0);	/* Ignore negative advice */

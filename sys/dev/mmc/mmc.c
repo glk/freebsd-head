@@ -353,7 +353,8 @@ mmc_highest_voltage(uint32_t ocr)
 {
 	int i;
 
-	for (i = 30; i >= 0; i--)
+	for (i = MMC_OCR_MAX_VOLTAGE_SHIFT;
+	    i >= MMC_OCR_MIN_VOLTAGE_SHIFT; i--)
 		if (ocr & (1 << i))
 			return (i);
 	return (-1);
@@ -411,6 +412,7 @@ mmc_wait_for_cmd(struct mmc_softc *sc, struct mmc_command *cmd, int retries)
 	memset(&mreq, 0, sizeof(mreq));
 	memset(cmd->resp, 0, sizeof(cmd->resp));
 	cmd->retries = retries;
+	cmd->mrq = &mreq;
 	mreq.cmd = cmd;
 	mmc_wait_for_req(sc, &mreq);
 	return (cmd->error);

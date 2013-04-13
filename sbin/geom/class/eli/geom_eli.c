@@ -260,6 +260,8 @@ struct g_command class_commands[] = {
 
 static int verbose = 0;
 
+#define	BUFSIZE	1024
+
 static int
 eli_protect(struct gctl_req *req)
 {
@@ -327,22 +329,6 @@ eli_main(struct gctl_req *req, unsigned int flags)
 		gctl_error(req, "Unknown command: %s.", name);
 }
 
-static void
-arc4rand(unsigned char *buf, size_t size)
-{
-	uint32_t *buf4;
-	size_t size4;
-	unsigned int i;
-
-	buf4 = (uint32_t *)buf;
-	size4 = size / 4;
-
-	for (i = 0; i < size4; i++)
-		buf4[i] = arc4random();
-	for (i *= 4; i < size; i++)
-		buf[i] = arc4random() % 0xff;
-}
-
 static bool
 eli_is_attached(const char *prov)
 {
@@ -361,7 +347,7 @@ static int
 eli_genkey_files(struct gctl_req *req, bool new, const char *type,
     struct hmac_ctx *ctxp, char *passbuf, size_t passbufsize)
 {
-	char *p, buf[MAXPHYS], argname[16];
+	char *p, buf[BUFSIZE], argname[16];
 	const char *file;
 	int error, fd, i;
 	ssize_t done;
@@ -397,6 +383,8 @@ eli_genkey_files(struct gctl_req *req, bool new, const char *type,
 			while ((done = read(fd, buf, sizeof(buf))) > 0)
 				hmac_update(ctxp, buf, done);
 		} else /* if (strcmp(type, "passfile") == 0) */ {
+			assert(strcmp(type, "passfile") == 0);
+
 			while ((done = read(fd, buf, sizeof(buf) - 1)) > 0) {
 				buf[done] = '\0';
 				p = strchr(buf, '\n');
@@ -446,7 +434,7 @@ eli_genkey_passphrase_prompt(struct gctl_req *req, bool new, char *passbuf,
 		}
 
 		if (new) {
-			char tmpbuf[BUFSIZ];
+			char tmpbuf[BUFSIZE];
 
 			p = readpassphrase("Reenter new passphrase: ",
 			    tmpbuf, sizeof(tmpbuf),
@@ -475,7 +463,7 @@ static int
 eli_genkey_passphrase(struct gctl_req *req, struct g_eli_metadata *md, bool new,
     struct hmac_ctx *ctxp)
 {
-	char passbuf[MAXPHYS];
+	char passbuf[BUFSIZE];
 	bool nopassphrase;
 	int nfiles;
 
@@ -815,8 +803,8 @@ eli_init(struct gctl_req *req)
 	}
 
 	md.md_keys = 0x01;
-	arc4rand(md.md_salt, sizeof(md.md_salt));
-	arc4rand(md.md_mkeys, sizeof(md.md_mkeys));
+	arc4random_buf(md.md_salt, sizeof(md.md_salt));
+	arc4random_buf(md.md_mkeys, sizeof(md.md_mkeys));
 
 	/* Generate user key. */
 	if (eli_genkey(req, &md, key, true) == NULL) {
@@ -1148,7 +1136,7 @@ eli_delkey_detached(struct gctl_req *req, const char *prov)
 
 	all = gctl_get_int(req, "all");
 	if (all)
-		arc4rand(md.md_mkeys, sizeof(md.md_mkeys));
+		arc4random_buf(md.md_mkeys, sizeof(md.md_mkeys));
 	else {
 		force = gctl_get_int(req, "force");
 		val = gctl_get_intmax(req, "keyno");
@@ -1172,7 +1160,7 @@ eli_delkey_detached(struct gctl_req *req, const char *prov)
 			return;
 		}
 		mkeydst = md.md_mkeys + nkey * G_ELI_MKEYLEN;
-		arc4rand(mkeydst, G_ELI_MKEYLEN);
+		arc4random_buf(mkeydst, G_ELI_MKEYLEN);
 	}
 
 	eli_metadata_store(req, prov, &md);
@@ -1264,13 +1252,14 @@ eli_trash_metadata(struct gctl_req *req, const char *prov, int fd, off_t offset)
 
 	error = 0;
 	do {
-		arc4rand(sector, size);
+		arc4random_buf(sector, size);
 		if (pwrite(fd, sector, size, offset) != size) {
 			if (error == 0)
 				error = errno;
 		}
 		(void)g_flush(fd);
 	} while (--overwrites > 0);
+	free(sector);
 	if (error != 0) {
 		gctl_error(req, "Cannot trash metadata on provider %s: %s.",
 		    prov, strerror(error));

@@ -5,7 +5,7 @@
  ******************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2012, Intel Corp.
+ * Copyright (C) 2000 - 2013, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,7 @@
 #include <contrib/dev/acpica/include/accommon.h>
 #include <contrib/dev/acpica/include/acnamesp.h>
 #include <contrib/dev/acpica/include/acdebug.h>
+#include <contrib/dev/acpica/include/acpredef.h>
 
 
 #ifdef ACPI_DEBUGGER
@@ -159,7 +160,7 @@ AcpiDbSetScope (
 
     AcpiDbPrepNamestring (Name);
 
-    if (Name[0] == '\\')
+    if (ACPI_IS_ROOT_PREFIX (Name[0]))
     {
         /* Validate new scope from the root */
 
@@ -436,7 +437,7 @@ AcpiDbWalkForPredefinedNames (
     char                        *Pathname;
 
 
-    Predefined = AcpiNsCheckForPredefinedName (Node);
+    Predefined = AcpiUtMatchPredefinedMethod (Node->Name.Ascii);
     if (!Predefined)
     {
         return (AE_OK);
@@ -450,13 +451,14 @@ AcpiDbWalkForPredefinedNames (
 
     /* If method returns a package, the info is in the next table entry */
 
-    if (Predefined->Info.ExpectedBtypes & ACPI_BTYPE_PACKAGE)
+    if (Predefined->Info.ExpectedBtypes & ACPI_RTYPE_PACKAGE)
     {
         Package = Predefined + 1;
     }
 
     AcpiOsPrintf ("%-32s arg %X ret %2.2X", Pathname,
-        Predefined->Info.ParamCount, Predefined->Info.ExpectedBtypes);
+        (Predefined->Info.ArgumentList & METHOD_ARG_MASK),
+        Predefined->Info.ExpectedBtypes);
 
     if (Package)
     {
