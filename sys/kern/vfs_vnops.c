@@ -872,8 +872,8 @@ static const int io_hold_cnt = 16;
 static int vn_io_fault_enable = 1;
 SYSCTL_INT(_debug, OID_AUTO, vn_io_fault_enable, CTLFLAG_RW,
     &vn_io_fault_enable, 0, "Enable vn_io_fault lock avoidance");
-static unsigned long vn_io_faults_cnt;
-SYSCTL_LONG(_debug, OID_AUTO, vn_io_faults, CTLFLAG_RD,
+static u_long vn_io_faults_cnt;
+SYSCTL_ULONG(_debug, OID_AUTO, vn_io_faults, CTLFLAG_RD,
     &vn_io_faults_cnt, 0, "Count of vn_io_fault lock avoidance triggers");
 
 /*
@@ -1642,7 +1642,7 @@ vfs_write_suspend(mp)
 	else
 		MNT_IUNLOCK(mp);
 	if ((error = VFS_SYNC(mp, MNT_SUSPEND)) != 0)
-		vfs_write_resume(mp);
+		vfs_write_resume(mp, 0);
 	return (error);
 }
 
@@ -1650,7 +1650,7 @@ vfs_write_suspend(mp)
  * Request a filesystem to resume write operations.
  */
 void
-vfs_write_resume_flags(struct mount *mp, int flags)
+vfs_write_resume(struct mount *mp, int flags)
 {
 
 	MNT_ILOCK(mp);
@@ -1677,23 +1677,14 @@ vfs_write_resume_flags(struct mount *mp, int flags)
 	}
 }
 
-void
-vfs_write_resume(struct mount *mp)
-{
-
-	vfs_write_resume_flags(mp, 0);
-}
-
 /*
  * Implement kqueues for files by translating it to vnode operation.
  */
 static int
 vn_kqfilter(struct file *fp, struct knote *kn)
 {
-	int error;
 
-	error = VOP_KQFILTER(fp->f_vnode, kn);
-	return (error);
+	return (VOP_KQFILTER(fp->f_vnode, kn));
 }
 
 /*
@@ -1869,7 +1860,6 @@ vn_chmod(struct file *fp, mode_t mode, struct ucred *active_cred,
     struct thread *td)
 {
 	struct vnode *vp;
-	int error;
 
 	vp = fp->f_vnode;
 #ifdef AUDIT
@@ -1877,8 +1867,7 @@ vn_chmod(struct file *fp, mode_t mode, struct ucred *active_cred,
 	AUDIT_ARG_VNODE1(vp);
 	VOP_UNLOCK(vp, 0);
 #endif
-	error = setfmode(td, active_cred, vp, mode);
-	return (error);
+	return (setfmode(td, active_cred, vp, mode));
 }
 
 int
@@ -1886,7 +1875,6 @@ vn_chown(struct file *fp, uid_t uid, gid_t gid, struct ucred *active_cred,
     struct thread *td)
 {
 	struct vnode *vp;
-	int error;
 
 	vp = fp->f_vnode;
 #ifdef AUDIT
@@ -1894,8 +1882,7 @@ vn_chown(struct file *fp, uid_t uid, gid_t gid, struct ucred *active_cred,
 	AUDIT_ARG_VNODE1(vp);
 	VOP_UNLOCK(vp, 0);
 #endif
-	error = setfown(td, active_cred, vp, uid, gid);
-	return (error);
+	return (setfown(td, active_cred, vp, uid, gid));
 }
 
 void

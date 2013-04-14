@@ -545,7 +545,7 @@ static void
 dump_metaslab_stats(metaslab_t *msp)
 {
 	char maxbuf[32];
-	space_map_t *sm = &msp->ms_map;
+	space_map_t *sm = msp->ms_map;
 	avl_tree_t *t = sm->sm_pp_root;
 	int free_pct = sm->sm_space * 100 / sm->sm_size;
 
@@ -561,7 +561,7 @@ dump_metaslab(metaslab_t *msp)
 {
 	vdev_t *vd = msp->ms_group->mg_vd;
 	spa_t *spa = vd->vdev_spa;
-	space_map_t *sm = &msp->ms_map;
+	space_map_t *sm = msp->ms_map;
 	space_map_obj_t *smo = &msp->ms_smo;
 	char freebuf[32];
 
@@ -704,7 +704,9 @@ dump_ddt(ddt_t *ddt, enum ddt_type type, enum ddt_class class)
 		return;
 	ASSERT(error == 0);
 
-	if ((count = ddt_object_count(ddt, type, class)) == 0)
+	error = ddt_object_count(ddt, type, class, &count);
+	ASSERT(error == 0);
+	if (count == 0)
 		return;
 
 	dspace = doi.doi_physical_blocks_512 << 9;
@@ -981,7 +983,7 @@ visit_indirect(spa_t *spa, const dnode_phys_t *dnp,
 		arc_buf_t *buf;
 		uint64_t fill = 0;
 
-		err = arc_read_nolock(NULL, spa, bp, arc_getbuf_func, &buf,
+		err = arc_read(NULL, spa, bp, arc_getbuf_func, &buf,
 		    ZIO_PRIORITY_ASYNC_READ, ZIO_FLAG_CANFAIL, &flags, zb);
 		if (err)
 			return (err);
@@ -1999,9 +2001,8 @@ zdb_count_block(zdb_cb_t *zcb, zilog_t *zilog, const blkptr_t *bp,
 	    bp, NULL, NULL, ZIO_FLAG_CANFAIL)), ==, 0);
 }
 
-/* ARGSUSED */
 static int
-zdb_blkptr_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp, arc_buf_t *pbuf,
+zdb_blkptr_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
     const zbookmark_t *zb, const dnode_phys_t *dnp, void *arg)
 {
 	zdb_cb_t *zcb = arg;
@@ -2159,11 +2160,11 @@ zdb_leak_init(spa_t *spa, zdb_cb_t *zcb)
 			for (int m = 0; m < vd->vdev_ms_count; m++) {
 				metaslab_t *msp = vd->vdev_ms[m];
 				mutex_enter(&msp->ms_lock);
-				space_map_unload(&msp->ms_map);
-				VERIFY(space_map_load(&msp->ms_map,
+				space_map_unload(msp->ms_map);
+				VERIFY(space_map_load(msp->ms_map,
 				    &zdb_space_map_ops, SM_ALLOC, &msp->ms_smo,
 				    spa->spa_meta_objset) == 0);
-				msp->ms_map.sm_ppd = vd;
+				msp->ms_map->sm_ppd = vd;
 				mutex_exit(&msp->ms_lock);
 			}
 		}
@@ -2186,7 +2187,7 @@ zdb_leak_fini(spa_t *spa)
 			for (int m = 0; m < vd->vdev_ms_count; m++) {
 				metaslab_t *msp = vd->vdev_ms[m];
 				mutex_enter(&msp->ms_lock);
-				space_map_unload(&msp->ms_map);
+				space_map_unload(msp->ms_map);
 				mutex_exit(&msp->ms_lock);
 			}
 		}
@@ -2408,7 +2409,7 @@ typedef struct zdb_ddt_entry {
 /* ARGSUSED */
 static int
 zdb_ddt_add_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
-    arc_buf_t *pbuf, const zbookmark_t *zb, const dnode_phys_t *dnp, void *arg)
+    const zbookmark_t *zb, const dnode_phys_t *dnp, void *arg)
 {
 	avl_tree_t *t = arg;
 	avl_index_t where;
