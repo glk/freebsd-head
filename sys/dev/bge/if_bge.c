@@ -680,7 +680,7 @@ bge_ape_lock_init(struct bge_softc *sc)
 			bit = BGE_APE_LOCK_GRANT_DRIVER0;
 			break;
 		default:
-			if (sc->bge_func_addr != 0)
+			if (sc->bge_func_addr == 0)
 				bit = BGE_APE_LOCK_GRANT_DRIVER0;
 			else
 				bit = (1 << sc->bge_func_addr);
@@ -2280,9 +2280,9 @@ bge_blockinit(struct bge_softc *sc)
 
 	/* Set random backoff seed for TX */
 	CSR_WRITE_4(sc, BGE_TX_RANDOM_BACKOFF,
-	    IF_LLADDR(sc->bge_ifp)[0] + IF_LLADDR(sc->bge_ifp)[1] +
+	    (IF_LLADDR(sc->bge_ifp)[0] + IF_LLADDR(sc->bge_ifp)[1] +
 	    IF_LLADDR(sc->bge_ifp)[2] + IF_LLADDR(sc->bge_ifp)[3] +
-	    IF_LLADDR(sc->bge_ifp)[4] + IF_LLADDR(sc->bge_ifp)[5] +
+	    IF_LLADDR(sc->bge_ifp)[4] + IF_LLADDR(sc->bge_ifp)[5]) &
 	    BGE_TX_BACKOFF_SEED_MASK);
 
 	/* Set inter-packet gap */
@@ -3594,15 +3594,15 @@ bge_attach(device_t dev)
 	}
 
 	bge_stop_fw(sc);
-	bge_sig_pre_reset(sc, BGE_RESET_START);
+	bge_sig_pre_reset(sc, BGE_RESET_SHUTDOWN);
 	if (bge_reset(sc)) {
 		device_printf(sc->bge_dev, "chip reset failed\n");
 		error = ENXIO;
 		goto fail;
 	}
 
-	bge_sig_legacy(sc, BGE_RESET_START);
-	bge_sig_post_reset(sc, BGE_RESET_START);
+	bge_sig_legacy(sc, BGE_RESET_SHUTDOWN);
+	bge_sig_post_reset(sc, BGE_RESET_SHUTDOWN);
 
 	if (bge_chipinit(sc)) {
 		device_printf(sc->bge_dev, "chip initialization failed\n");
@@ -3960,6 +3960,20 @@ bge_reset(struct bge_softc *sc)
 	} else
 		write_op = bge_writereg_ind;
 
+	if (sc->bge_asicrev != BGE_ASICREV_BCM5700 &&
+	    sc->bge_asicrev != BGE_ASICREV_BCM5701) {
+		CSR_WRITE_4(sc, BGE_NVRAM_SWARB, BGE_NVRAMSWARB_SET1);
+		for (i = 0; i < 8000; i++) {
+			if (CSR_READ_4(sc, BGE_NVRAM_SWARB) &
+			    BGE_NVRAMSWARB_GNT1)
+				break;
+			DELAY(20);
+		}
+		if (i == 8000) {
+			if (bootverbose)
+				device_printf(dev, "NVRAM lock timedout!\n");
+		}
+	}
 	/* Take APE lock when performing reset. */
 	bge_ape_lock(sc, BGE_APE_LOCK_GRC);
 
@@ -5569,6 +5583,10 @@ bge_ifmedia_sts(struct ifnet *ifp, struct ifmediareq *ifmr)
 
 	BGE_LOCK(sc);
 
+	if ((ifp->if_flags & IFF_UP) == 0) {
+		BGE_UNLOCK(sc);
+		return;
+	}
 	if (sc->bge_flags & BGE_FLAG_TBI) {
 		ifmr->ifm_status = IFM_AVALID;
 		ifmr->ifm_active = IFM_ETHER;
