@@ -81,7 +81,7 @@ SUBDIR=	\
 	${_ctau} \
 	ctl \
 	${_cxgb} \
-	cxgbe \
+	${_cxgbe} \
 	${_cyclic} \
 	dc \
 	dcons \
@@ -123,6 +123,7 @@ SUBDIR=	\
 	${_hpt27xx} \
 	${_hptiop} \
 	${_hptmv} \
+	${_hptnr} \
 	${_hptrr} \
 	hwpmc \
 	${_i2c} \
@@ -387,6 +388,10 @@ _cxgb=		cxgb
 .endif
 .endif
 
+.if ${MK_SOURCELESS_UCODE} != "no"
+_cxgbe=		cxgbe
+.endif
+
 .if ${MK_CRYPT} != "no" || defined(ALL_MODULES)
 .if exists(${.CURDIR}/../opencrypto)
 _crypto=	crypto
@@ -566,6 +571,7 @@ _hpt27xx=	hpt27xx
 _hptiop=	hptiop
 .if ${MK_SOURCELESS_HOST} != "no"
 _hptmv=		hptmv
+_hptnr=		hptnr
 _hptrr=		hptrr
 .endif
 _ichwd=		ichwd
@@ -663,6 +669,7 @@ _hpt27xx=	hpt27xx
 _hptiop=	hptiop
 .if ${MK_SOURCELESS_HOST} != "no"
 _hptmv=		hptmv
+_hptnr=		hptnr
 _hptrr=		hptrr
 .endif
 _i2c=		i2c
@@ -802,23 +809,24 @@ _cardbus=	cardbus
 _cbb=		cbb
 _cfi=		cfi
 _cpufreq=	cpufreq
+.if ${MK_CDDL} != "no" || defined(ALL_MODULES)
+_cyclic=	cyclic
+.endif
 _drm=		drm
+.if ${MK_CDDL} != "no" || defined(ALL_MODULES)
+_dtrace=	dtrace
+.endif
 _exca=		exca
 _nvram=		powermac_nvram
 _pccard=	pccard
 _smbfs=		smbfs
 _sound=		sound
-_cyclic=	cyclic
-_dtrace=	dtrace
+.if ${MK_CDDL} != "no" || defined(ALL_MODULES)
 _opensolaris=	opensolaris
+.endif
 .endif
 
 .if ${MACHINE_ARCH} == "powerpc64"
-.if ${MK_CDDL} != "no" || defined(ALL_MODULES)
-_cyclic=	cyclic
-_dtrace=	dtrace
-_opensolaris=	opensolaris
-.endif
 .if ${MK_ZFS} != "no" || defined(ALL_MODULES)
 _zfs=		zfs
 .endif
