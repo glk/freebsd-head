@@ -27,6 +27,7 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_wlan.h"
+#include "opt_iwn.h"
 
 #include <sys/param.h>
 #include <sys/sockio.h>
@@ -73,6 +74,7 @@ __FBSDID("$FreeBSD$");
 
 #include <dev/iwn/if_iwnreg.h>
 #include <dev/iwn/if_iwnvar.h>
+#include <dev/iwn/if_iwn_devid.h>
 
 struct iwn_ident {
 	uint16_t	vendor;
@@ -81,40 +83,40 @@ struct iwn_ident {
 };
 
 static const struct iwn_ident iwn_ident_table[] = {
-	{ 0x8086, 0x0082, "Intel Centrino Advanced-N 6205"		},
-	{ 0x8086, 0x0083, "Intel Centrino Wireless-N 1000"		},
-	{ 0x8086, 0x0084, "Intel Centrino Wireless-N 1000"		},
-	{ 0x8086, 0x0085, "Intel Centrino Advanced-N 6205"		},
-	{ 0x8086, 0x0087, "Intel Centrino Advanced-N + WiMAX 6250"	},
-	{ 0x8086, 0x0089, "Intel Centrino Advanced-N + WiMAX 6250"	},
-	{ 0x8086, 0x008a, "Intel Centrino Wireless-N 1030"		},
-	{ 0x8086, 0x008b, "Intel Centrino Wireless-N 1030"		},
-	{ 0x8086, 0x0090, "Intel Centrino Advanced-N 6230"		},
-	{ 0x8086, 0x0091, "Intel Centrino Advanced-N 6230"		},
-	{ 0x8086, 0x0885, "Intel Centrino Wireless-N + WiMAX 6150"	},
-	{ 0x8086, 0x0886, "Intel Centrino Wireless-N + WiMAX 6150"	},
-	{ 0x8086, 0x0887, "Intel Centrino Wireless-N 2230"		},
-	{ 0x8086, 0x0888, "Intel Centrino Wireless-N 2230"		},
-	{ 0x8086, 0x0896, "Intel Centrino Wireless-N 130"		},
-	{ 0x8086, 0x0897, "Intel Centrino Wireless-N 130"		},
-	{ 0x8086, 0x08ae, "Intel Centrino Wireless-N 100"		},
-	{ 0x8086, 0x08af, "Intel Centrino Wireless-N 100"		},
-	{ 0x8086, 0x4229, "Intel Wireless WiFi Link 4965"		},
-	{ 0x8086, 0x422b, "Intel Centrino Ultimate-N 6300"		},
-	{ 0x8086, 0x422c, "Intel Centrino Advanced-N 6200"		},
-	{ 0x8086, 0x422d, "Intel Wireless WiFi Link 4965"		},
-	{ 0x8086, 0x4230, "Intel Wireless WiFi Link 4965"		},
-	{ 0x8086, 0x4232, "Intel WiFi Link 5100"			},
-	{ 0x8086, 0x4233, "Intel Wireless WiFi Link 4965"		},
-	{ 0x8086, 0x4235, "Intel Ultimate N WiFi Link 5300"		},
-	{ 0x8086, 0x4236, "Intel Ultimate N WiFi Link 5300"		},
-	{ 0x8086, 0x4237, "Intel WiFi Link 5100"			},
-	{ 0x8086, 0x4238, "Intel Centrino Ultimate-N 6300"		},
-	{ 0x8086, 0x4239, "Intel Centrino Advanced-N 6200"		},
-	{ 0x8086, 0x423a, "Intel WiMAX/WiFi Link 5350"			},
-	{ 0x8086, 0x423b, "Intel WiMAX/WiFi Link 5350"			},
-	{ 0x8086, 0x423c, "Intel WiMAX/WiFi Link 5150"			},
-	{ 0x8086, 0x423d, "Intel WiMAX/WiFi Link 5150"			},
+	{ 0x8086, IWN_DID_6x05_1, "Intel Centrino Advanced-N 6205"		},
+	{ 0x8086, IWN_DID_1000_1, "Intel Centrino Wireless-N 1000"		},
+	{ 0x8086, IWN_DID_1000_2, "Intel Centrino Wireless-N 1000"		},
+	{ 0x8086, IWN_DID_6x05_2, "Intel Centrino Advanced-N 6205"		},
+	{ 0x8086, IWN_DID_6050_1, "Intel Centrino Advanced-N + WiMAX 6250"	},
+	{ 0x8086, IWN_DID_6050_2, "Intel Centrino Advanced-N + WiMAX 6250"	},
+	{ 0x8086, IWN_DID_x030_1, "Intel Centrino Wireless-N 1030"		},
+	{ 0x8086, IWN_DID_x030_2, "Intel Centrino Wireless-N 1030"		},
+	{ 0x8086, IWN_DID_x030_3, "Intel Centrino Advanced-N 6230"		},
+	{ 0x8086, IWN_DID_x030_4, "Intel Centrino Advanced-N 6230"		},
+	{ 0x8086, IWN_DID_6150_1, "Intel Centrino Wireless-N + WiMAX 6150"	},
+	{ 0x8086, IWN_DID_6150_2, "Intel Centrino Wireless-N + WiMAX 6150"	},
+	{ 0x8086, IWN_DID_2x30_1, "Intel Centrino Wireless-N 2230"		},
+	{ 0x8086, IWN_DID_2x30_2, "Intel Centrino Wireless-N 2230"		},
+	{ 0x8086, IWN_DID_130_1, "Intel Centrino Wireless-N 130"		},
+	{ 0x8086, IWN_DID_130_2, "Intel Centrino Wireless-N 130"		},
+	{ 0x8086, IWN_DID_100_1, "Intel Centrino Wireless-N 100"		},
+	{ 0x8086, IWN_DID_100_2, "Intel Centrino Wireless-N 100"		},
+	{ 0x8086, IWN_DID_4965_1, "Intel Wireless WiFi Link 4965"		},
+	{ 0x8086, IWN_DID_6x00_1, "Intel Centrino Ultimate-N 6300"		},
+	{ 0x8086, IWN_DID_6x00_2, "Intel Centrino Advanced-N 6200"		},
+	{ 0x8086, IWN_DID_4965_2, "Intel Wireless WiFi Link 4965"		},
+	{ 0x8086, IWN_DID_4965_3, "Intel Wireless WiFi Link 4965"		},
+	{ 0x8086, IWN_DID_5x00_1, "Intel WiFi Link 5100"			},
+	{ 0x8086, IWN_DID_4965_4, "Intel Wireless WiFi Link 4965"		},
+	{ 0x8086, IWN_DID_5x00_3, "Intel Ultimate N WiFi Link 5300"		},
+	{ 0x8086, IWN_DID_5x00_4, "Intel Ultimate N WiFi Link 5300"		},
+	{ 0x8086, IWN_DID_5x00_2, "Intel WiFi Link 5100"			},
+	{ 0x8086, IWN_DID_6x00_3, "Intel Centrino Ultimate-N 6300"		},
+	{ 0x8086, IWN_DID_6x00_4, "Intel Centrino Advanced-N 6200"		},
+	{ 0x8086, IWN_DID_5x50_1, "Intel WiMAX/WiFi Link 5350"			},
+	{ 0x8086, IWN_DID_5x50_2, "Intel WiMAX/WiFi Link 5350"			},
+	{ 0x8086, IWN_DID_5x50_3, "Intel WiMAX/WiFi Link 5150"			},
+	{ 0x8086, IWN_DID_5x50_4, "Intel WiMAX/WiFi Link 5150"			},
 	{ 0, 0, NULL }
 };
 
@@ -160,7 +162,9 @@ static void	iwn5000_ict_reset(struct iwn_softc *);
 static int	iwn_read_eeprom(struct iwn_softc *,
 		    uint8_t macaddr[IEEE80211_ADDR_LEN]);
 static void	iwn4965_read_eeprom(struct iwn_softc *);
+#ifdef	IWN_DEBUG
 static void	iwn4965_print_power_group(struct iwn_softc *, int);
+#endif
 static void	iwn5000_read_eeprom(struct iwn_softc *);
 static uint32_t	iwn_eeprom_channel_flags(struct iwn_eeprom_chan *);
 static void	iwn_read_eeprom_band(struct iwn_softc *, int);
@@ -320,9 +324,12 @@ static void	iwn_set_channel(struct ieee80211com *);
 static void	iwn_scan_curchan(struct ieee80211_scan_state *, unsigned long);
 static void	iwn_scan_mindwell(struct ieee80211_scan_state *);
 static void	iwn_hw_reset(void *, int);
+#ifdef	IWN_DEBUG
+static char	*iwn_get_csr_string(int);
+static void	iwn_debug_register(struct iwn_softc *);
+#endif
 
-#define IWN_DEBUG
-#ifdef IWN_DEBUG
+#ifdef	IWN_DEBUG
 enum {
 	IWN_DEBUG_XMIT		= 0x00000001,	/* basic xmit operation */
 	IWN_DEBUG_RECV		= 0x00000002,	/* basic recv operation */
@@ -339,6 +346,7 @@ enum {
 	IWN_DEBUG_CMD		= 0x00001000,	/* cmd submission */
 	IWN_DEBUG_TXRATE	= 0x00002000,	/* TX rate debugging */
 	IWN_DEBUG_PWRSAVE	= 0x00004000,	/* Power save operations */
+	IWN_DEBUG_REGISTER	= 0x20000000,	/* print chipset register */
 	IWN_DEBUG_TRACE		= 0x40000000,	/* Print begin and start driver function */
 	IWN_DEBUG_FATAL		= 0x80000000,	/* fatal errors */
 	IWN_DEBUG_ANY		= 0xffffffff
@@ -511,7 +519,8 @@ iwn_attach(device_t dev)
 	IWN_LOCK_INIT(sc);
 
 	/* Read hardware revision and attach. */
-	sc->hw_type = (IWN_READ(sc, IWN_HW_REV) >> 4) & 0xf;
+	sc->hw_type = (IWN_READ(sc, IWN_HW_REV) >> IWN_HW_REV_TYPE_SHIFT)
+	    & IWN_HW_REV_TYPE_MASK;
 	if (sc->hw_type == IWN_HW_REV_TYPE_4965)
 		error = iwn4965_attach(sc, pci_get_device(dev));
 	else
@@ -924,6 +933,8 @@ iwn_detach(device_t dev)
 	struct ieee80211com *ic;
 	int qid;
 
+	DPRINTF(sc, IWN_DEBUG_TRACE, "->%s begin\n", __func__);
+
 	if (ifp != NULL) {
 		ic = ifp->if_l2com;
 
@@ -961,7 +972,7 @@ iwn_detach(device_t dev)
 	if (ifp != NULL)
 		if_free(ifp);
 
-	DPRINTF(sc, IWN_DEBUG_TRACE, "->%s done\n", __func__);
+	DPRINTF(sc, IWN_DEBUG_TRACE, "->%s: end\n", __func__);
 	IWN_LOCK_DESTROY(sc);
 	return 0;
 }
@@ -3202,8 +3213,6 @@ iwn_notif_intr(struct iwn_softc *sc)
 		}
 		case IWN_STATE_CHANGED:
 		{
-			uint32_t *status = (uint32_t *)(desc + 1);
-
 			/*
 			 * State change allows hardware switch change to be
 			 * noted. However, we handle this in iwn_intr as we
@@ -3211,32 +3220,37 @@ iwn_notif_intr(struct iwn_softc *sc)
 			 */
 			bus_dmamap_sync(sc->rxq.data_dmat, data->map,
 			    BUS_DMASYNC_POSTREAD);
+#ifdef	IWN_DEBUG
+			uint32_t *status = (uint32_t *)(desc + 1);
 			DPRINTF(sc, IWN_DEBUG_INTR, "state changed to %x\n",
 			    le32toh(*status));
+#endif
 			break;
 		}
 		case IWN_START_SCAN:
 		{
-			struct iwn_start_scan *scan =
-			    (struct iwn_start_scan *)(desc + 1);
-
 			bus_dmamap_sync(sc->rxq.data_dmat, data->map,
 			    BUS_DMASYNC_POSTREAD);
+#ifdef	IWN_DEBUG
+			struct iwn_start_scan *scan =
+			    (struct iwn_start_scan *)(desc + 1);
 			DPRINTF(sc, IWN_DEBUG_ANY,
 			    "%s: scanning channel %d status %x\n",
 			    __func__, scan->chan, le32toh(scan->status));
+#endif
 			break;
 		}
 		case IWN_STOP_SCAN:
 		{
-			struct iwn_stop_scan *scan =
-			    (struct iwn_stop_scan *)(desc + 1);
-
 			bus_dmamap_sync(sc->rxq.data_dmat, data->map,
 			    BUS_DMASYNC_POSTREAD);
+#ifdef	IWN_DEBUG
+			struct iwn_stop_scan *scan =
+			    (struct iwn_stop_scan *)(desc + 1);
 			DPRINTF(sc, IWN_DEBUG_STATE,
 			    "scan finished nchan=%d status=%d chan=%d\n",
 			    scan->nchan, scan->status, scan->chan);
+#endif
 
 			IWN_UNLOCK(sc);
 			ieee80211_scan_next(vap);
@@ -3416,6 +3430,9 @@ iwn_intr(void *arg)
 	if (r1 & (IWN_INT_SW_ERR | IWN_INT_HW_ERR)) {
 		device_printf(sc->sc_dev, "%s: fatal firmware error\n",
 		    __func__);
+#ifdef	IWN_DEBUG
+		iwn_debug_register(sc);
+#endif
 		/* Dump firmware error log and stop. */
 		iwn_fatal_intr(sc);
 		ifp->if_flags &= ~IFF_UP;
@@ -7467,3 +7484,85 @@ iwn_hw_reset(void *arg0, int pending)
 	iwn_init(sc);
 	ieee80211_notify_radio(ic, 1);
 }
+#ifdef	IWN_DEBUG
+#define	IWN_DESC(x) case x:	return #x
+#define	COUNTOF(array) (sizeof(array) / sizeof(array[0]))
+
+/*
+ * Translate CSR code to string
+ */
+static char *iwn_get_csr_string(int csr)
+{
+	switch (csr) {
+		IWN_DESC(IWN_HW_IF_CONFIG);
+		IWN_DESC(IWN_INT_COALESCING);
+		IWN_DESC(IWN_INT);
+		IWN_DESC(IWN_INT_MASK);
+		IWN_DESC(IWN_FH_INT);
+		IWN_DESC(IWN_GPIO_IN);
+		IWN_DESC(IWN_RESET);
+		IWN_DESC(IWN_GP_CNTRL);
+		IWN_DESC(IWN_HW_REV);
+		IWN_DESC(IWN_EEPROM);
+		IWN_DESC(IWN_EEPROM_GP);
+		IWN_DESC(IWN_OTP_GP);
+		IWN_DESC(IWN_GIO);
+		IWN_DESC(IWN_GP_UCODE);
+		IWN_DESC(IWN_GP_DRIVER);
+		IWN_DESC(IWN_UCODE_GP1);
+		IWN_DESC(IWN_UCODE_GP2);
+		IWN_DESC(IWN_LED);
+		IWN_DESC(IWN_DRAM_INT_TBL);
+		IWN_DESC(IWN_GIO_CHICKEN);
+		IWN_DESC(IWN_ANA_PLL);
+		IWN_DESC(IWN_HW_REV_WA);
+		IWN_DESC(IWN_DBG_HPET_MEM);
+	default:
+		return "UNKNOWN CSR";
+	}
+}
+
+/*
+ * This function print firmware register
+ */
+static void
+iwn_debug_register(struct iwn_softc *sc)
+{
+	int i;
+	static const uint32_t csr_tbl[] = {
+		IWN_HW_IF_CONFIG,
+		IWN_INT_COALESCING,
+		IWN_INT,
+		IWN_INT_MASK,
+		IWN_FH_INT,
+		IWN_GPIO_IN,
+		IWN_RESET,
+		IWN_GP_CNTRL,
+		IWN_HW_REV,
+		IWN_EEPROM,
+		IWN_EEPROM_GP,
+		IWN_OTP_GP,
+		IWN_GIO,
+		IWN_GP_UCODE,
+		IWN_GP_DRIVER,
+		IWN_UCODE_GP1,
+		IWN_UCODE_GP2,
+		IWN_LED,
+		IWN_DRAM_INT_TBL,
+		IWN_GIO_CHICKEN,
+		IWN_ANA_PLL,
+		IWN_HW_REV_WA,
+		IWN_DBG_HPET_MEM,
+	};
+	DPRINTF(sc, IWN_DEBUG_REGISTER,
+	    "CSR values: (2nd byte of IWN_INT_COALESCING is IWN_INT_PERIODIC)%s",
+	    "\n");
+	for (i = 0; i <  COUNTOF(csr_tbl); i++){
+		DPRINTF(sc, IWN_DEBUG_REGISTER,"  %10s: 0x%08x ",
+			iwn_get_csr_string(csr_tbl[i]), IWN_READ(sc, csr_tbl[i]));
+		if ((i+1) % 3 == 0)
+			DPRINTF(sc, IWN_DEBUG_REGISTER,"%s","\n");
+	}
+	DPRINTF(sc, IWN_DEBUG_REGISTER,"%s","\n");
+}
+#endif

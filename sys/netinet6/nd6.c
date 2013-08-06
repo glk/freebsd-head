@@ -428,7 +428,7 @@ nd6_llinfo_settimer_locked(struct llentry *ln, long tick)
 		ln->ln_ntick = 0;
 		canceled = callout_stop(&ln->ln_timer_ch);
 	} else {
-		ln->la_expire = time_second + tick / hz;
+		ln->la_expire = time_uptime + tick / hz;
 		LLE_ADDREF(ln);
 		if (tick > INT_MAX) {
 			ln->ln_ntick = tick - INT_MAX;
@@ -591,7 +591,7 @@ nd6_timer(void *arg)
 
 	/* expire default router list */
 	TAILQ_FOREACH_SAFE(dr, &V_nd_defrouter, dr_entry, ndr) {
-		if (dr->expire && dr->expire < time_second)
+		if (dr->expire && dr->expire < time_uptime)
 			defrtrlist_del(dr);
 	}
 
@@ -675,7 +675,7 @@ nd6_timer(void *arg)
 		 * prefix is not necessary.
 		 */
 		if (pr->ndpr_vltime != ND6_INFINITE_LIFETIME &&
-		    time_second - pr->ndpr_lastupdate > pr->ndpr_vltime) {
+		    time_uptime - pr->ndpr_lastupdate > pr->ndpr_vltime) {
 
 			/*
 			 * address expiration and prefix expiration are
@@ -1033,9 +1033,9 @@ nd6_free(struct llentry *ln, int gc)
 			 * XXX: the check for ln_state would be redundant,
 			 *      but we intentionally keep it just in case.
 			 */
-			if (dr->expire > time_second)
+			if (dr->expire > time_uptime)
 				nd6_llinfo_settimer_locked(ln,
-				    (dr->expire - time_second) * hz);
+				    (dr->expire - time_uptime) * hz);
 			else
 				nd6_llinfo_settimer_locked(ln,
 				    (long)V_nd6_gctimer * hz);
@@ -1227,6 +1227,8 @@ nd6_ioctl(u_long cmd, caddr_t data, struct ifnet *ifp)
 	struct nd_prefix *pr;
 	int i = 0, error = 0;
 
+	if (ifp->if_afdata[AF_INET6] == NULL)
+		return (EPFNOSUPPORT);
 	switch (cmd) {
 	case SIOCGDRLST_IN6:
 		/*
@@ -1801,6 +1803,8 @@ nd6_slowtimo(void *arg)
 	    nd6_slowtimo, curvnet);
 	IFNET_RLOCK_NOSLEEP();
 	TAILQ_FOREACH(ifp, &V_ifnet, if_list) {
+		if (ifp->if_afdata[AF_INET6] == NULL)
+			continue;
 		nd6if = ND_IFINFO(ifp);
 		if (nd6if->basereachable && /* already initialized */
 		    (nd6if->recalctm -= ND6_SLOWTIMER_INTERVAL) <= 0) {
