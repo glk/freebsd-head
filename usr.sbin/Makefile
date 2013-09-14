@@ -17,6 +17,7 @@ SUBDIR=	adduser \
 	crashinfo \
 	cron \
 	ctladm \
+	ctld \
 	daemon \
 	dconschat \
 	devinfo \
@@ -35,6 +36,7 @@ SUBDIR=	adduser \
 	ifmcstat \
 	inetd \
 	iostat \
+	iscsid \
 	isfctl \
 	kldxref \
 	mailwrapper \
@@ -129,6 +131,7 @@ SUBDIR+=	dnssec-keygen
 SUBDIR+=	dnssec-revoke
 SUBDIR+=	dnssec-settime
 SUBDIR+=	dnssec-signzone
+SUBDIR+=	dnssec-verify
 .endif
 .if ${MK_BIND_NAMED} != "no"
 SUBDIR+=	arpaname

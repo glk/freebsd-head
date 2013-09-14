@@ -900,6 +900,11 @@ OLD_FILES+=usr/bin/CC
 OLD_FILES+=usr/bin/c++
 OLD_FILES+=usr/bin/c++filt
 OLD_FILES+=usr/bin/g++
+OLD_FILES+=usr/libexec/cc1plus
+.endif
+
+.if ${MK_GNUCXX} == no
+OLD_FILES+=usr/bin/g++
 OLD_FILES+=usr/include/c++/4.2/algorithm
 OLD_FILES+=usr/include/c++/4.2/backward/algo.h
 OLD_FILES+=usr/include/c++/4.2/backward/algobase.h
@@ -1455,12 +1460,23 @@ OLD_FILES+=usr/include/c++/4.2/utility
 OLD_FILES+=usr/include/c++/4.2/valarray
 OLD_FILES+=usr/include/c++/4.2/vector
 OLD_FILES+=usr/lib/libstdc++.a
-# Keep libs to allow bootstrapping g++(1) with gperf(1)
-#OLD_LIBS+=usr/lib/libstdc++.so
-#OLD_LIBS+=usr/lib/libstdc++.so.6
+OLD_FILES+=usr/lib/libstdc++.so
+OLD_LIBS+=usr/lib/libstdc++.so.6
 OLD_FILES+=usr/lib/libstdc++_p.a
 OLD_FILES+=usr/lib/libsupc++.a
+OLD_FILES+=usr/lib/libsupc++.so
+OLD_LIBS+=usr/lib/libsupc++.so.1
 OLD_FILES+=usr/lib/libsupc++_p.a
+.if ${TARGET_ARCH} == "amd64" || ${TARGET_ARCH} == "powerpc64"
+OLD_FILES+=usr/lib32/libstdc++.a
+OLD_FILES+=usr/lib32/libstdc++.so
+OLD_LIBS+=usr/lib32/libstdc++.so.6
+OLD_FILES+=usr/lib32/libstdc++_p.a
+OLD_FILES+=usr/lib32/libsupc++.a
+OLD_FILES+=usr/lib32/libsupc++.so
+OLD_LIBS+=usr/lib32/libsupc++.so.1
+OLD_FILES+=usr/lib32/libsupc++_p.a
+.endif
 OLD_FILES+=usr/libexec/cc1plus
 .endif
 
@@ -1546,19 +1562,25 @@ OLD_FILES+=usr/share/man/man8/unstr.8.gz
 .endif
 
 .if ${MK_GCC} == no
+.if ${MK_CXX} == no
 OLD_FILES+=usr/bin/c++filt
+.endif
 OLD_FILES+=usr/bin/g++
 OLD_FILES+=usr/bin/gcc
 OLD_FILES+=usr/bin/gcov
 OLD_FILES+=usr/bin/gcpp
 .if ${TARGET_ARCH} == "amd64" || ${TARGET_ARCH} == "i386"
+OLD_FILES+=usr/include/gcc/4.2/__wmmintrin_aes.h
+OLD_FILES+=usr/include/gcc/4.2/__wmmintrin_pclmul.h
+OLD_FILES+=usr/include/gcc/4.2/ammintrin.h
 OLD_FILES+=usr/include/gcc/4.2/emmintrin.h
+OLD_FILES+=usr/include/gcc/4.2/mm3dnow.h
 OLD_FILES+=usr/include/gcc/4.2/mm_malloc.h
 OLD_FILES+=usr/include/gcc/4.2/mmintrin.h
 OLD_FILES+=usr/include/gcc/4.2/pmmintrin.h
 OLD_FILES+=usr/include/gcc/4.2/tmmintrin.h
+OLD_FILES+=usr/include/gcc/4.2/wmmintrin.h
 OLD_FILES+=usr/include/gcc/4.2/xmmintrin.h
-OLD_FILES+=usr/include/gcc/4.2/mm3dnow.h
 .elif ${TARGET_ARCH} == "ia64"
 OLD_FILES+=usr/include/gcc/4.2/ia64intrin.h
 .elif ${TARGET_ARCH} == "arm"
@@ -1568,8 +1590,6 @@ OLD_FILES+=usr/include/gcc/4.2/altivec.h
 OLD_FILES+=usr/include/gcc/4.2/ppc-asm.h
 OLD_FILES+=usr/include/gcc/4.2/spe.h
 .endif
-OLD_DIRS+=usr/include/gcc/4.2
-OLD_DIRS+=usr/include/gcc
 OLD_FILES+=usr/libexec/cc1
 OLD_FILES+=usr/libexec/cc1plus
 OLD_FILES+=usr/share/info/cpp.info.gz
@@ -2198,6 +2218,27 @@ OLD_FILES+=usr/share/man/man5/hesiod.conf.5.gz
 # to be filled in
 #.endif
 
+.if ${MK_ICONV} == no
+OLD_FILES+=usr/bin/iconv
+OLD_FILES+=usr/bin/mkcsmapper
+OLD_FILES+=usr/bin/mkesdb
+OLD_FILES+=usr/include/_libiconv_compat.h
+OLD_FILES+=usr/include/iconv.h
+OLD_FILES+=usr/share/man/man1/iconv.1.gz
+OLD_FILES+=usr/share/man/man1/mkcsmapper.1.gz
+OLD_FILES+=usr/share/man/man1/mkesdb.1.gz
+OLD_FILES+=usr/share/man/man3/__iconv.3.gz
+OLD_FILES+=usr/share/man/man3/__iconv_free_list.3.gz	
+OLD_FILES+=usr/share/man/man3/__iconv_get_list.3.gz
+OLD_FILES+=usr/share/man/man3/iconv.3.gz
+OLD_FILES+=usr/share/man/man3/iconv_canonicalize.3.gz	
+OLD_FILES+=usr/share/man/man3/iconv_close.3.gz
+OLD_FILES+=usr/share/man/man3/iconv_open.3.gz
+OLD_FILES+=usr/share/man/man3/iconv_open_into.3.gz
+OLD_FILES+=usr/share/man/man3/iconvctl.3.gz
+OLD_FILES+=usr/share/man/man3/iconvlist.3.gz	
+.endif
+
 .if ${MK_INET6} == no
 OLD_FILES+=sbin/ping6
 OLD_FILES+=sbin/rtsol
@@ -2507,6 +2548,14 @@ OLD_FILES+=usr/lib/pam_krb5.so
 OLD_LIBS+=usr/lib/pam_krb5.so.5
 OLD_FILES+=usr/lib/pam_ksu.so
 OLD_LIBS+=usr/lib/pam_ksu.so.5
+OLD_FILES+=usr/lib/private/libheimipcc.a
+OLD_FILES+=usr/lib/private/libheimipcc.so
+OLD_LIBS+=usr/lib/private/libheimipcc.so.11
+OLD_FILES+=usr/lib/private/libheimipcc_p.a
+OLD_FILES+=usr/lib/private/libheimipcs.a
+OLD_FILES+=usr/lib/private/libheimipcs.so
+OLD_LIBS+=usr/lib/private/libheimipcs.so.11
+OLD_FILES+=usr/lib/private/libheimipcs_p.a
 .if ${TARGET_ARCH} == "amd64" || ${TARGET_ARCH} == "powerpc64"
 OLD_FILES+=usr/lib32/libasn1.a
 OLD_FILES+=usr/lib32/libasn1.so
@@ -2576,6 +2625,14 @@ OLD_FILES+=usr/lib32/pam_krb5.so
 OLD_LIBS+=usr/lib32/pam_krb5.so.5
 OLD_FILES+=usr/lib32/pam_ksu.so
 OLD_LIBS+=usr/lib32/pam_ksu.so.5
+OLD_FILES+=usr/lib32/private/libheimipcc.a
+OLD_FILES+=usr/lib32/private/libheimipcc.so
+OLD_LIBS+=usr/lib32/private/libheimipcc.so.11
+OLD_FILES+=usr/lib32/private/libheimipcc_p.a
+OLD_FILES+=usr/lib32/private/libheimipcs.a
+OLD_FILES+=usr/lib32/private/libheimipcs.so
+OLD_LIBS+=usr/lib32/private/libheimipcs.so.11
+OLD_FILES+=usr/lib32/private/libheimipcs_p.a
 .endif
 OLD_FILES+=usr/libexec/digest-service
 OLD_FILES+=usr/libexec/hprop
@@ -3337,6 +3394,13 @@ OLD_FILES+=usr/share/man/man8/verify_krb5_conf.8.gz
 #.if ${MK_LIB32} == no
 # to be filled in
 #.endif
+
+.if ${MK_LIBICONV_COMPAT} == no
+OLD_FILES+=usr/lib/libiconv.a
+OLD_FILES+=usr/lib/libiconv.so
+OLD_FILES+=usr/lib/libiconv.so.3
+OLD_FILES+=usr/lib/libiconv_p.a
+.endif
 
 .if ${MK_LIBCPLUSPLUS} == no
 OLD_LIBS+=lib/libcxxrt.so.1
