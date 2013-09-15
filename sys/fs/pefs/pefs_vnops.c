@@ -1797,24 +1797,31 @@ lookupvpg:
 	m = vm_page_lookup(vp->v_object,
 	    OFF_TO_IDX(uio->uio_offset));
 	if (m != NULL && vm_page_is_valid(m, moffset, msize)) {
-		if ((m->oflags & VPO_BUSY) != 0) {
+		if (vm_page_xbusied(m)) {
 			/*
 			 * Reference the page before unlocking and
 			 * sleeping so that the page daemon is less
 			 * likely to reclaim it.
 			 */
-			vm_page_aflag_set(m, PGA_REFERENCED);
-			vm_page_sleep(m, "pefsmr");
+			vm_page_reference(m);
+			vm_page_lock(m);
+			VM_OBJECT_WUNLOCK(vp->v_object);
+			vm_page_busy_sleep(m, "pefsmr");
+			VM_OBJECT_WLOCK(vp->v_object);
 			goto lookupvpg;
 		}
-		vm_page_busy(m);
+		vm_page_lock(m);
+		vm_page_hold(m);
+		vm_page_unlock(m);
 		VM_OBJECT_WUNLOCK(vp->v_object);
 		PEFSDEBUG("pefs_read: mapped: "
 		    "offset=0x%jx moffset=0x%jx msize=0x%jx\n",
 		    uio->uio_offset, (intmax_t)moffset, (intmax_t)msize);
 		error = uiomove_fromphys(&m, moffset, msize, uio);
 		VM_OBJECT_WLOCK(vp->v_object);
-		vm_page_wakeup(m);
+		vm_page_lock(m);
+		vm_page_unhold(m);
+		vm_page_unlock(m);
 		VM_OBJECT_WUNLOCK(vp->v_object);
 		if (error != 0) {
 			MPASS(error != EJUSTRETURN);
@@ -1823,17 +1830,20 @@ lookupvpg:
 		return (EJUSTRETURN);
 	}
 	if (m != NULL && uio->uio_segflg == UIO_NOCOPY) {
-		if ((m->oflags & VPO_BUSY) != 0) {
+		if (vm_page_xbusied(m)) {
 			/*
 			 * Reference the page before unlocking and
 			 * sleeping so that the page daemon is less
 			 * likely to reclaim it.
 			 */
-			vm_page_aflag_set(m, PGA_REFERENCED);
-			vm_page_sleep(m, "pefsmr");
+			vm_page_reference(m);
+			vm_page_lock(m);
+			VM_OBJECT_WUNLOCK(vp->v_object);
+			vm_page_busy_sleep(m, "pefsmr");
+			VM_OBJECT_WLOCK(vp->v_object);
 			goto lookupvpg;
 		}
-		vm_page_busy(m);
+		vm_page_sbusy(m);
 		*mp = m;
 	}
 	VM_OBJECT_WUNLOCK(vp->v_object);
@@ -1956,13 +1966,13 @@ pefs_read_int(struct vnode *vp, struct uio *uio, int ioflag, struct ucred *cred,
 			sf_buf_free(sf);
 			sched_unpin();
 			VM_OBJECT_WLOCK(vp->v_object);
-			vm_page_wakeup(m);
+			vm_page_sunbusy(m);
 			VM_OBJECT_WUNLOCK(vp->v_object);
 		}
 	}
 	if (nocopy != 0) {
 		VM_OBJECT_WLOCK(vp->v_object);
-		vm_page_wakeup(m);
+		vm_page_sunbusy(m);
 		VM_OBJECT_WUNLOCK(vp->v_object);
 	}
 	pefs_chunk_free(&pc, pn);
@@ -1989,17 +1999,21 @@ lookupvpg:
 	idx = OFF_TO_IDX(uio->uio_offset);
 	m = vm_page_lookup(vp->v_object, idx);
 	if (m != NULL && vm_page_is_valid(m, 0, bsize)) {
-		if ((m->oflags & VPO_BUSY) != 0) {
+		if (vm_page_xbusied(m)) {
 			/*
 			 * Reference the page before unlocking and
 			 * sleeping so that the page daemon is less
 			 * likely to reclaim it.
 			 */
-			vm_page_aflag_set(m, PGA_REFERENCED);
-			vm_page_sleep(m, "pefsmw");
+
+			vm_page_reference(m);
+			vm_page_lock(m);
+			VM_OBJECT_WUNLOCK(vp->v_object);
+			vm_page_busy_sleep(m, "pefsmw");
+			VM_OBJECT_WLOCK(vp->v_object);
 			goto lookupvpg;
 		}
-		vm_page_busy(m);
+		vm_page_sbusy(m);
 		vm_page_undirty(m);
 		VM_OBJECT_WUNLOCK(vp->v_object);
 		PEFSDEBUG("pefs_write: mapped: "
@@ -2013,7 +2027,7 @@ lookupvpg:
 		sf_buf_free(sf);
 		sched_unpin();
 		VM_OBJECT_WLOCK(vp->v_object);
-		vm_page_wakeup(m);
+		vm_page_sunbusy(m);
 		VM_OBJECT_WUNLOCK(vp->v_object);
 		if (error != 0) {
 			MPASS(error != EJUSTRETURN);
