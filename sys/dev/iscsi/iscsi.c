@@ -558,7 +558,11 @@ iscsi_callout(void *context)
 	if (is->is_timeout < 2)
 		return;
 
-	request = icl_pdu_new_bhs(is->is_conn, M_WAITOK);
+	request = icl_pdu_new_bhs(is->is_conn, M_NOWAIT);
+	if (request == NULL) {
+		ISCSI_SESSION_WARN(is, "failed to allocate PDU");
+		return;
+	}
 	bhsno = (struct iscsi_bhs_nop_out *)request->ip_bhs;
 	bhsno->bhsno_opcode = ISCSI_BHS_OPCODE_NOP_OUT |
 	    ISCSI_BHS_OPCODE_IMMEDIATE;
@@ -1513,8 +1517,13 @@ iscsi_ioctl_session_add(struct iscsi_softc *sc, struct iscsi_session_add *isa)
 	memcpy(&is->is_conf, &isa->isa_conf, sizeof(is->is_conf));
 
 	if (is->is_conf.isc_initiator[0] == '\0' ||
-	    is->is_conf.isc_target == '\0' ||
-	    is->is_conf.isc_target_addr == '\0') {
+	    is->is_conf.isc_target_addr[0] == '\0') {
+		free(is, M_ISCSI);
+		return (EINVAL);
+	}
+
+	if ((is->is_conf.isc_discovery != 0 && is->is_conf.isc_target[0] != 0) ||
+	    (is->is_conf.isc_discovery == 0 && is->is_conf.isc_target[0] == 0)) {
 		free(is, M_ISCSI);
 		return (EINVAL);
 	}
@@ -1525,11 +1534,22 @@ iscsi_ioctl_session_add(struct iscsi_softc *sc, struct iscsi_session_add *isa)
 	 * Prevent duplicates.
 	 */
 	TAILQ_FOREACH(is2, &sc->sc_sessions, is_next) {
-		if (strcmp(is2->is_conf.isc_target,
-		    is->is_conf.isc_target) == 0) {
-			sx_xunlock(&sc->sc_lock);
-			return (EBUSY);
-		}
+		if (!!is->is_conf.isc_discovery !=
+		    !!is2->is_conf.isc_discovery)
+			continue;
+
+		if (strcmp(is->is_conf.isc_target_addr,
+		    is2->is_conf.isc_target_addr) != 0)
+			continue;
+
+		if (is->is_conf.isc_discovery == 0 &&
+		    strcmp(is->is_conf.isc_target,
+		    is2->is_conf.isc_target) != 0)
+			continue;
+
+		sx_xunlock(&sc->sc_lock);
+		free(is, M_ISCSI);
+		return (EBUSY);
 	}
 
 	is->is_conn = icl_conn_new();
@@ -1936,9 +1956,9 @@ iscsi_action(struct cam_sim *sim, union ccb *ccb)
 		cpi->max_lun = 255;
 		//cpi->initiator_id = 0; /* XXX */
 		cpi->initiator_id = 64; /* XXX */
-		strncpy(cpi->sim_vid, "FreeBSD", SIM_IDLEN);
-		strncpy(cpi->hba_vid, "iSCSI", HBA_IDLEN);
-		strncpy(cpi->dev_name, cam_sim_name(sim), DEV_IDLEN);
+		strlcpy(cpi->sim_vid, "FreeBSD", SIM_IDLEN);
+		strlcpy(cpi->hba_vid, "iSCSI", HBA_IDLEN);
+		strlcpy(cpi->dev_name, cam_sim_name(sim), DEV_IDLEN);
 		cpi->unit_number = cam_sim_unit(sim);
 		cpi->bus_id = cam_sim_bus(sim);
 		cpi->base_transfer_speed = 150000; /* XXX */
@@ -2016,10 +2036,6 @@ iscsi_load(void)
 	    NULL, UID_ROOT, GID_WHEEL, 0600, "iscsi");
 	if (error != 0) {
 		ISCSI_WARN("failed to create device node, error %d", error);
-		sx_destroy(&sc->sc_lock);
-		cv_destroy(&sc->sc_cv);
-		uma_zdestroy(iscsi_outstanding_zone);
-		free(sc, M_ISCSI);
 		return (error);
 	}
 	sc->sc_cdev->si_drv1 = sc;
@@ -2036,16 +2052,16 @@ iscsi_load(void)
 static int
 iscsi_unload(void)
 {
-	/*
-	 * XXX: kldunload hangs on "devdrn".
-	 */
 	struct iscsi_session *is, *tmp;
 
-	ISCSI_DEBUG("removing device node");
-	destroy_dev(sc->sc_cdev);
-	ISCSI_DEBUG("device node removed");
+	if (sc->sc_cdev != NULL) {
+		ISCSI_DEBUG("removing device node");
+		destroy_dev(sc->sc_cdev);
+		ISCSI_DEBUG("device node removed");
+	}
 
-	EVENTHANDLER_DEREGISTER(shutdown_post_sync, sc->sc_shutdown_eh);
+	if (sc->sc_shutdown_eh != NULL)
+		EVENTHANDLER_DEREGISTER(shutdown_post_sync, sc->sc_shutdown_eh);
 
 	sx_slock(&sc->sc_lock);
 	TAILQ_FOREACH_SAFE(is, &sc->sc_sessions, is_next, tmp)

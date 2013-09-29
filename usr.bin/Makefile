@@ -132,6 +132,7 @@ SUBDIR=	alias \
 	printenv \
 	printf \
 	procstat \
+	protect \
 	rctl \
 	renice \
 	rev \
@@ -264,6 +265,7 @@ SUBDIR+=	compile_et
 .endif
 
 .if ${MK_LDNS_UTILS} != "no"
+SUBDIR+=	drill
 SUBDIR+=	host
 .endif
 

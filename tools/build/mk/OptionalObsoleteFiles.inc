@@ -214,7 +214,6 @@ OLD_FILES+=usr/share/man/man8/authpf-noip.8.gz
 .if ${MK_BIND} == no
 OLD_FILES+=etc/periodic/daily/470.status-named
 OLD_FILES+=usr/bin/dig
-OLD_FILES+=usr/bin/host
 OLD_FILES+=usr/bin/nslookup
 OLD_FILES+=usr/bin/nsupdate
 OLD_FILES+=usr/include/lwres/context.h
@@ -235,10 +234,17 @@ OLD_FILES+=usr/lib/liblwres.a
 OLD_FILES+=usr/lib/liblwres_p.a
 OLD_LIBS+=usr/lib/liblwres.so.50
 OLD_FILES+=usr/lib/liblwres.so
+OLD_FILES+=usr/sbin/arpaname
+OLD_FILES+=usr/sbin/ddns-confgen
+OLD_FILES+=usr/sbin/genrandom
+OLD_FILES+=usr/sbin/isc-hmac-fixup
+OLD_FILES+=usr/sbin/nsec3hash
 OLD_FILES+=usr/sbin/named
 OLD_FILES+=usr/sbin/lwresd
 OLD_FILES+=usr/sbin/named-checkconf
 OLD_FILES+=usr/sbin/named-checkzone
+OLD_FILES+=usr/sbin/named-compilezone
+OLD_FILES+=usr/sbin/named-journalprint
 OLD_FILES+=usr/sbin/named.reload
 OLD_FILES+=usr/sbin/named.reconfig
 OLD_FILES+=usr/sbin/rndc
@@ -252,8 +258,33 @@ OLD_FILES+=usr/share/doc/bind9/arm/Bv9ARM.ch06.html
 OLD_FILES+=usr/share/doc/bind9/arm/Bv9ARM.ch07.html
 OLD_FILES+=usr/share/doc/bind9/arm/Bv9ARM.ch08.html
 OLD_FILES+=usr/share/doc/bind9/arm/Bv9ARM.ch09.html
+OLD_FILES+=usr/share/doc/bind9/arm/Bv9ARM.ch10.html
 OLD_FILES+=usr/share/doc/bind9/arm/Bv9ARM.html
+OLD_FILES+=usr/share/doc/bind9/arm/Bv9ARM.pdf
+OLD_FILES+=usr/share/doc/bind9/arm/man.arpaname.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.ddns-confgen.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.dig.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.dnssec-dsfromkey.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.dnssec-keyfromlabel.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.dnssec-keygen.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.dnssec-revoke.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.dnssec-settime.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.dnssec-signzone.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.dnssec-verify.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.genrandom.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.host.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.isc-hmac-fixup.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.named-checkconf.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.named-checkzone.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.named-journalprint.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.named.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.nsec3hash.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.nsupdate.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.rndc-confgen.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.rndc.conf.html
+OLD_FILES+=usr/share/doc/bind9/arm/man.rndc.html
 OLD_DIRS+=usr/share/doc/bind9/arm
+OLD_FILES+=usr/share/doc/bind9/misc
 OLD_FILES+=usr/share/doc/bind9/misc/dnssec
 OLD_FILES+=usr/share/doc/bind9/misc/format-options.pl
 OLD_FILES+=usr/share/doc/bind9/misc/ipv6
@@ -263,15 +294,18 @@ OLD_FILES+=usr/share/doc/bind9/misc/options
 OLD_FILES+=usr/share/doc/bind9/misc/rfc-compliance
 OLD_FILES+=usr/share/doc/bind9/misc/roadmap
 OLD_FILES+=usr/share/doc/bind9/misc/sdb
+OLD_FILES+=usr/share/doc/bind9/misc/sort-options.pl
 OLD_DIRS+=usr/share/doc/bind9/misc
 OLD_DIRS+=usr/share/doc/bind9
 OLD_FILES+=usr/share/doc/bind9/CHANGES
 OLD_FILES+=usr/share/doc/bind9/COPYRIGHT
 OLD_FILES+=usr/share/doc/bind9/FAQ
+OLD_FILES+=usr/share/doc/bind9/HISTORY
 OLD_FILES+=usr/share/doc/bind9/README
+OLD_FILES+=usr/share/man/man1/arpaname.1.gz
 OLD_FILES+=usr/share/man/man1/dig.1.gz
-OLD_FILES+=usr/share/man/man1/host.1.gz
 OLD_FILES+=usr/share/man/man1/nslookup.1.gz
+OLD_FILES+=usr/share/man/man1/nsupdate.1.gz
 OLD_FILES+=usr/share/man/man3/lwres.3.gz
 OLD_FILES+=usr/share/man/man3/lwres_buffer.3.gz
 OLD_FILES+=usr/share/man/man3/lwres_config.3.gz
@@ -359,15 +393,18 @@ OLD_FILES+=usr/share/man/man3/lwres_getnamebyaddr.3.gz
 OLD_FILES+=usr/share/man/man3/lwres_string_parse.3.gz
 OLD_FILES+=usr/share/man/man5/named.conf.5.gz
 OLD_FILES+=usr/share/man/man5/rndc.conf.5.gz
-OLD_FILES+=usr/share/man/man1/nsupdate.1.gz
-OLD_FILES+=usr/share/man/man8/dnssec-keygen.8.gz
-OLD_FILES+=usr/share/man/man8/dnssec-signzone.8.gz
-OLD_FILES+=usr/share/man/man8/named.8.gz
-OLD_FILES+=usr/share/man/man8/lwresd.8.gz
+OLD_FILES+=usr/share/man/man8/ddns-confgen.8.gz
+OLD_FILES+=usr/share/man/man8/genrandom.8.gz
+OLD_FILES+=usr/share/man/man8/isc-hmac-fixup.8.gz
 OLD_FILES+=usr/share/man/man8/named-checkconf.8.gz
 OLD_FILES+=usr/share/man/man8/named-checkzone.8.gz
+OLD_FILES+=usr/share/man/man8/named-compilezone.8.gz
+OLD_FILES+=usr/share/man/man8/named-journalprint.8.gz
 OLD_FILES+=usr/share/man/man8/named.reload.8.gz
 OLD_FILES+=usr/share/man/man8/named.reconfig.8.gz
+OLD_FILES+=usr/share/man/man8/named.8.gz
+OLD_FILES+=usr/share/man/man8/nsec3hash.8.gz
+OLD_FILES+=usr/share/man/man8/lwresd.8.gz
 OLD_FILES+=usr/share/man/man8/rndc.8.gz
 OLD_FILES+=usr/share/man/man8/rndc-confgen.8.gz
 OLD_DIRS+=var/named/dev
@@ -380,8 +417,18 @@ OLD_DIRS+=var/named/var
 .endif
 
 .if ${MK_BIND_DNSSEC} == no || ${MK_BIND} == no
+OLD_FILES+=usr/sbin/dnssec-dsfromkey
+OLD_FILES+=usr/sbin/dnssec-keyfromlabel
 OLD_FILES+=usr/sbin/dnssec-keygen
+OLD_FILES+=usr/sbin/dnssec-revoke
+OLD_FILES+=usr/sbin/dnssec-settime
 OLD_FILES+=usr/sbin/dnssec-signzone
+OLD_FILES+=usr/share/man/man8/dnssec-dsfromkey.8.gz
+OLD_FILES+=usr/share/man/man8/dnssec-keyfromlabel.8.gz
+OLD_FILES+=usr/share/man/man8/dnssec-keygen.8.gz
+OLD_FILES+=usr/share/man/man8/dnssec-revoke.8.gz
+OLD_FILES+=usr/share/man/man8/dnssec-settime.8.gz
+OLD_FILES+=usr/share/man/man8/dnssec-signzone.8.gz
 .endif
 
 .if ${MK_BIND_ETC} == no || ${MK_BIND} == no
@@ -1562,9 +1609,7 @@ OLD_FILES+=usr/share/man/man8/unstr.8.gz
 .endif
 
 .if ${MK_GCC} == no
-.if ${MK_CXX} == no
 OLD_FILES+=usr/bin/c++filt
-.endif
 OLD_FILES+=usr/bin/g++
 OLD_FILES+=usr/bin/gcc
 OLD_FILES+=usr/bin/gcov
@@ -3391,6 +3436,28 @@ OLD_FILES+=usr/share/man/man8/verify_krb5_conf.8.gz
 OLD_FILES+=usr/share/man/man8/verify_krb5_conf.8.gz
 .endif
 
+.if ${MK_LDNS} == no
+OLD_FILES+=usr/lib/private/libldns.a
+OLD_FILES+=usr/lib/private/libldns.so
+OLD_LIBS+=usr/lib/private/libldns.so.5
+OLD_FILES+=usr/lib/private/libldns_p.a
+.if ${TARGET_ARCH} == "amd64" || ${TARGET_ARCH} == "powerpc64"
+OLD_FILES+=usr/lib32/private/libldns.a
+OLD_FILES+=usr/lib32/private/libldns.so
+OLD_LIBS+=usr/lib32/private/libldns.so.5
+OLD_FILES+=usr/lib32/private/libldns_p.a
+.endif
+.endif
+
+.if ${MK_LDNS_UTILS} == no
+OLD_FILES+=usr/bin/drill
+OLD_FILES+=usr/share/man/man1/drill.1.gz
+.if ${MK_BIND} == no
+OLD_FILES+=usr/bin/host
+OLD_FILES+=usr/share/man/man1/host.1.gz
+.endif
+.endif
+
 #.if ${MK_LIB32} == no
 # to be filled in
 #.endif
@@ -3717,7 +3784,27 @@ OLD_FILES+=usr/share/man/man8/ntptime.8.gz
 #.endif
 
 .if ${MK_OPENSSH} == no
-OLD_FILES+=usr.bin/ssh-copy-id
+OLD_FILES+=usr/bin/sftp
+OLD_FILES+=usr/bin/ssh
+OLD_FILES+=usr/bin/ssh-add
+OLD_FILES+=usr/bin/ssh-agent
+OLD_FILES+=usr/bin/ssh-copy-id
+OLD_FILES+=usr/bin/ssh-keygen
+OLD_FILES+=usr/bin/ssh-keyscan
+OLD_FILES+=usr/lib/private/libssh.a
+OLD_FILES+=usr/lib/private/libssh.so
+OLD_LIBS+=usr/lib/private/libssh.so.5
+OLD_FILES+=usr/lib/private/libssh_p.a
+.if ${TARGET_ARCH} == "amd64" || ${TARGET_ARCH} == "powerpc64"
+OLD_FILES+=usr/lib32/private/libssh.a
+OLD_FILES+=usr/lib32/private/libssh.so
+OLD_LIBS+=usr/lib32/private/libssh.so.5
+OLD_FILES+=usr/lib32/private/libssh_p.a
+.endif
+OLD_FILES+=usr/libexec/sftp-server
+OLD_FILES+=usr/libexec/ssh-keysign
+OLD_FILES+=usr/libexec/ssh-pkcs11-helper
+OLD_FILES+=usr/sbin/sshd
 .endif
 
 #.if ${MK_OPENSSL} == no
@@ -3974,7 +4061,6 @@ OLD_FILES+=usr/lib/librt_p.a
 OLD_FILES+=usr/lib/libsbuf_p.a
 OLD_FILES+=usr/lib/libsdp_p.a
 OLD_FILES+=usr/lib/libsmb_p.a
-OLD_FILES+=usr/lib/libssh_p.a
 OLD_FILES+=usr/lib/libssl_p.a
 OLD_FILES+=usr/lib/libstdc++_p.a
 OLD_FILES+=usr/lib/libsupc++_p.a
@@ -3997,6 +4083,8 @@ OLD_FILES+=usr/lib/libwrap_p.a
 OLD_FILES+=usr/lib/liby_p.a
 OLD_FILES+=usr/lib/libypclnt_p.a
 OLD_FILES+=usr/lib/libz_p.a
+OLD_FILES+=usr/lib/private/libldns_p.a
+OLD_FILES+=usr/lib/private/libssh_p.a
 .endif
 
 .if ${MK_RCMDS} == no
@@ -4334,6 +4422,26 @@ OLD_FILES+=usr/share/man/man8/telnetd.8.gz
 #.if ${MK_TOOLCHAIN} == no
 # to be filled in
 #.endif
+
+.if ${MK_UNBOUND} == no
+OLD_FILES+=etc/rc.d/local_unbound
+OLD_FILES+=usr/lib/private/libunbound.a
+OLD_FILES+=usr/lib/private/libunbound.so
+OLD_LIBS+=usr/lib/private/libunbound.so.5
+OLD_FILES+=usr/lib/private/libunbound_p.a
+.if ${TARGET_ARCH} == "amd64" || ${TARGET_ARCH} == "powerpc64"
+OLD_FILES+=usr/lib32/private/libunbound.a
+OLD_FILES+=usr/lib32/private/libunbound.so
+OLD_LIBS+=usr/lib32/private/libunbound.so.5
+OLD_FILES+=usr/lib32/private/libunbound_p.a
+.endif
+OLD_FILES+=usr/sbin/local-unbound-setup
+OLD_FILES+=usr/sbin/unbound
+OLD_FILES+=usr/sbin/unbound-anchor
+OLD_FILES+=usr/sbin/unbound-checkconf
+OLD_FILES+=usr/sbin/unbound-control
+OLD_FILES+=usr/sbin/unbound-control-setup
+.endif
 
 #.if ${MK_USB} == no
 # to be filled in
