@@ -435,6 +435,7 @@ pefs_flushkey(struct mount *mp, struct thread *td, int flags,
 	struct pefs_node *pn;
 	int error;
 
+	cache_purgevfs(mp);
 	vflush(mp, 0, 0, td);
 	rootvp = VFS_TO_PEFS(mp)->pm_rootvp;
 loop:
@@ -458,11 +459,17 @@ loop:
 		    pn->pn_tkey.ptk_key == pk)) ||
 		    ((pn->pn_flags & PN_HASKEY) == 0 && pk == NULL)) {
 			vgone(vp);
+		} else if (pk != NULL || (flags & PEFS_FLUSHKEY_ALL) != 0) {
+			pefs_dircache_purge(pn->pn_dircache);
 		}
 		vput(vp);
 	}
+	if (pk != NULL || (flags & PEFS_FLUSHKEY_ALL) != 0) {
+		vn_lock(rootvp, LK_EXCLUSIVE | LK_RETRY);
+		pefs_dircache_purge(VP_TO_PN(rootvp)->pn_dircache);
+		VOP_UNLOCK(rootvp, 0);
+	}
 
-	cache_purgevfs(mp);
 	return (0);
 }
 
