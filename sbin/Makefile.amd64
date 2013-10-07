@@ -3,3 +3,4 @@
 SUBDIR += bsdlabel
 SUBDIR += fdisk
 SUBDIR += nvmecontrol
+SUBDIR += pefs
