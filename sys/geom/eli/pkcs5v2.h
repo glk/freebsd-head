@@ -31,6 +31,6 @@
 void pkcs5v2_genkey(uint8_t *key, unsigned keylen, const uint8_t *salt,
     size_t saltsize, const char *passphrase, u_int iterations);
 #ifndef _KERNEL
-int pkcs5v2_calculate(int usecs, size_t keylen, size_t saltlen);
+int pkcs5v2_calculate(int usecs);
 #endif
 #endif	/* !_PKCS5V2_H_ */
