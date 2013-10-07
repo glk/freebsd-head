@@ -262,6 +262,7 @@ SUBDIR=	\
 	${_pccard} \
 	${_pcfclock} \
 	pcn \
+	${_pefs} \
 	${_pf} \
 	${_pflog} \
 	${_pfsync} \
@@ -373,6 +374,7 @@ SUBDIR=	\
 
 .if ${MACHINE_CPUARCH} == "i386" || ${MACHINE_CPUARCH} == "amd64"
 _filemon=	filemon
+_pefs=		pefs
 _vmware=	vmware
 .endif
 

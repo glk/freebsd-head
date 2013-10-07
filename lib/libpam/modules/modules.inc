@@ -20,6 +20,9 @@ MODULES		+= pam_nologin
 MODULES		+= pam_opie
 MODULES		+= pam_opieaccess
 MODULES		+= pam_passwdqc
+.if ${MACHINE_CPUARCH} == "i386" || ${MACHINE_CPUARCH} == "amd64"
+MODULES		+= pam_pefs
+.endif
 MODULES		+= pam_permit
 MODULES		+= pam_radius
 MODULES		+= pam_rhosts
