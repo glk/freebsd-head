@@ -1476,7 +1476,8 @@ set_cpufuncs()
 	}
 #endif /* CPU_ARM1136 || CPU_ARM1176 */
 #ifdef CPU_CORTEXA
-	if (cputype == CPU_ID_CORTEXA7 ||
+	if (cputype == CPU_ID_CORTEXA5 ||
+	    cputype == CPU_ID_CORTEXA7 ||
 	    cputype == CPU_ID_CORTEXA8R1 ||
 	    cputype == CPU_ID_CORTEXA8R2 ||
 	    cputype == CPU_ID_CORTEXA8R3 ||
@@ -1720,7 +1721,7 @@ int
 early_abort_fixup(arg)
 	void *arg;
 {
-	trapframe_t *frame = arg;
+	struct trapframe *frame = arg;
 	u_int fault_pc;
 	u_int fault_instruction;
 	int saved_lr = 0;
@@ -1861,7 +1862,7 @@ int
 late_abort_fixup(arg)
 	void *arg;
 {
-	trapframe_t *frame = arg;
+	struct trapframe *frame = arg;
 	u_int fault_pc;
 	u_int fault_instruction;
 	int saved_lr = 0;

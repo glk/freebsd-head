@@ -257,8 +257,8 @@ dev/nvme/nvme_test.c		optional nvme
 dev/nvme/nvme_util.c		optional nvme
 dev/nvram/nvram.c		optional nvram isa
 dev/pcf/pcf_isa.c		optional pcf
-dev/random/ivy.c		optional random rdrand_rng
-dev/random/nehemiah.c		optional random padlock_rng
+dev/random/ivy.c		optional rdrand_rng
+dev/random/nehemiah.c		optional padlock_rng
 dev/sbni/if_sbni.c		optional sbni
 dev/sbni/if_sbni_isa.c		optional sbni isa
 dev/sbni/if_sbni_pci.c		optional sbni pci
@@ -564,6 +564,7 @@ x86/isa/nmi.c			standard
 x86/isa/orm.c			optional isa
 x86/pci/pci_bus.c		optional pci
 x86/pci/qpi.c			optional pci
+x86/x86/busdma_bounce.c		standard
 x86/x86/busdma_machdep.c	standard
 x86/x86/dump_machdep.c		standard
 x86/x86/fdt_machdep.c		optional fdt
