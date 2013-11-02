@@ -1881,6 +1881,8 @@ dev/nand/nfc_if.m		optional nand
 dev/ncv/ncr53c500.c		optional ncv
 dev/ncv/ncr53c500_pccard.c	optional ncv pccard
 dev/netmap/netmap.c		optional netmap
+dev/netmap/netmap_mem2.c	optional netmap
+# compile-with "${NORMAL_C} -Wconversion -Wextra"
 dev/nge/if_nge.c		optional nge
 dev/nxge/if_nxge.c		optional nxge \
 	compile-with "${NORMAL_C} ${NO_WSELF_ASSIGN}"
@@ -3205,7 +3207,6 @@ netgraph/ng_echo.c		optional netgraph_echo
 netgraph/ng_eiface.c		optional netgraph_eiface
 netgraph/ng_ether.c		optional netgraph_ether
 netgraph/ng_ether_echo.c	optional netgraph_ether_echo
-netgraph/ng_fec.c		optional netgraph_fec
 netgraph/ng_frame_relay.c	optional netgraph_frame_relay
 netgraph/ng_gif.c		optional netgraph_gif
 netgraph/ng_gif_demux.c		optional netgraph_gif_demux
