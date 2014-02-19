@@ -10,6 +10,7 @@ SRCS+=	pefs_hmac.c
 SRCS+=	pefs_pkcs5v2.c
 SRCS+=	rijndael-api.c rijndael-api-fst.c rijndael-alg-fst.c
 SRCS+=	sha2.c
+SRCS+=	crypto_verify_bytes.c
 
 MAN=	pefs.8
 

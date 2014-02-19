@@ -41,6 +41,7 @@ __FBSDID("$FreeBSD$");
 
 #include <crypto/rijndael/rijndael.h>
 #include <opencrypto/cryptodev.h>
+#include <fs/pefs/crypto_verify_bytes.h>
 #include <fs/pefs/pefs.h>
 #include <fs/pefs/pefs_hmac.h>
 #include <fs/pefs/pefs_pkcs5v2.h>
@@ -354,8 +355,10 @@ pefs_key_cipher(struct pefs_xkeyenc *xe, int enc,
 		pefs_hmac_update(&hmac_ctx, data, datasize);
 		pefs_hmac_final(&hmac_ctx, mac, PEFS_KEYENC_MAC_SIZE);
 		bzero(&hmac_ctx, sizeof(hmac_ctx));
-		if (memcmp(mac, xe->ke_mac, PEFS_KEYENC_MAC_SIZE) != 0)
+		if (crypto_verify_bytes(mac, xe->ke_mac,
+		    PEFS_KEYENC_MAC_SIZE) != 0) {
 			return (PEFS_ERR_INVALID);
+		}
 	}
 
 	rijndael_set_key(&enc_ctx, key, keysize * 8);
