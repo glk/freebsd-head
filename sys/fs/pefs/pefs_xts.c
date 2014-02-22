@@ -36,7 +36,9 @@
 #ifdef _KERNEL
 #include <sys/libkern.h>
 #else
+#include <assert.h>
 #include <string.h>
+#define	KASSERT(cond, msg)	assert(cond)
 #endif
 
 #define	XTS_BLK_BYTES		16
@@ -97,7 +99,7 @@ xts_lastblock(algop_crypt_t *data_crypt, const struct pefs_session *ses,
 }
 
 static __inline void
-xts_smallblock(const struct pefs_alg *alg, const struct pefs_session *ses,
+pefs_smallblock_crypt(const struct pefs_alg *alg, const struct pefs_session *ses,
     const struct pefs_ctx *data_ctx,
     uint64_t *tweak, const uint8_t *src, uint8_t *dst, int len)
 {
@@ -129,8 +131,8 @@ xts_start(const struct pefs_alg *alg, const struct pefs_session *ses,
 	alg->pa_encrypt(ses, tweak_ctx, (uint8_t *)tweak, (uint8_t *)tweak);
 }
 
-void
-pefs_xts_block_encrypt(const struct pefs_alg *alg,
+static void
+pefs_xts_block_encrypt_gen(const struct pefs_alg *alg,
     const struct pefs_session *ses,
     const struct pefs_ctx *tweak_ctx, const struct pefs_ctx *data_ctx,
     uint64_t sector, const uint8_t *xtweak, int len,
@@ -138,12 +140,9 @@ pefs_xts_block_encrypt(const struct pefs_alg *alg,
 {
 	uint64_t tweak[XTS_BLK_BYTES / 8];
 
-	xts_start(alg, ses, tweak_ctx, tweak, sector, xtweak);
+	KASSERT(len >= XTS_BLK_BYTES, ("PEFS XTS encryption of small block"));
 
-	if (len < XTS_BLK_BYTES) {
-		xts_smallblock(alg, ses, data_ctx, tweak, src, dst, len);
-		return;
-	}
+	xts_start(alg, ses, tweak_ctx, tweak, sector, xtweak);
 
 	while (len >= XTS_BLK_BYTES) {
 		xts_fullblock(alg->pa_encrypt, ses, data_ctx, tweak, src, dst);
@@ -158,7 +157,31 @@ pefs_xts_block_encrypt(const struct pefs_alg *alg,
 }
 
 void
-pefs_xts_block_decrypt(const struct pefs_alg *alg,
+pefs_xts_block_encrypt(const struct pefs_alg *alg,
+    const struct pefs_session *ses,
+    const struct pefs_ctx *tweak_ctx, const struct pefs_ctx *data_ctx,
+    uint64_t sector, const uint8_t *xtweak, int len,
+    const uint8_t *src, uint8_t *dst)
+{
+	uint64_t tweak[XTS_BLK_BYTES / 8];
+
+	if (len < XTS_BLK_BYTES) {
+		xts_start(alg, ses, tweak_ctx, tweak, sector, xtweak);
+		pefs_smallblock_crypt(alg, ses, data_ctx, tweak, src, dst, len);
+		return;
+	}
+
+	if (alg->pa_encrypt_xts != NULL &&
+	    alg->pa_encrypt_xts(ses, tweak_ctx, data_ctx, sector, xtweak,
+	    len, src, dst) == 0)
+		return;
+
+	pefs_xts_block_encrypt_gen(alg, ses, tweak_ctx, data_ctx,
+	    sector, xtweak, len, src, dst);
+}
+
+static void
+pefs_xts_block_decrypt_gen(const struct pefs_alg *alg,
     const struct pefs_session *ses,
     const struct pefs_ctx *tweak_ctx, const struct pefs_ctx *data_ctx,
     uint64_t sector, const uint8_t *xtweak, int len,
@@ -167,12 +190,9 @@ pefs_xts_block_decrypt(const struct pefs_alg *alg,
 	uint64_t tweak[XTS_BLK_BYTES / 8];
 	uint64_t prevtweak[XTS_BLK_BYTES / 8];
 
-	xts_start(alg, ses, tweak_ctx, tweak, sector, xtweak);
+	KASSERT(len >= XTS_BLK_BYTES, ("PEFS XTS decryption of small block"));
 
-	if (len < XTS_BLK_BYTES) {
-		xts_smallblock(alg, ses, data_ctx, tweak, src, dst, len);
-		return;
-	}
+	xts_start(alg, ses, tweak_ctx, tweak, sector, xtweak);
 
 	if ((len & XTS_BLK_MASK) != 0)
 		len -= XTS_BLK_BYTES;
@@ -196,4 +216,28 @@ pefs_xts_block_decrypt(const struct pefs_alg *alg,
 		xts_lastblock(alg->pa_decrypt, ses, data_ctx, prevtweak,
 		    src, dst, len);
 	}
+}
+
+void
+pefs_xts_block_decrypt(const struct pefs_alg *alg,
+    const struct pefs_session *ses,
+    const struct pefs_ctx *tweak_ctx, const struct pefs_ctx *data_ctx,
+    uint64_t sector, const uint8_t *xtweak, int len,
+    const uint8_t *src, uint8_t *dst)
+{
+	uint64_t tweak[XTS_BLK_BYTES / 8];
+
+	if (len < XTS_BLK_BYTES) {
+		xts_start(alg, ses, tweak_ctx, tweak, sector, xtweak);
+		pefs_smallblock_crypt(alg, ses, data_ctx, tweak, src, dst, len);
+		return;
+	}
+
+	if (alg->pa_decrypt_xts != NULL &&
+	    alg->pa_decrypt_xts(ses, tweak_ctx, data_ctx, sector, xtweak,
+	    len, src, dst) == 0)
+		return;
+
+	pefs_xts_block_decrypt_gen(alg, ses, tweak_ctx, data_ctx,
+	    sector, xtweak, len, src, dst);
 }

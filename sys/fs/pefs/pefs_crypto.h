@@ -46,10 +46,16 @@ typedef int	algop_keysetup_t(const struct pefs_session *sess,
 	    struct pefs_ctx *ctx, const uint8_t *key, uint32_t keybits);
 typedef void	algop_crypt_t(const struct pefs_session *sess,
 	    const struct pefs_ctx *ctx, const uint8_t *in, uint8_t *out);
+typedef int	algop_crypt_xts_t(const struct pefs_session *ses,
+	    const struct pefs_ctx *tweak_ctx, const struct pefs_ctx *data_ctx,
+	    uint64_t sector, const uint8_t *xtweak, int len,
+	    const uint8_t *src, uint8_t *dst);
 
 struct pefs_alg {
 	algop_session_t		*pa_enter;
 	algop_session_t		*pa_leave;
+	algop_crypt_xts_t	*pa_encrypt_xts;
+	algop_crypt_xts_t	*pa_decrypt_xts;
 	algop_crypt_t		*pa_encrypt;
 	algop_crypt_t		*pa_decrypt;
 	algop_keysetup_t	*pa_keysetup;

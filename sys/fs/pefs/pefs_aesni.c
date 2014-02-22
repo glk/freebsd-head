@@ -120,6 +120,46 @@ pefs_aesni_decrypt(const struct pefs_session *xses,
 		rijndael_decrypt(&ctx->sw, in, out);
 }
 
+static int
+pefs_aesni_encrypt_xts(const struct pefs_session *xses,
+	    const struct pefs_ctx *xtweak_ctx, const struct pefs_ctx *xdata_ctx,
+	    uint64_t sector, const uint8_t *xtweak, int len,
+	    const uint8_t *src, uint8_t *dst)
+{
+	const struct pefs_aesni_ses *ses = &xses->o.ps_aesni;
+	const struct pefs_aesni_ctx *data_ctx = &xdata_ctx->o.pctx_aesni;
+	const struct pefs_aesni_ctx *tweak_ctx = &xtweak_ctx->o.pctx_aesni;
+
+	if (ses->fpu_saved < 0)
+		return (ENODEV);
+
+	aesni_encrypt_xts(data_ctx->rounds, data_ctx->enc_schedule,
+	    tweak_ctx->enc_schedule, len, src, dst,
+	    (const uint8_t *)&sector, xtweak);
+
+	return (0);
+}
+
+static int
+pefs_aesni_decrypt_xts(const struct pefs_session *xses,
+	    const struct pefs_ctx *xtweak_ctx, const struct pefs_ctx *xdata_ctx,
+	    uint64_t sector, const uint8_t *xtweak, int len,
+	    const uint8_t *src, uint8_t *dst)
+{
+	const struct pefs_aesni_ses *ses = &xses->o.ps_aesni;
+	const struct pefs_aesni_ctx *data_ctx = &xdata_ctx->o.pctx_aesni;
+	const struct pefs_aesni_ctx *tweak_ctx = &xtweak_ctx->o.pctx_aesni;
+
+	if (ses->fpu_saved < 0)
+		return (ENODEV);
+
+	aesni_decrypt_xts(data_ctx->rounds, data_ctx->dec_schedule,
+	    tweak_ctx->enc_schedule, len, src, dst,
+	    (const uint8_t *)&sector, xtweak);
+
+	return (0);
+}
+
 static void
 pefs_aesni_enter(struct pefs_session *xses)
 {
@@ -193,6 +233,8 @@ pefs_aesni_init(struct pefs_alg *pa)
 		pa->pa_keysetup = pefs_aesni_keysetup;
 		pa->pa_encrypt = pefs_aesni_encrypt;
 		pa->pa_decrypt = pefs_aesni_decrypt;
+		pa->pa_encrypt_xts = pefs_aesni_encrypt_xts;
+		pa->pa_decrypt_xts = pefs_aesni_decrypt_xts;
 		CPU_FOREACH(cpuid) {
 			fpu_ctx = fpu_kern_alloc_ctx(FPU_KERN_NORMAL);
 			DPCPU_ID_SET(cpuid, pefs_aesni_fpu, fpu_ctx);
