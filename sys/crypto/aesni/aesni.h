@@ -91,10 +91,14 @@ void aesni_decrypt_ecb(int rounds, const void *key_schedule /*__aligned(16)*/,
 
 void aesni_encrypt_xts(int rounds, const void *data_schedule /*__aligned(16)*/,
     const void *tweak_schedule /*__aligned(16)*/, size_t len,
-    const uint8_t *from, uint8_t *to, const uint8_t iv[AES_BLOCK_LEN]);
+    const uint8_t *from, uint8_t *to, const uint8_t *iv_lo,
+    const uint8_t *iv_hi /* assume zero if NULL */);
 void aesni_decrypt_xts(int rounds, const void *data_schedule /*__aligned(16)*/,
     const void *tweak_schedule /*__aligned(16)*/, size_t len,
-    const uint8_t *from, uint8_t *to, const uint8_t iv[AES_BLOCK_LEN]);
+    const uint8_t *from, uint8_t *to, const uint8_t *iv_lo,
+    const uint8_t *iv_hi /* assume zero if NULL */);
+
+#ifdef _KERNEL
 
 int aesni_cipher_setup(struct aesni_session *ses,
     struct cryptoini *encini);
@@ -103,5 +107,7 @@ int aesni_cipher_process(struct aesni_session *ses,
 
 uint8_t *aesni_cipher_alloc(struct cryptodesc *enccrd, struct cryptop *crp,
     int *allocated);
+
+#endif
 
 #endif /* _AESNI_H_ */

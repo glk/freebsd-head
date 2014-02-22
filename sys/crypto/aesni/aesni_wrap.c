@@ -29,17 +29,24 @@
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
- 
+
+#ifdef _KERNEL
 #include <sys/param.h>
 #include <sys/libkern.h>
 #include <sys/malloc.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
+#else
+#include <strings.h>
+#endif
+
 #include <crypto/aesni/aesni.h>
- 
+
 #include "aesencdec.h"
 
+#ifdef _KERNEL
 MALLOC_DECLARE(M_AESNI);
+#endif
 
 struct blocks8 {
 	__m128i	blk[8];
@@ -217,6 +224,31 @@ aesni_crypt_xts_block(int rounds, const __m128i *key_schedule, __m128i *tweak,
 }
 
 static void
+aesni_crypt_xts_blocksteal(int rounds, const __m128i *key_schedule,
+    __m128i *tweak, size_t len, const uint8_t *from, uint8_t *to,
+    int do_encrypt)
+{
+	uint8_t b[AES_XTS_BLOCKSIZE] __aligned(16);
+	__m128i ntweak;
+	__m128i *tweak0;
+
+	len -= AES_XTS_BLOCKSIZE;
+	if (do_encrypt) {
+		tweak0 = tweak;
+	} else {
+		ntweak = xts_crank_lfsr(*tweak);
+		tweak0 = &ntweak;
+	}
+	aesni_crypt_xts_block(rounds, key_schedule, tweak0,
+	    from, to, do_encrypt);
+	bcopy(to, b, AES_XTS_BLOCKSIZE);
+	bcopy(from + AES_XTS_BLOCKSIZE, b, len);
+	bcopy(to, to + AES_XTS_BLOCKSIZE, len);
+	aesni_crypt_xts_block(rounds, key_schedule, tweak,
+	    b, to, do_encrypt);
+}
+
+static void
 aesni_crypt_xts_block8(int rounds, const __m128i *key_schedule, __m128i *tweak,
     const uint8_t *from, uint8_t *to, int do_encrypt)
 {
@@ -272,23 +304,38 @@ aesni_crypt_xts_block8(int rounds, const __m128i *key_schedule, __m128i *tweak,
 static void
 aesni_crypt_xts(int rounds, const __m128i *data_schedule,
     const __m128i *tweak_schedule, size_t len, const uint8_t *from,
-    uint8_t *to, const uint8_t iv[AES_BLOCK_LEN], int do_encrypt)
+    uint8_t *to, const uint8_t *iv_lo, const uint8_t *iv_hi, int do_encrypt)
 {
 	__m128i tweakreg;
 	uint8_t tweak[AES_XTS_BLOCKSIZE] __aligned(16);
-	size_t i, cnt;
+	size_t i, cnt, len_steal;
 
 	/*
 	 * Prepare tweak as E_k2(IV). IV is specified as LE representation
 	 * of a 64-bit block number which we allow to be passed in directly.
 	 */
 #if BYTE_ORDER == LITTLE_ENDIAN
-	bcopy(iv, tweak, AES_XTS_IVSIZE);
-	/* Last 64 bits of IV are always zero. */
-	bzero(tweak + AES_XTS_IVSIZE, AES_XTS_IVSIZE);
+	bcopy(iv_lo, tweak, AES_XTS_IVSIZE);
+	/*
+	 * Most implementations always keep last 64 bits of IV zero while
+	 * standard specifies only that "tweak value is a non-negative integer
+	 * [...] starting from an arbitrary non-negative integer"
+	 */
+	if (iv_hi == NULL)
+		bzero(tweak + AES_XTS_IVSIZE, AES_XTS_IVSIZE);
+	else
+		bcopy(iv_hi, tweak + AES_XTS_IVSIZE, AES_XTS_IVSIZE);
 #else
 #error Only LITTLE_ENDIAN architectures are supported.
 #endif
+	if (len % AES_XTS_BLOCKSIZE != 0) {
+		if (len <= AES_XTS_BLOCKSIZE)
+			return; /* panic? */
+		len_steal = AES_XTS_BLOCKSIZE + (len % AES_XTS_BLOCKSIZE);
+		len -= len_steal;
+	} else {
+		len_steal = 0;
+	}
 	tweakreg = _mm_loadu_si128((__m128i *)&tweak[0]);
 	tweakreg = aesni_enc(rounds - 1, tweak_schedule, tweakreg);
 
@@ -307,27 +354,32 @@ aesni_crypt_xts(int rounds, const __m128i *data_schedule,
 		from += AES_XTS_BLOCKSIZE;
 		to += AES_XTS_BLOCKSIZE;
 	}
+	if (len_steal != 0)
+		aesni_crypt_xts_blocksteal(rounds, data_schedule, &tweakreg,
+		    len_steal, from, to, do_encrypt);
 }
 
 void
 aesni_encrypt_xts(int rounds, const void *data_schedule,
     const void *tweak_schedule, size_t len, const uint8_t *from, uint8_t *to,
-    const uint8_t iv[AES_BLOCK_LEN])
+    const uint8_t *iv_lo, const uint8_t *iv_hi)
 {
 
 	aesni_crypt_xts(rounds, data_schedule, tweak_schedule, len, from, to,
-	    iv, 1);
+	    iv_lo, iv_hi, 1);
 }
 
 void
 aesni_decrypt_xts(int rounds, const void *data_schedule,
     const void *tweak_schedule, size_t len, const uint8_t *from, uint8_t *to,
-    const uint8_t iv[AES_BLOCK_LEN])
+    const uint8_t *iv_lo, const uint8_t *iv_hi)
 {
 
 	aesni_crypt_xts(rounds, data_schedule, tweak_schedule, len, from, to,
-	    iv, 0);
+	    iv_lo, iv_hi, 0);
 }
+
+#ifdef _KERNEL
 
 static int
 aesni_cipher_setup_common(struct aesni_session *ses, const uint8_t *key,
@@ -443,7 +495,7 @@ aesni_cipher_process(struct aesni_session *ses, struct cryptodesc *enccrd,
 		} else /* if (ses->algo == CRYPTO_AES_XTS) */ {
 			aesni_encrypt_xts(ses->rounds, ses->enc_schedule,
 			    ses->xts_schedule, enccrd->crd_len, buf, buf,
-			    ses->iv);
+			    ses->iv, NULL);
 		}
 	} else {
 		if ((enccrd->crd_flags & CRD_F_IV_EXPLICIT) != 0)
@@ -457,7 +509,7 @@ aesni_cipher_process(struct aesni_session *ses, struct cryptodesc *enccrd,
 		} else /* if (ses->algo == CRYPTO_AES_XTS) */ {
 			aesni_decrypt_xts(ses->rounds, ses->dec_schedule,
 			    ses->xts_schedule, enccrd->crd_len, buf, buf,
-			    ses->iv);
+			    ses->iv, NULL);
 		}
 	}
 	if (saved_ctx)
@@ -476,3 +528,5 @@ aesni_cipher_process(struct aesni_session *ses, struct cryptodesc *enccrd,
 	}
 	return (error);
 }
+
+#endif /* _KERNEL */
