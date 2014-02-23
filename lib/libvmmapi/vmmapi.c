@@ -397,6 +397,18 @@ vm_lapic_irq(struct vmctx *ctx, int vcpu, int vector)
 }
 
 int
+vm_lapic_local_irq(struct vmctx *ctx, int vcpu, int vector)
+{
+	struct vm_lapic_irq vmirq;
+
+	bzero(&vmirq, sizeof(vmirq));
+	vmirq.cpuid = vcpu;
+	vmirq.vector = vector;
+
+	return (ioctl(ctx->fd, VM_LAPIC_LOCAL_IRQ, &vmirq));
+}
+
+int
 vm_lapic_msi(struct vmctx *ctx, uint64_t addr, uint64_t msg)
 {
 	struct vm_lapic_msi vmmsi;
@@ -439,6 +451,13 @@ vm_ioapic_pulse_irq(struct vmctx *ctx, int irq)
 	ioapic_irq.irq = irq;
 
 	return (ioctl(ctx->fd, VM_IOAPIC_PULSE_IRQ, &ioapic_irq));
+}
+
+int
+vm_ioapic_pincount(struct vmctx *ctx, int *pincount)
+{
+
+	return (ioctl(ctx->fd, VM_IOAPIC_PINCOUNT, pincount));
 }
 
 int

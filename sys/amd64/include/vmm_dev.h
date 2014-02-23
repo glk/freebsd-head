@@ -181,6 +181,8 @@ enum {
 	IOCNUM_IOAPIC_DEASSERT_IRQ = 34,
 	IOCNUM_IOAPIC_PULSE_IRQ = 35,
 	IOCNUM_LAPIC_MSI = 36,
+	IOCNUM_LAPIC_LOCAL_IRQ = 37,
+	IOCNUM_IOAPIC_PINCOUNT = 38,
 
 	/* PCI pass-thru */
 	IOCNUM_BIND_PPTDEV = 40,
@@ -217,6 +219,8 @@ enum {
 	_IOW('v', IOCNUM_INJECT_EVENT, struct vm_event)
 #define	VM_LAPIC_IRQ 		\
 	_IOW('v', IOCNUM_LAPIC_IRQ, struct vm_lapic_irq)
+#define	VM_LAPIC_LOCAL_IRQ 	\
+	_IOW('v', IOCNUM_LAPIC_LOCAL_IRQ, struct vm_lapic_irq)
 #define	VM_LAPIC_MSI		\
 	_IOW('v', IOCNUM_LAPIC_MSI, struct vm_lapic_msi)
 #define	VM_IOAPIC_ASSERT_IRQ	\
@@ -225,6 +229,8 @@ enum {
 	_IOW('v', IOCNUM_IOAPIC_DEASSERT_IRQ, struct vm_ioapic_irq)
 #define	VM_IOAPIC_PULSE_IRQ	\
 	_IOW('v', IOCNUM_IOAPIC_PULSE_IRQ, struct vm_ioapic_irq)
+#define	VM_IOAPIC_PINCOUNT	\
+	_IOR('v', IOCNUM_IOAPIC_PINCOUNT, int)
 #define	VM_SET_CAPABILITY \
 	_IOW('v', IOCNUM_SET_CAPABILITY, struct vm_capability)
 #define	VM_GET_CAPABILITY \

@@ -158,6 +158,7 @@
 #define CPU_ID_CORTEXA15	0x410fc0f0
 #define CPU_ID_SA110		0x4401a100
 #define CPU_ID_SA1100		0x4401a110
+#define	CPU_ID_KRAIT		0x510f06f0 /* Snapdragon S4 Pro/APQ8064 */
 #define	CPU_ID_TI925T		0x54029250
 #define CPU_ID_MV88FR131	0x56251310 /* Marvell Feroceon 88FR131 Core */
 #define CPU_ID_MV88FR331	0x56153310 /* Marvell Feroceon 88FR331 Core */
@@ -403,6 +404,8 @@
 #define FAULT_PERM_P    0x0f /* Permission -- Page */
 
 #define	FAULT_IMPRECISE	0x400	/* Imprecise exception (XSCALE) */
+#define	FAULT_EXTERNAL	0x400	/* External abort (armv6+) */
+#define	FAULT_WNR	0x800	/* Write-not-Read access (armv6+) */
 
 /*
  * Address of the vector page, low and high versions.
