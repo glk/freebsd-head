@@ -64,7 +64,8 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_pager.h>
 #include <vm/vnode_pager.h>
 
-#include <fs/pefs/crypto_verify_bytes.h>
+#include <crypto/crypto_verify_bytes.h>
+
 #include <fs/pefs/pefs.h>
 #include <fs/pefs/pefs_dircache.h>
 

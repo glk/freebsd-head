@@ -40,7 +40,8 @@ __FBSDID("$FreeBSD$");
 #include <limits.h>
 #include <errno.h>
 
-#include <fs/pefs/crypto_verify_bytes.h>
+#include <crypto/crypto_verify_bytes.h>
+
 #include <fs/pefs/pefs.h>
 
 #include "pefs_ctl.h"

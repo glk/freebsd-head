@@ -48,7 +48,8 @@ __FBSDID("$FreeBSD$");
 #include <libutil.h>
 #include <readpassphrase.h>
 
-#include <fs/pefs/crypto_verify_bytes.h>
+#include <crypto/crypto_verify_bytes.h>
+
 #include <fs/pefs/pefs.h>
 
 #include "pefs_ctl.h"
