@@ -5,6 +5,8 @@
 .PATH:	${.CURDIR}/../../crypto/blowfish
 .PATH:	${.CURDIR}/../../crypto/camellia
 .PATH:	${.CURDIR}/../../crypto/des
+.PATH:	${.CURDIR}/../../crypto/hmac
+.PATH:	${.CURDIR}/../../crypto/pbkdf2
 .PATH:	${.CURDIR}/../../crypto/rijndael
 .PATH:	${.CURDIR}/../../crypto/sha2
 .PATH:	${.CURDIR}/../../crypto/siphash
@@ -18,6 +20,8 @@ SRCS	+= camellia.c camellia-api.c
 SRCS	+= des_ecb.c des_enc.c des_setkey.c
 SRCS	+= sha1.c sha2.c sha256c.c
 SRCS	+= siphash.c
+SRCS	+= hmac_sha512.c
+SRCS	+= pbkdf2_hmac_sha512.c
 SRCS	+= opt_param.h cryptodev_if.h bus_if.h device_if.h
 SRCS	+= opt_ddb.h
 
