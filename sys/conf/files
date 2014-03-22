@@ -510,6 +510,7 @@ crypto/blowfish/bf_ecb.c	optional ipsec
 crypto/blowfish/bf_skey.c	optional crypto | ipsec
 crypto/camellia/camellia.c	optional crypto | ipsec
 crypto/camellia/camellia-api.c	optional crypto | ipsec
+crypto/crypto_verify_bytes.c	optional crypto
 crypto/des/des_ecb.c		optional crypto | ipsec | netsmb
 crypto/des/des_setkey.c		optional crypto | ipsec | netsmb
 crypto/hmac/hmac_sha512.c	optional crypto
