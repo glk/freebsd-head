@@ -12,8 +12,6 @@
         ..
     ..
     share
-        aclocal
-        ..
         atf
         ..
         doc
@@ -23,6 +21,8 @@
     ..
     tests
         bin
+            chown
+            ..
             date
             ..
             mv
@@ -85,19 +85,23 @@
             ..
             libcrypt
             ..
+            libmp
+            ..
         ..
         libexec
             atf
                 atf-check
                 ..
+                atf-sh
+                ..
+            ..
+            rtld-elf
             ..
         ..
         sbin
             dhclient
             ..
             growfs
-            ..
-            ifconfig
             ..
             mdconfig
             ..
@@ -131,25 +135,7 @@
         usr.bin
             apply
             ..
-            atf
-                atf-sh
-                ..
-            ..
-            calendar
-            ..
-            comm
-            ..
-            file2c
-            ..
-            join
-            ..
-            jot
-            ..
-            lastcomm
-            ..
-            m4
-            ..
-            make
+            bmake
                 archives
                     fmt_44bsd
                     ..
@@ -247,6 +233,20 @@
                     ..
                 ..
             ..
+            calendar
+            ..
+            comm
+            ..
+            file2c
+            ..
+            join
+            ..
+            jot
+            ..
+            lastcomm
+            ..
+            m4
+            ..
             ncal
             ..
             printf
@@ -257,6 +257,10 @@
             ..
             tr
             ..
+            truncate
+            ..
+            units
+            ..
             uudecode
             ..
             uuencode
@@ -264,6 +268,8 @@
             xargs
             ..
             yacc
+                yacc
+                ..
             ..
         ..
         usr.sbin

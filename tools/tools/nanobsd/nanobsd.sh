@@ -79,7 +79,8 @@ CONF_WORLD=' '
 # Kernel config file to use
 NANO_KERNEL=GENERIC
 
-# Kernel modules to build; default is none
+# Kernel modules to install. If empty, no modules are installed.
+# Use "default" to install all built modules.
 NANO_MODULES=
 
 # Customize commands.
@@ -177,6 +178,15 @@ SRCCONF=${SRCCONF:=/dev/null}
 #
 #######################################################################
 
+# rm doesn't know -x prior to FreeBSD 10, so cope with a variety of build
+# hosts for now.
+nano_rm ( ) {
+	case $(uname -r) in
+	7*|8*|9*) rm $* ;;
+	*) rm -x $* ;;
+	esac
+}
+
 # run in the world chroot, errors fatal
 CR()
 {
@@ -199,9 +209,9 @@ nano_cleanup ( ) (
 clean_build ( ) (
 	pprint 2 "Clean and create object directory (${MAKEOBJDIRPREFIX})"
 
-	if ! rm -xrf ${MAKEOBJDIRPREFIX}/ > /dev/null 2>&1 ; then
+	if ! nano_rm -rf ${MAKEOBJDIRPREFIX}/ > /dev/null 2>&1 ; then
 		chflags -R noschg ${MAKEOBJDIRPREFIX}/
-		rm -xr ${MAKEOBJDIRPREFIX}/
+		nano_rm -r ${MAKEOBJDIRPREFIX}/
 	fi
 	mkdir -p ${MAKEOBJDIRPREFIX}
 	printenv > ${MAKEOBJDIRPREFIX}/_.env
@@ -233,7 +243,7 @@ build_kernel ( ) (
 
 	(
 	if [ -f ${NANO_KERNEL} ] ; then
-		extra="KERNCONFDIR=$(realpath $(dirname ${NANO_KERNEL}))"
+		kernconfdir_arg="KERNCONFDIR='$(realpath $(dirname ${NANO_KERNEL}))'"
 		kernconf=$(basename ${NANO_KERNEL})
 	else
 		kernconf=${NANO_KERNEL}
@@ -245,27 +255,27 @@ build_kernel ( ) (
 	unset TARGET_CPUTYPE
 	# Note: We intentionally build all modules, not only the ones in
 	# NANO_MODULES so the built world can be reused by multiple images.
-	env TARGET_ARCH=${NANO_ARCH} ${NANO_PMAKE} buildkernel \
-		SRCCONF=${SRCCONF} \
-		${extra} __MAKE_CONF=${NANO_MAKE_CONF_BUILD} \
-		KERNCONF=${kernconf}
+	eval "TARGET_ARCH=${NANO_ARCH} ${NANO_PMAKE} buildkernel \
+		SRCCONF='${SRCCONF}' \
+		__MAKE_CONF='${NANO_MAKE_CONF_BUILD}' \
+		${kernconfdir_arg} KERNCONF=${kernconf}"
 	) > ${MAKEOBJDIRPREFIX}/_.bk 2>&1
 )
 
 clean_world ( ) (
 	if [ "${NANO_OBJ}" != "${MAKEOBJDIRPREFIX}" ]; then
 		pprint 2 "Clean and create object directory (${NANO_OBJ})"
-		if ! rm -rxf ${NANO_OBJ}/ > /dev/null 2>&1 ; then
+		if ! nano_rm -rf ${NANO_OBJ}/ > /dev/null 2>&1 ; then
 			chflags -R noschg ${NANO_OBJ}
-			rm -xr ${NANO_OBJ}/
+			nano_rm -r ${NANO_OBJ}/
 		fi
 		mkdir -p ${NANO_OBJ} ${NANO_WORLDDIR}
 		printenv > ${NANO_OBJ}/_.env
 	else
 		pprint 2 "Clean and create world directory (${NANO_WORLDDIR})"
-		if ! rm -rxf ${NANO_WORLDDIR}/ > /dev/null 2>&1 ; then
+		if ! nano_rm -rf ${NANO_WORLDDIR}/ > /dev/null 2>&1 ; then
 			chflags -R noschg ${NANO_WORLDDIR}
-			rm -rxf ${NANO_WORLDDIR}/
+			nano_rm -rf ${NANO_WORLDDIR}/
 		fi
 		mkdir -p ${NANO_WORLDDIR}
 	fi
@@ -315,19 +325,25 @@ install_kernel ( ) (
 
 	(
 	if [ -f ${NANO_KERNEL} ] ; then
-		extra="KERNCONFDIR=$(realpath $(dirname ${NANO_KERNEL}))"
+		kernconfdir_arg="KERNCONFDIR='$(realpath $(dirname ${NANO_KERNEL}))'"
 		kernconf=$(basename ${NANO_KERNEL})
 	else
 		kernconf=${NANO_KERNEL}
 	fi
 
+	# Install all built modules if NANO_MODULES=default,
+	# else install only listed modules (none if NANO_MODULES is empty).
+	if [ "${NANO_MODULES}" != "default" ]; then
+		modules_override_arg="MODULES_OVERRIDE='${NANO_MODULES}'"
+	fi
+
 	cd ${NANO_SRC}
-	env TARGET_ARCH=${NANO_ARCH} ${NANO_MAKE} installkernel \
-		DESTDIR=${NANO_WORLDDIR} \
-		SRCCONF=${SRCCONF} \
-		${extra} __MAKE_CONF=${NANO_MAKE_CONF_INSTALL} \
-		KERNCONF=${kernconf} \
-		MODULES_OVERRIDE="${NANO_MODULES}"
+	eval "TARGET_ARCH=${NANO_ARCH} ${NANO_MAKE} installkernel \
+		DESTDIR='${NANO_WORLDDIR}' \
+		SRCCONF='${SRCCONF}' \
+		__MAKE_CONF='${NANO_MAKE_CONF_INSTALL}' \
+		${kernconfdir_arg} KERNCONF=${kernconf} \
+		${modules_override_arg}"
 	) > ${NANO_OBJ}/_.ik 2>&1
 )
 
@@ -371,7 +387,7 @@ setup_nanobsd ( ) (
 		cd usr/local/etc
 		find . -print | cpio -dumpl ../../../etc/local
 		cd ..
-		rm -rf etc
+		nano_rm -rf etc
 		ln -s ../../etc/local etc
 		)
 	fi
@@ -393,7 +409,7 @@ setup_nanobsd ( ) (
 	echo "mount -o ro /dev/${NANO_DRIVE}s3" > conf/default/etc/remount
 
 	# Put /tmp on the /var ramdisk (could be symlink already)
-	test -d tmp && rmdir tmp || rm -f tmp
+	test -d tmp && rmdir tmp || nano_rm -f tmp
 	ln -s var/tmp tmp
 
 	) > ${NANO_OBJ}/_.dl 2>&1
@@ -442,9 +458,9 @@ newfs_part ( ) (
 
 # Convenient spot to work around any umount issues that your build environment
 # hits by overriding this method.
-nano_umount () {
+nano_umount () (
 	umount ${1}
-}
+)
 
 populate_slice ( ) (
 	local dev dir mnt lbl
@@ -553,7 +569,7 @@ create_i386_diskimage ( ) (
 			-y ${NANO_HEADS}`
 	else
 		echo "Creating md backing file..."
-		rm -f ${IMG}
+		nano_rm -f ${IMG}
 		dd if=/dev/zero of=${IMG} seek=${NANO_MEDIASIZE} count=0
 		MD=`mdconfig -a -t vnode -f ${IMG} -x ${NANO_SECTS} \
 			-y ${NANO_HEADS}`
@@ -637,6 +653,7 @@ last_orders () (
 	# after the build completed, for instance to copy the finished
 	# image to a more convenient place:
 	# cp ${NANO_DISKIMGDIR}/_.disk.image /home/ftp/pub/nanobsd.disk
+	true
 )
 
 #######################################################################
@@ -777,7 +794,7 @@ cust_pkg () (
 			exit 2
 		fi
 	done
-	rm -rxf ${NANO_WORLDDIR}/Pkg
+	nano_rm -rf ${NANO_WORLDDIR}/Pkg
 )
 
 cust_pkgng () (
@@ -812,7 +829,7 @@ cust_pkgng () (
 		echo "FAILED: pkg bootstrapping faied"
 		exit 2
 	fi
-	rm -f ${NANO_WORLDDIR}/Pkg/pkg-*
+	nano_rm -f ${NANO_WORLDDIR}/Pkg/pkg-*
 
 	# Count & report how many we have to install
 	todo=`ls ${NANO_WORLDDIR}/Pkg | /usr/bin/wc -l`
@@ -841,7 +858,7 @@ cust_pkgng () (
 			exit 2
 		fi
 	done
-	rm -rxf ${NANO_WORLDDIR}/Pkg
+	nano_rm -rf ${NANO_WORLDDIR}/Pkg
 )
 
 #######################################################################
@@ -869,17 +886,19 @@ late_customize_cmd () {
 
 # Progress Print
 #	Print $2 at level $1.
-pprint() {
+pprint() (
     if [ "$1" -le $PPLEVEL ]; then
 	runtime=$(( `date +%s` - $NANO_STARTTIME ))
 	printf "%s %.${1}s %s\n" "`date -u -r $runtime +%H:%M:%S`" "#####" "$2" 1>&3
     fi
-}
+)
 
 usage () {
 	(
-	echo "Usage: $0 [-bfiknqvw] [-c config_file]"
+	echo "Usage: $0 [-bfiKknqvw] [-c config_file]"
+	echo "	-K	suppress installkernel"
 	echo "	-b	suppress builds (both kernel and world)"
+	echo "	-c	specify config file"
 	echo "	-f	suppress code slice extraction"
 	echo "	-i	suppress disk image build"
 	echo "	-k	suppress buildkernel"
@@ -887,7 +906,6 @@ usage () {
 	echo "	-q	make output more quiet"
 	echo "	-v	make output more verbose"
 	echo "	-w	suppress buildworld"
-	echo "	-c	specify config file"
 	) 1>&2
 	exit 2
 }
@@ -897,12 +915,13 @@ usage () {
 
 do_clean=true
 do_kernel=true
+do_installkernel=true
 do_world=true
 do_image=true
 do_copyout_partition=true
 
 set +e
-args=`getopt bc:fhiknqvw $*`
+args=`getopt Kbc:fhiknqvw $*`
 if [ $? -ne 0 ] ; then
 	usage
 	exit 2
@@ -914,16 +933,20 @@ for i
 do
 	case "$i" 
 	in
+	-K)
+		do_installkernel=false
+		shift
+		;;
 	-b)
 		do_world=false
 		do_kernel=false
 		shift
 		;;
-	-k)
-		do_kernel=false
-		shift
-		;;
 	-c)
+		# Make config file path available to the config file
+		# itself so that it can access additional files relative
+		# to its own location.
+		NANO_CONFIG=$2
 		. "$2"
 		shift
 		shift
@@ -937,6 +960,10 @@ do
 		;;
 	-i)
 		do_image=false
+		shift
+		;;
+	-k)
+		do_kernel=false
 		shift
 		;;
 	-n)
@@ -971,7 +998,7 @@ trap nano_cleanup EXIT
 #######################################################################
 # Setup and Export Internal variables
 #
-test -n "${NANO_OBJ}" || NANO_OBJ=/usr/obj/nanobsd.${NANO_NAME}/
+test -n "${NANO_OBJ}" || NANO_OBJ=/usr/obj/nanobsd.${NANO_NAME}
 test -n "${MAKEOBJDIRPREFIX}" || MAKEOBJDIRPREFIX=${NANO_OBJ}
 test -n "${NANO_DISKIMGDIR}" || NANO_DISKIMGDIR=${NANO_OBJ}
 
@@ -1062,7 +1089,11 @@ make_conf_install
 install_world
 install_etc
 setup_nanobsd_etc
-install_kernel
+if $do_installkernel ; then
+	install_kernel
+else
+	pprint 2 "Skipping installkernel (as instructed)"
+fi
 
 run_customize
 setup_nanobsd
