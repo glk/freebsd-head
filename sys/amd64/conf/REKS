@@ -191,8 +191,6 @@ device		ukbd			# Keyboard
 device		umass			# Disks/Mass storage - Requires scbus and da
 
 device		uhid		# Human Interface Devices
-device		ukbd		# Keyboard
-device		umass
 device		ums		# Mouse
 
 # Sound support
