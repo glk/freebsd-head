@@ -614,6 +614,14 @@ static void initialize(TargetLibraryInfo &TLI, const Triple &T,
     TLI.setUnavailable(LibFunc::statvfs64);
     TLI.setUnavailable(LibFunc::tmpfile64);
   }
+
+  switch (T.getOS()) {
+  case Triple::FreeBSD:
+    TLI.setUnavailable(LibFunc::bzero);
+    break;
+  default:
+    break;
+  }
 }
 
 
