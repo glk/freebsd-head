@@ -413,7 +413,7 @@ aesni_cipher_process(struct aesni_session *ses, struct cryptodesc *enccrd,
 		} else /* if (ses->algo == CRYPTO_AES_XTS) */ {
 			aesni_encrypt_xts(ses->rounds, ses->enc_schedule,
 			    ses->xts_schedule, enccrd->crd_len, buf, buf,
-			    ses->iv);
+			    ses->iv, NULL);
 		}
 	} else {
 		if ((enccrd->crd_flags & CRD_F_IV_EXPLICIT) != 0)
@@ -427,7 +427,7 @@ aesni_cipher_process(struct aesni_session *ses, struct cryptodesc *enccrd,
 		} else /* if (ses->algo == CRYPTO_AES_XTS) */ {
 			aesni_decrypt_xts(ses->rounds, ses->dec_schedule,
 			    ses->xts_schedule, enccrd->crd_len, buf, buf,
-			    ses->iv);
+			    ses->iv, NULL);
 		}
 	}
 	if (allocated)
