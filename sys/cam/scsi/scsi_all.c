@@ -1733,7 +1733,7 @@ static struct asc_table_entry asc_table[] = {
 	{ SST(0x27, 0x06, SS_RDEF,	/* XXX TBD */
 	    "Conditional write protect") },
 	/* D         B    */
-	{ SST(0x27, 0x07, SS_RDEF,	/* XXX TBD */
+	{ SST(0x27, 0x07, SS_FATAL | ENOSPC,
 	    "Space allocation failed write protect") },
 	/* DTLPWROMAEBKVF */
 	{ SST(0x28, 0x00, SS_FATAL | ENXIO,
@@ -6064,13 +6064,12 @@ scsi_parse_transportid_iscsi(char *id_str, struct scsi_transportid_header **hdr,
 			     char *error_str, int error_str_len)
 {
 	size_t id_len, sep_len, id_size, name_len;
-	int is_full_id, retval;
+	int retval;
 	unsigned int i, sep_pos, sep_found;
 	const char *sep_template = ",i,0x";
 	const char *iqn_prefix = "iqn.";
 	struct scsi_transportid_iscsi_device *iscsi;
 
-	is_full_id = 0;
 	retval = 0;
 	sep_found = 0;
 

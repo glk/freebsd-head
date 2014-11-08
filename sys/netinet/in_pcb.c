@@ -164,34 +164,38 @@ sysctl_net_ipport_check(SYSCTL_HANDLER_ARGS)
 static SYSCTL_NODE(_net_inet_ip, IPPROTO_IP, portrange, CTLFLAG_RW, 0,
     "IP Ports");
 
-SYSCTL_VNET_PROC(_net_inet_ip_portrange, OID_AUTO, lowfirst,
-	CTLTYPE_INT|CTLFLAG_RW, &VNET_NAME(ipport_lowfirstauto), 0,
-	&sysctl_net_ipport_check, "I", "");
-SYSCTL_VNET_PROC(_net_inet_ip_portrange, OID_AUTO, lowlast,
-	CTLTYPE_INT|CTLFLAG_RW, &VNET_NAME(ipport_lowlastauto), 0,
-	&sysctl_net_ipport_check, "I", "");
-SYSCTL_VNET_PROC(_net_inet_ip_portrange, OID_AUTO, first,
-	CTLTYPE_INT|CTLFLAG_RW, &VNET_NAME(ipport_firstauto), 0,
-	&sysctl_net_ipport_check, "I", "");
-SYSCTL_VNET_PROC(_net_inet_ip_portrange, OID_AUTO, last,
-	CTLTYPE_INT|CTLFLAG_RW, &VNET_NAME(ipport_lastauto), 0,
-	&sysctl_net_ipport_check, "I", "");
-SYSCTL_VNET_PROC(_net_inet_ip_portrange, OID_AUTO, hifirst,
-	CTLTYPE_INT|CTLFLAG_RW, &VNET_NAME(ipport_hifirstauto), 0,
-	&sysctl_net_ipport_check, "I", "");
-SYSCTL_VNET_PROC(_net_inet_ip_portrange, OID_AUTO, hilast,
-	CTLTYPE_INT|CTLFLAG_RW, &VNET_NAME(ipport_hilastauto), 0,
-	&sysctl_net_ipport_check, "I", "");
-SYSCTL_VNET_INT(_net_inet_ip_portrange, OID_AUTO, reservedhigh,
-	CTLFLAG_RW|CTLFLAG_SECURE, &VNET_NAME(ipport_reservedhigh), 0, "");
-SYSCTL_VNET_INT(_net_inet_ip_portrange, OID_AUTO, reservedlow,
+SYSCTL_PROC(_net_inet_ip_portrange, OID_AUTO, lowfirst,
+	CTLFLAG_VNET | CTLTYPE_INT | CTLFLAG_RW,
+	&VNET_NAME(ipport_lowfirstauto), 0, &sysctl_net_ipport_check, "I", "");
+SYSCTL_PROC(_net_inet_ip_portrange, OID_AUTO, lowlast,
+	CTLFLAG_VNET | CTLTYPE_INT | CTLFLAG_RW,
+	&VNET_NAME(ipport_lowlastauto), 0, &sysctl_net_ipport_check, "I", "");
+SYSCTL_PROC(_net_inet_ip_portrange, OID_AUTO, first,
+	CTLFLAG_VNET | CTLTYPE_INT | CTLFLAG_RW,
+	&VNET_NAME(ipport_firstauto), 0, &sysctl_net_ipport_check, "I", "");
+SYSCTL_PROC(_net_inet_ip_portrange, OID_AUTO, last,
+	CTLFLAG_VNET | CTLTYPE_INT | CTLFLAG_RW,
+	&VNET_NAME(ipport_lastauto), 0, &sysctl_net_ipport_check, "I", "");
+SYSCTL_PROC(_net_inet_ip_portrange, OID_AUTO, hifirst,
+	CTLFLAG_VNET | CTLTYPE_INT | CTLFLAG_RW,
+	&VNET_NAME(ipport_hifirstauto), 0, &sysctl_net_ipport_check, "I", "");
+SYSCTL_PROC(_net_inet_ip_portrange, OID_AUTO, hilast,
+	CTLFLAG_VNET | CTLTYPE_INT | CTLFLAG_RW,
+	&VNET_NAME(ipport_hilastauto), 0, &sysctl_net_ipport_check, "I", "");
+SYSCTL_INT(_net_inet_ip_portrange, OID_AUTO, reservedhigh,
+	CTLFLAG_VNET | CTLFLAG_RW | CTLFLAG_SECURE,
+	&VNET_NAME(ipport_reservedhigh), 0, "");
+SYSCTL_INT(_net_inet_ip_portrange, OID_AUTO, reservedlow,
 	CTLFLAG_RW|CTLFLAG_SECURE, &VNET_NAME(ipport_reservedlow), 0, "");
-SYSCTL_VNET_INT(_net_inet_ip_portrange, OID_AUTO, randomized, CTLFLAG_RW,
+SYSCTL_INT(_net_inet_ip_portrange, OID_AUTO, randomized,
+	CTLFLAG_VNET | CTLFLAG_RW,
 	&VNET_NAME(ipport_randomized), 0, "Enable random port allocation");
-SYSCTL_VNET_INT(_net_inet_ip_portrange, OID_AUTO, randomcps, CTLFLAG_RW,
+SYSCTL_INT(_net_inet_ip_portrange, OID_AUTO, randomcps,
+	CTLFLAG_VNET | CTLFLAG_RW,
 	&VNET_NAME(ipport_randomcps), 0, "Maximum number of random port "
 	"allocations before switching to a sequental one");
-SYSCTL_VNET_INT(_net_inet_ip_portrange, OID_AUTO, randomtime, CTLFLAG_RW,
+SYSCTL_INT(_net_inet_ip_portrange, OID_AUTO, randomtime,
+	CTLFLAG_VNET | CTLFLAG_RW,
 	&VNET_NAME(ipport_randomtime), 0,
 	"Minimum time to keep sequental port "
 	"allocation before switching to a random one");
@@ -792,9 +796,11 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 		struct in_ifaddr *ia;
 		struct ifnet *ifp;
 
-		ia = ifatoia(ifa_ifwithdstaddr((struct sockaddr *)sin));
+		ia = ifatoia(ifa_ifwithdstaddr((struct sockaddr *)sin,
+					inp->inp_socket->so_fibnum));
 		if (ia == NULL)
-			ia = ifatoia(ifa_ifwithnet((struct sockaddr *)sin, 0));
+			ia = ifatoia(ifa_ifwithnet((struct sockaddr *)sin, 0,
+						inp->inp_socket->so_fibnum));
 		if (ia == NULL) {
 			error = ENETUNREACH;
 			goto done;
@@ -909,9 +915,11 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 		sain.sin_len = sizeof(struct sockaddr_in);
 		sain.sin_addr.s_addr = faddr->s_addr;
 
-		ia = ifatoia(ifa_ifwithdstaddr(sintosa(&sain)));
+		ia = ifatoia(ifa_ifwithdstaddr(sintosa(&sain),
+					inp->inp_socket->so_fibnum));
 		if (ia == NULL)
-			ia = ifatoia(ifa_ifwithnet(sintosa(&sain), 0));
+			ia = ifatoia(ifa_ifwithnet(sintosa(&sain), 0,
+						inp->inp_socket->so_fibnum));
 		if (ia == NULL)
 			ia = ifatoia(ifa_ifwithaddr(sintosa(&sain)));
 
@@ -2046,7 +2054,7 @@ in_pcbinshash_internal(struct inpcb *inp, int do_pcbgroup_update)
 
 #ifdef INET6
 	if (inp->inp_vflag & INP_IPV6)
-		hashkey_faddr = inp->in6p_faddr.s6_addr32[3] /* XXX */;
+		hashkey_faddr = INP6_PCBHASHKEY(&inp->in6p_faddr);
 	else
 #endif
 	hashkey_faddr = inp->inp_faddr.s_addr;
@@ -2133,7 +2141,7 @@ in_pcbrehash_mbuf(struct inpcb *inp, struct mbuf *m)
 
 #ifdef INET6
 	if (inp->inp_vflag & INP_IPV6)
-		hashkey_faddr = inp->in6p_faddr.s6_addr32[3] /* XXX */;
+		hashkey_faddr = INP6_PCBHASHKEY(&inp->in6p_faddr);
 	else
 #endif
 	hashkey_faddr = inp->inp_faddr.s_addr;

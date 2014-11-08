@@ -45,13 +45,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/gpio.h>
 
-#include <dev/fdt/fdt_common.h>
 #include <dev/ofw/openfirm.h>
 #include <dev/ofw/ofw_bus.h>
 #include <dev/ofw/ofw_bus_subr.h>
 
 #include <machine/bus.h>
-#include <machine/fdt.h>
 #include <machine/cpu.h>
 #include <machine/intr.h>
 
@@ -561,8 +559,8 @@ pad_attach(device_t dev)
 		    "pad%d.%d", device_get_unit(dev), i);
 	}
 
-	device_add_child(dev, "gpioc", device_get_unit(dev));
-	device_add_child(dev, "gpiobus", device_get_unit(dev));
+	device_add_child(dev, "gpioc", -1);
+	device_add_child(dev, "gpiobus", -1);
 
 	return (bus_generic_attach(dev));
 }

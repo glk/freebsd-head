@@ -87,7 +87,6 @@ struct faith_softc {
 static int faithioctl(struct ifnet *, u_long, caddr_t);
 static int faithoutput(struct ifnet *, struct mbuf *, const struct sockaddr *,
 	struct route *);
-static void faithrtrequest(int, struct rtentry *, struct rt_addrinfo *);
 #ifdef INET6
 static int faithprefix(struct in6_addr *);
 #endif
@@ -211,8 +210,8 @@ faithoutput(struct ifnet *ifp, struct mbuf *m, const struct sockaddr *dst,
 		return (rt->rt_flags & RTF_BLACKHOLE ? 0 :
 		        rt->rt_flags & RTF_HOST ? EHOSTUNREACH : ENETUNREACH);
 	}
-	ifp->if_opackets++;
-	ifp->if_obytes += m->m_pkthdr.len;
+	if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
+	if_inc_counter(ifp, IFCOUNTER_OBYTES, m->m_pkthdr.len);
 	switch (af) {
 #ifdef INET
 	case AF_INET:
@@ -232,21 +231,10 @@ faithoutput(struct ifnet *ifp, struct mbuf *m, const struct sockaddr *dst,
 	/* XXX do we need more sanity checks? */
 
 	m->m_pkthdr.rcvif = ifp;
-	ifp->if_ipackets++;
-	ifp->if_ibytes += m->m_pkthdr.len;
+	if_inc_counter(ifp, IFCOUNTER_IPACKETS, 1);
+	if_inc_counter(ifp, IFCOUNTER_IBYTES, m->m_pkthdr.len);
 	netisr_dispatch(isr, m);
 	return (0);
-}
-
-/* ARGSUSED */
-static void
-faithrtrequest(cmd, rt, info)
-	int cmd;
-	struct rtentry *rt;
-	struct rt_addrinfo *info;
-{
-	RT_LOCK_ASSERT(rt);
-	rt->rt_mtu = rt->rt_ifp->if_mtu;
 }
 
 /*
@@ -259,7 +247,6 @@ faithioctl(ifp, cmd, data)
 	u_long cmd;
 	caddr_t data;
 {
-	struct ifaddr *ifa;
 	struct ifreq *ifr = (struct ifreq *)data;
 	int error = 0;
 
@@ -268,8 +255,7 @@ faithioctl(ifp, cmd, data)
 	case SIOCSIFADDR:
 		ifp->if_flags |= IFF_UP;
 		ifp->if_drv_flags |= IFF_DRV_RUNNING;
-		ifa = (struct ifaddr *)data;
-		ifa->ifa_rtrequest = faithrtrequest;
+
 		/*
 		 * Everything else is done at a higher level.
 		 */

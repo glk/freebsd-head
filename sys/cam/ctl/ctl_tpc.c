@@ -228,7 +228,7 @@ ctl_tpc_lun_shutdown(struct ctl_lun *lun)
 	}
 
 	/* Free ROD tokens for this LUN. */
-	mtx_lock(&control_softc->ctl_lock);
+	mtx_assert(&control_softc->ctl_lock, MA_OWNED);
 	TAILQ_FOREACH_SAFE(token, &control_softc->tpc_tokens, links, ttoken) {
 		if (token->lun != lun->lun || token->active)
 			continue;
@@ -236,7 +236,6 @@ ctl_tpc_lun_shutdown(struct ctl_lun *lun)
 		free(token->params, M_CTL);
 		free(token, M_CTL);
 	}
-	mtx_unlock(&control_softc->ctl_lock);
 }
 
 int
@@ -828,11 +827,10 @@ complete:
 			    /*sense_key*/ SSD_KEY_COPY_ABORTED,
 			    /*asc*/ 0x0d, /*ascq*/ 0x01, SSD_ELEM_NONE);
 			return (CTL_RETVAL_ERROR);
-		} else {
-			list->cursectors += list->segsectors;
-			list->curbytes += list->segbytes;
-			return (CTL_RETVAL_COMPLETE);
 		}
+		list->cursectors += list->segsectors;
+		list->curbytes += list->segbytes;
+		return (CTL_RETVAL_COMPLETE);
 	}
 
 	TAILQ_INIT(&list->allio);
@@ -1141,14 +1139,6 @@ complete:
 		return (CTL_RETVAL_COMPLETE);
 	dstblock = list->lun->be_lun->blocksize;
 
-	/* Special case: no token == Block device zero ROD token */
-	if (list->token == NULL) {
-		srcblock = 1;
-		srclba = 0;
-		numbytes = INT64_MAX;
-		goto dstp;
-	}
-
 	/* Check where we are on source ranges list. */
 	srcblock = list->token->blocksize;
 	if (tpc_skip_ranges(list->token->range, list->token->nrange,
@@ -1163,7 +1153,6 @@ complete:
 	srclba = scsi_8btou64(list->token->range[srange].lba) + soffset;
 	numbytes = srcblock * omin(TPC_MAX_IOCHUNK_SIZE / srcblock,
 	    (scsi_4btoul(list->token->range[srange].length) - soffset));
-dstp:
 	dstlba = scsi_8btou64(list->range[drange].lba) + doffset;
 	numbytes = omin(numbytes,
 	    dstblock * omin(TPC_MAX_IOCHUNK_SIZE / dstblock,
@@ -1190,10 +1179,6 @@ dstp:
 	while (donebytes < numbytes) {
 		roundbytes = MIN(numbytes - donebytes, TPC_MAX_IO_SIZE);
 
-		if (list->token == NULL) {
-			tior = NULL;
-			goto dstw;
-		}
 		tior = malloc(sizeof(*tior), M_CTL, M_WAITOK | M_ZERO);
 		TAILQ_INIT(&tior->run);
 		tior->list = list;
@@ -1217,7 +1202,6 @@ dstp:
 		tior->lun = list->token->lun;
 		tior->io->io_hdr.ctl_private[CTL_PRIV_FRONTEND].ptr = tior;
 
-dstw:
 		tiow = malloc(sizeof(*tiow), M_CTL, M_WAITOK | M_ZERO);
 		TAILQ_INIT(&tiow->run);
 		tiow->list = list;
@@ -1241,20 +1225,98 @@ dstw:
 		tiow->lun = list->lun->lun;
 		tiow->io->io_hdr.ctl_private[CTL_PRIV_FRONTEND].ptr = tiow;
 
-		if (tior) {
-			TAILQ_INSERT_TAIL(&tior->run, tiow, rlinks);
-			TAILQ_INSERT_TAIL(prun, tior, rlinks);
-			prun = &tior->run;
-		} else {
-			TAILQ_INSERT_TAIL(prun, tiow, rlinks);
-			prun = &tiow->run;
-		}
+		TAILQ_INSERT_TAIL(&tior->run, tiow, rlinks);
+		TAILQ_INSERT_TAIL(prun, tior, rlinks);
+		prun = &tior->run;
 		donebytes += roundbytes;
 	}
 
 	while ((tior = TAILQ_FIRST(&run)) != NULL) {
 		TAILQ_REMOVE(&run, tior, rlinks);
 		if (tpcl_queue(tior->io, tior->lun) != CTL_RETVAL_COMPLETE)
+			panic("tpcl_queue() error");
+	}
+
+	list->stage++;
+	return (CTL_RETVAL_QUEUED);
+}
+
+static int
+tpc_process_zero_wut(struct tpc_list *list)
+{
+	struct tpc_io *tio, *tiow;
+	struct runl run, *prun;
+	int r;
+	uint32_t dstblock, len;
+
+	if (list->stage > 0) {
+complete:
+		/* Cleanup after previous rounds. */
+		while ((tio = TAILQ_FIRST(&list->allio)) != NULL) {
+			TAILQ_REMOVE(&list->allio, tio, links);
+			ctl_free_io(tio->io);
+			free(tio, M_CTL);
+		}
+		free(list->buf, M_CTL);
+		if (list->abort) {
+			ctl_set_task_aborted(list->ctsio);
+			return (CTL_RETVAL_ERROR);
+		} else if (list->error) {
+			ctl_set_sense(list->ctsio, /*current_error*/ 1,
+			    /*sense_key*/ SSD_KEY_COPY_ABORTED,
+			    /*asc*/ 0x0d, /*ascq*/ 0x01, SSD_ELEM_NONE);
+			return (CTL_RETVAL_ERROR);
+		}
+		list->cursectors += list->segsectors;
+		list->curbytes += list->segbytes;
+		return (CTL_RETVAL_COMPLETE);
+	}
+
+	dstblock = list->lun->be_lun->blocksize;
+	list->buf = malloc(dstblock, M_CTL, M_WAITOK | M_ZERO);
+	TAILQ_INIT(&run);
+	prun = &run;
+	list->tbdio = 1;
+	TAILQ_INIT(&list->allio);
+	list->segsectors = 0;
+	for (r = 0; r < list->nrange; r++) {
+		len = scsi_4btoul(list->range[r].length);
+		if (len == 0)
+			continue;
+
+		tiow = malloc(sizeof(*tiow), M_CTL, M_WAITOK | M_ZERO);
+		TAILQ_INIT(&tiow->run);
+		tiow->list = list;
+		TAILQ_INSERT_TAIL(&list->allio, tiow, links);
+		tiow->io = tpcl_alloc_io();
+		if (tiow->io == NULL) {
+			list->error = 1;
+			goto complete;
+		}
+		ctl_scsi_write_same(tiow->io,
+				    /*data_ptr*/ list->buf,
+				    /*data_len*/ dstblock,
+				    /*byte2*/ 0,
+				    /*lba*/ scsi_8btou64(list->range[r].lba),
+				    /*num_blocks*/ len,
+				    /*tag_type*/ CTL_TAG_SIMPLE,
+				    /*control*/ 0);
+		tiow->io->io_hdr.retries = 3;
+		tiow->lun = list->lun->lun;
+		tiow->io->io_hdr.ctl_private[CTL_PRIV_FRONTEND].ptr = tiow;
+
+		TAILQ_INSERT_TAIL(prun, tiow, rlinks);
+		prun = &tiow->run;
+		list->segsectors += len;
+	}
+	list->segbytes = list->segsectors * dstblock;
+
+	if (TAILQ_EMPTY(&run))
+		goto complete;
+
+	while ((tiow = TAILQ_FIRST(&run)) != NULL) {
+		TAILQ_REMOVE(&run, tiow, rlinks);
+		if (tpcl_queue(tiow->io, tiow->lun) != CTL_RETVAL_COMPLETE)
 			panic("tpcl_queue() error");
 	}
 
@@ -1271,7 +1333,10 @@ tpc_process(struct tpc_list *list)
 	int retval = CTL_RETVAL_COMPLETE;
 
 	if (list->service_action == EC_WUT) {
-		retval = tpc_process_wut(list);
+		if (list->token != NULL)
+			retval = tpc_process_wut(list);
+		else
+			retval = tpc_process_zero_wut(list);
 		if (retval == CTL_RETVAL_QUEUED)
 			return;
 		if (retval == CTL_RETVAL_ERROR) {
@@ -1746,6 +1811,8 @@ tpc_create_token(struct ctl_lun *lun, struct ctl_port *port, off_t len,
 {
 	static int id = 0;
 	struct scsi_vpd_id_descriptor *idd = NULL;
+	struct scsi_ec_cscd_id *cscd;
+	struct scsi_read_capacity_data_long *dtsd;
 	int targid_len;
 
 	scsi_ulto4b(ROD_TYPE_AUR, token->type);
@@ -1759,10 +1826,24 @@ tpc_create_token(struct ctl_lun *lun, struct ctl_port *port, off_t len,
 		idd = scsi_get_devid_desc((struct scsi_vpd_id_descriptor *)
 		    lun->lun_devid->data, lun->lun_devid->len,
 		    scsi_devid_is_lun_eui64);
-	if (idd != NULL)
-		memcpy(&token->body[8], idd, 4 + idd->length);
-	scsi_u64to8b(0, &token->body[40]);
+	if (idd != NULL) {
+		cscd = (struct scsi_ec_cscd_id *)&token->body[8];
+		cscd->type_code = EC_CSCD_ID;
+		cscd->luidt_pdt = T_DIRECT;
+		memcpy(&cscd->codeset, idd, 4 + idd->length);
+		scsi_ulto3b(lun->be_lun->blocksize, cscd->dtsp.block_length);
+	}
+	scsi_u64to8b(0, &token->body[40]); /* XXX: Should be 128bit value. */
 	scsi_u64to8b(len, &token->body[48]);
+
+	/* ROD token device type specific data (RC16 without first field) */
+	dtsd = (struct scsi_read_capacity_data_long *)&token->body[88 - 8];
+	scsi_ulto4b(lun->be_lun->blocksize, dtsd->length);
+	dtsd->prot_lbppbe = lun->be_lun->pblockexp & SRC16_LBPPBE;
+	scsi_ulto2b(lun->be_lun->pblockoff & SRC16_LALBA_A, dtsd->lalba_lbp);
+	if (lun->be_lun->flags & CTL_LUN_FLAG_UNMAP)
+		dtsd->lalba_lbp[0] |= SRC16_LBPME | SRC16_LBPRZ;
+
 	if (port->target_devid) {
 		targid_len = port->target_devid->len;
 		memcpy(&token->body[120], port->target_devid->data, targid_len);
@@ -1868,6 +1949,8 @@ ctl_populate_token(struct ctl_scsiio *ctsio)
 	token->range = &data->desc[0];
 	token->nrange = scsi_2btoul(data->range_descriptor_length) /
 	    sizeof(struct scsi_range_desc);
+	list->cursectors = tpc_ranges_length(token->range, token->nrange);
+	list->curbytes = (off_t)list->cursectors * lun->be_lun->blocksize;
 	tpc_create_token(lun, port, list->curbytes,
 	    (struct scsi_token *)token->token);
 	token->active = 0;
@@ -1884,8 +1967,6 @@ ctl_populate_token(struct ctl_scsiio *ctsio)
 	}
 	memcpy(list->res_token, token->token, sizeof(list->res_token));
 	list->res_token_valid = 1;
-	list->cursectors = tpc_ranges_length(token->range, token->nrange);
-	list->curbytes = (off_t)list->cursectors * lun->be_lun->blocksize;
 	list->curseg = 0;
 	list->completed = 1;
 	list->last_active = time_uptime;
