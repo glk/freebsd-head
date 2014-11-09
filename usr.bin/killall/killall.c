@@ -54,7 +54,7 @@ static void __dead2
 usage(void)
 {
 
-	fprintf(stderr, "usage: killall [-delmsvz] [-help] [-j jail]\n");
+	fprintf(stderr, "usage: killall [-delmsvz] [-help] [-I] [-j jail]\n");
 	fprintf(stderr,
 	    "               [-u user] [-t tty] [-c cmd] [-SIGNAL] [cmd]...\n");
 	fprintf(stderr, "At least one option or argument to specify processes must be given.\n");
@@ -91,13 +91,14 @@ nosig(char *name)
 int
 main(int ac, char **av)
 {
-	struct kinfo_proc *procs = NULL, *newprocs;
+	struct kinfo_proc *procs, *newprocs;
 	struct stat	sb;
 	struct passwd	*pw;
 	regex_t		rgx;
 	regmatch_t	pmatch;
-	int		i, j;
+	int		i, j, ch;
 	char		buf[256];
+	char		first;
 	char		*user = NULL;
 	char		*tty = NULL;
 	char		*cmd = NULL;
@@ -105,6 +106,7 @@ main(int ac, char **av)
 	int		sflag = 0;
 	int		dflag = 0;
 	int		eflag = 0;
+	int		Iflag = 0;
 	int		jflag = 0;
 	int		mflag = 0;
 	int		zflag = 0;
@@ -142,6 +144,9 @@ main(int ac, char **av)
 		if (**av == '-') {
 			++*av;
 			switch (**av) {
+			case 'I':
+				Iflag = 1;
+				break;
 			case 'j':
 				++*av;
 				if (**av == '\0') {
@@ -274,9 +279,6 @@ main(int ac, char **av)
 	size = 0;
 	mib[0] = CTL_KERN;
 	mib[1] = KERN_PROC;
-	mib[2] = KERN_PROC_PROC;
-	mib[3] = 0;
-	miblen = 3;
 
 	if (user) {
 		mib[2] = eflag ? KERN_PROC_UID : KERN_PROC_RUID;
@@ -286,16 +288,20 @@ main(int ac, char **av)
 		mib[2] = KERN_PROC_TTY;
 		mib[3] = tdev;
 		miblen = 4;
+	} else {
+		mib[2] = KERN_PROC_PROC;
+		mib[3] = 0;
+		miblen = 3;
 	}
 
+	procs = NULL;
 	st = sysctl(mib, miblen, NULL, &size, NULL, 0);
 	do {
 		size += size / 10;
 		newprocs = realloc(procs, size);
-		if (newprocs == 0) {
-			if (procs)
-				free(procs);
-			errx(1, "could not reallocate memory");
+		if (newprocs == NULL) {
+			free(procs);
+			err(1, "could not reallocate memory");
 		}
 		procs = newprocs;
 		st = sysctl(mib, miblen, procs, &size, NULL, 0);
@@ -305,7 +311,7 @@ main(int ac, char **av)
 	if (size % sizeof(struct kinfo_proc) != 0) {
 		fprintf(stderr, "proc size mismatch (%zu total, %zu chunks)\n",
 			size, sizeof(struct kinfo_proc));
-		fprintf(stderr, "userland out of sync with kernel, recompile libkvm etc\n");
+		fprintf(stderr, "userland out of sync with kernel\n");
 		exit(1);
 	}
 	nprocs = size / sizeof(struct kinfo_proc);
@@ -314,7 +320,7 @@ main(int ac, char **av)
 	mypid = getpid();
 
 	for (i = 0; i < nprocs; i++) {
-		if ((procs[i].ki_stat & SZOMB) == SZOMB && !zflag)
+		if (procs[i].ki_stat == SZOMB && !zflag)
 			continue;
 		thispid = procs[i].ki_pid;
 		strlcpy(thiscmd, procs[i].ki_comm, sizeof(thiscmd));
@@ -382,6 +388,16 @@ main(int ac, char **av)
 			}
 			if (matched)
 				break;
+		}
+		if (matched != 0 && Iflag) {
+			printf("Send signal %d to %s (pid %d uid %d)? ",
+				sig, thiscmd, thispid, thisuid);
+			fflush(stdout);
+			first = ch = getchar();
+			while (ch != '\n' && ch != EOF)
+				ch = getchar();
+			if (first != 'y' && first != 'Y')
+				matched = 0;
 		}
 		if (matched == 0)
 			continue;
