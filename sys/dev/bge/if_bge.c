@@ -139,7 +139,7 @@ MODULE_DEPEND(bge, miibus, 1, 1, 1);
 static const struct bge_type {
 	uint16_t	bge_vid;
 	uint16_t	bge_did;
-} const bge_devs[] = {
+} bge_devs[] = {
 	{ ALTEON_VENDORID,	ALTEON_DEVICEID_BCM5700 },
 	{ ALTEON_VENDORID,	ALTEON_DEVICEID_BCM5701 },
 
@@ -239,7 +239,7 @@ static const struct bge_type {
 static const struct bge_vendor {
 	uint16_t	v_id;
 	const char	*v_name;
-} const bge_vendors[] = {
+} bge_vendors[] = {
 	{ ALTEON_VENDORID,	"Alteon" },
 	{ ALTIMA_VENDORID,	"Altima" },
 	{ APPLE_VENDORID,	"Apple" },
@@ -254,7 +254,7 @@ static const struct bge_vendor {
 static const struct bge_revision {
 	uint32_t	br_chipid;
 	const char	*br_name;
-} const bge_revisions[] = {
+} bge_revisions[] = {
 	{ BGE_CHIPID_BCM5700_A0,	"BCM5700 A0" },
 	{ BGE_CHIPID_BCM5700_A1,	"BCM5700 A1" },
 	{ BGE_CHIPID_BCM5700_B0,	"BCM5700 B0" },
@@ -328,7 +328,7 @@ static const struct bge_revision {
  * Some defaults for major revisions, so that newer steppings
  * that we don't know about have a shot at working.
  */
-static const struct bge_revision const bge_majorrevs[] = {
+static const struct bge_revision bge_majorrevs[] = {
 	{ BGE_ASICREV_BCM5700,		"unknown BCM5700" },
 	{ BGE_ASICREV_BCM5701,		"unknown BCM5701" },
 	{ BGE_ASICREV_BCM5703,		"unknown BCM5703" },
@@ -3122,7 +3122,7 @@ bge_mbox_reorder(struct bge_softc *sc)
 		const uint16_t vendor;
 		const uint16_t device;
 		const char *desc;
-	} const mbox_reorder_lists[] = {
+	} mbox_reorder_lists[] = {
 		{ 0x1022, 0x7450, "AMD-8131 PCI-X Bridge" },
 	};
 	devclass_t pci, pcib;
@@ -3215,7 +3215,7 @@ bge_attach(device_t dev)
 	struct bge_softc *sc;
 	uint32_t hwcfg = 0, misccfg, pcistate;
 	u_char eaddr[ETHER_ADDR_LEN];
-	int capmask, error, msicount, phy_addr, reg, rid, trys;
+	int capmask, error, msicount, reg, rid, trys;
 
 	sc = device_get_softc(dev);
 	sc->bge_dev = dev;
@@ -3275,7 +3275,7 @@ bge_attach(device_t dev)
 	sc->bge_chiprev = BGE_CHIPREV(sc->bge_chipid);
 
 	/* Set default PHY address. */
-	phy_addr = 1;
+	sc->bge_phy_addr = 1;
 	 /*
 	  * PHY address mapping for various devices.
 	  *
@@ -3304,28 +3304,17 @@ bge_attach(device_t dev)
 		if (sc->bge_chipid != BGE_CHIPID_BCM5717_A0) {
 			if (CSR_READ_4(sc, BGE_SGDIG_STS) &
 			    BGE_SGDIGSTS_IS_SERDES)
-				phy_addr = sc->bge_func_addr + 8;
+				sc->bge_phy_addr = sc->bge_func_addr + 8;
 			else
-				phy_addr = sc->bge_func_addr + 1;
+				sc->bge_phy_addr = sc->bge_func_addr + 1;
 		} else {
 			if (CSR_READ_4(sc, BGE_CPMU_PHY_STRAP) &
 			    BGE_CPMU_PHY_STRAP_IS_SERDES)
-				phy_addr = sc->bge_func_addr + 8;
+				sc->bge_phy_addr = sc->bge_func_addr + 8;
 			else
-				phy_addr = sc->bge_func_addr + 1;
+				sc->bge_phy_addr = sc->bge_func_addr + 1;
 		}
 	}
-
-	/*
-	 * Don't enable Ethernet@WireSpeed for the 5700, 5906, or the
-	 * 5705 A0 and A1 chips.
-	 */
-	if (sc->bge_asicrev == BGE_ASICREV_BCM5700 ||
-	    (sc->bge_asicrev == BGE_ASICREV_BCM5705 &&
-	    (sc->bge_chipid != BGE_CHIPID_BCM5705_A0 &&
-	    sc->bge_chipid != BGE_CHIPID_BCM5705_A1)) ||
-	    sc->bge_asicrev == BGE_ASICREV_BCM5906)
-		sc->bge_phy_flags |= BGE_PHY_NO_WIRESPEED;
 
 	if (bge_has_eaddr(sc))
 		sc->bge_flags |= BGE_FLAG_EADDR;
@@ -3411,38 +3400,6 @@ bge_attach(device_t dev)
 	/* Add SYSCTLs, requires the chipset family to be set. */
 	bge_add_sysctls(sc);
 
-	/* Set various PHY bug flags. */
-	if (sc->bge_chipid == BGE_CHIPID_BCM5701_A0 ||
-	    sc->bge_chipid == BGE_CHIPID_BCM5701_B0)
-		sc->bge_phy_flags |= BGE_PHY_CRC_BUG;
-	if (sc->bge_chiprev == BGE_CHIPREV_5703_AX ||
-	    sc->bge_chiprev == BGE_CHIPREV_5704_AX)
-		sc->bge_phy_flags |= BGE_PHY_ADC_BUG;
-	if (sc->bge_chipid == BGE_CHIPID_BCM5704_A0)
-		sc->bge_phy_flags |= BGE_PHY_5704_A0_BUG;
-	if (pci_get_subvendor(dev) == DELL_VENDORID)
-		sc->bge_phy_flags |= BGE_PHY_NO_3LED;
-	if ((BGE_IS_5705_PLUS(sc)) &&
-	    sc->bge_asicrev != BGE_ASICREV_BCM5906 &&
-	    sc->bge_asicrev != BGE_ASICREV_BCM5717 &&
-	    sc->bge_asicrev != BGE_ASICREV_BCM5719 &&
-	    sc->bge_asicrev != BGE_ASICREV_BCM5720 &&
-	    sc->bge_asicrev != BGE_ASICREV_BCM5785 &&
-	    sc->bge_asicrev != BGE_ASICREV_BCM57765 &&
-	    sc->bge_asicrev != BGE_ASICREV_BCM57780) {
-		if (sc->bge_asicrev == BGE_ASICREV_BCM5755 ||
-		    sc->bge_asicrev == BGE_ASICREV_BCM5761 ||
-		    sc->bge_asicrev == BGE_ASICREV_BCM5784 ||
-		    sc->bge_asicrev == BGE_ASICREV_BCM5787) {
-			if (pci_get_device(dev) != BCOM_DEVICEID_BCM5722 &&
-			    pci_get_device(dev) != BCOM_DEVICEID_BCM5756)
-				sc->bge_phy_flags |= BGE_PHY_JITTER_BUG;
-			if (pci_get_device(dev) == BCOM_DEVICEID_BCM5755M)
-				sc->bge_phy_flags |= BGE_PHY_ADJUST_TRIM;
-		} else
-			sc->bge_phy_flags |= BGE_PHY_BER_BUG;
-	}
-
 	/* Identify the chips that use an CPMU. */
 	if (BGE_IS_5717_PLUS(sc) ||
 	    sc->bge_asicrev == BGE_ASICREV_BCM5784 ||
@@ -3503,6 +3460,7 @@ bge_attach(device_t dev)
 	    sc->bge_asicrev == BGE_ASICREV_BCM5906) {
 		/* These chips are 10/100 only. */
 		capmask &= ~BMSR_EXTSTAT;
+		sc->bge_phy_flags |= BGE_PHY_NO_WIRESPEED;
 	}
 
 	/*
@@ -3760,11 +3718,54 @@ bge_attach(device_t dev)
 	/* The SysKonnect SK-9D41 is a 1000baseSX card. */
 	if ((pci_read_config(dev, BGE_PCI_SUBSYS, 4) >> 16) ==
 	    SK_SUBSYSID_9D41 || (hwcfg & BGE_HWCFG_MEDIA) == BGE_MEDIA_FIBER) {
-		if (BGE_IS_5705_PLUS(sc))
+		if (BGE_IS_5705_PLUS(sc)) {
 			sc->bge_flags |= BGE_FLAG_MII_SERDES;
-		else
+			sc->bge_phy_flags |= BGE_PHY_NO_WIRESPEED;
+		} else
 			sc->bge_flags |= BGE_FLAG_TBI;
 	}
+
+	/* Set various PHY bug flags. */
+	if (sc->bge_chipid == BGE_CHIPID_BCM5701_A0 ||
+	    sc->bge_chipid == BGE_CHIPID_BCM5701_B0)
+		sc->bge_phy_flags |= BGE_PHY_CRC_BUG;
+	if (sc->bge_chiprev == BGE_CHIPREV_5703_AX ||
+	    sc->bge_chiprev == BGE_CHIPREV_5704_AX)
+		sc->bge_phy_flags |= BGE_PHY_ADC_BUG;
+	if (sc->bge_chipid == BGE_CHIPID_BCM5704_A0)
+		sc->bge_phy_flags |= BGE_PHY_5704_A0_BUG;
+	if (pci_get_subvendor(dev) == DELL_VENDORID)
+		sc->bge_phy_flags |= BGE_PHY_NO_3LED;
+	if ((BGE_IS_5705_PLUS(sc)) &&
+	    sc->bge_asicrev != BGE_ASICREV_BCM5906 &&
+	    sc->bge_asicrev != BGE_ASICREV_BCM5717 &&
+	    sc->bge_asicrev != BGE_ASICREV_BCM5719 &&
+	    sc->bge_asicrev != BGE_ASICREV_BCM5720 &&
+	    sc->bge_asicrev != BGE_ASICREV_BCM5785 &&
+	    sc->bge_asicrev != BGE_ASICREV_BCM57765 &&
+	    sc->bge_asicrev != BGE_ASICREV_BCM57780) {
+		if (sc->bge_asicrev == BGE_ASICREV_BCM5755 ||
+		    sc->bge_asicrev == BGE_ASICREV_BCM5761 ||
+		    sc->bge_asicrev == BGE_ASICREV_BCM5784 ||
+		    sc->bge_asicrev == BGE_ASICREV_BCM5787) {
+			if (pci_get_device(dev) != BCOM_DEVICEID_BCM5722 &&
+			    pci_get_device(dev) != BCOM_DEVICEID_BCM5756)
+				sc->bge_phy_flags |= BGE_PHY_JITTER_BUG;
+			if (pci_get_device(dev) == BCOM_DEVICEID_BCM5755M)
+				sc->bge_phy_flags |= BGE_PHY_ADJUST_TRIM;
+		} else
+			sc->bge_phy_flags |= BGE_PHY_BER_BUG;
+	}
+
+	/*
+	 * Don't enable Ethernet@WireSpeed for the 5700 or the
+	 * 5705 A0 and A1 chips.
+	 */
+	if (sc->bge_asicrev == BGE_ASICREV_BCM5700 ||
+	    (sc->bge_asicrev == BGE_ASICREV_BCM5705 &&
+	    (sc->bge_chipid != BGE_CHIPID_BCM5705_A0 &&
+	    sc->bge_chipid != BGE_CHIPID_BCM5705_A1)))
+		sc->bge_phy_flags |= BGE_PHY_NO_WIRESPEED;
 
 	if (sc->bge_flags & BGE_FLAG_TBI) {
 		ifmedia_init(&sc->bge_ifmedia, IFM_IMASK, bge_ifmedia_upd,
@@ -3789,13 +3790,13 @@ again:
 		bge_asf_driver_up(sc);
 
 		error = mii_attach(dev, &sc->bge_miibus, ifp, bge_ifmedia_upd,
-		    bge_ifmedia_sts, capmask, phy_addr, MII_OFFSET_ANY,
+		    bge_ifmedia_sts, capmask, sc->bge_phy_addr, MII_OFFSET_ANY,
 		    MIIF_DOPAUSE);
 		if (error != 0) {
 			if (trys++ < 4) {
 				device_printf(sc->bge_dev, "Try again\n");
-				bge_miibus_writereg(sc->bge_dev, 1, MII_BMCR,
-				    BMCR_RESET);
+				bge_miibus_writereg(sc->bge_dev,
+				    sc->bge_phy_addr, MII_BMCR, BMCR_RESET);
 				goto again;
 			}
 			device_printf(sc->bge_dev, "attaching PHYs failed\n");
@@ -5102,10 +5103,6 @@ bge_encap(struct bge_softc *sc, struct mbuf **m_head, uint32_t *txidx)
 				return (error);
 			}
 		}
-		if (m->m_flags & M_LASTFRAG)
-			csum_flags |= BGE_TXBDFLAG_IP_FRAG_END;
-		else if (m->m_flags & M_FRAG)
-			csum_flags |= BGE_TXBDFLAG_IP_FRAG;
 	}
 
 	if ((m->m_pkthdr.csum_flags & CSUM_TSO) == 0) {
@@ -5225,29 +5222,6 @@ bge_start_locked(struct ifnet *ifp)
 		IFQ_DRV_DEQUEUE(&ifp->if_snd, m_head);
 		if (m_head == NULL)
 			break;
-
-		/*
-		 * XXX
-		 * The code inside the if() block is never reached since we
-		 * must mark CSUM_IP_FRAGS in our if_hwassist to start getting
-		 * requests to checksum TCP/UDP in a fragmented packet.
-		 *
-		 * XXX
-		 * safety overkill.  If this is a fragmented packet chain
-		 * with delayed TCP/UDP checksums, then only encapsulate
-		 * it if we have enough descriptors to handle the entire
-		 * chain at once.
-		 * (paranoia -- may not actually be needed)
-		 */
-		if (m_head->m_flags & M_FIRSTFRAG &&
-		    m_head->m_pkthdr.csum_flags & (CSUM_DELAY_DATA)) {
-			if ((BGE_TX_RING_CNT - sc->bge_txcnt) <
-			    m_head->m_pkthdr.csum_data + 16) {
-				IFQ_DRV_PREPEND(&ifp->if_snd, m_head);
-				ifp->if_drv_flags |= IFF_DRV_OACTIVE;
-				break;
-			}
-		}
 
 		/*
 		 * Pack the data into the transmit ring. If we
@@ -6017,9 +5991,10 @@ bge_link_upd(struct bge_softc *sc)
 			/* Clear the interrupt. */
 			CSR_WRITE_4(sc, BGE_MAC_EVT_ENB,
 			    BGE_EVTENB_MI_INTERRUPT);
-			bge_miibus_readreg(sc->bge_dev, 1, BRGPHY_MII_ISR);
-			bge_miibus_writereg(sc->bge_dev, 1, BRGPHY_MII_IMR,
-			    BRGPHY_INTRS);
+			bge_miibus_readreg(sc->bge_dev, sc->bge_phy_addr,
+			    BRGPHY_MII_ISR);
+			bge_miibus_writereg(sc->bge_dev, sc->bge_phy_addr,
+			    BRGPHY_MII_IMR, BRGPHY_INTRS);
 		}
 		return;
 	}

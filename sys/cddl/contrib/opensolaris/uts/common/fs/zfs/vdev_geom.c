@@ -270,14 +270,16 @@ vdev_geom_read_config(struct g_consumer *cp, nvlist_t **config)
 			continue;
 
 		if (nvlist_lookup_uint64(*config, ZPOOL_CONFIG_POOL_STATE,
-		    &state) != 0 || state >= POOL_STATE_DESTROYED) {
+		    &state) != 0 || state == POOL_STATE_DESTROYED ||
+		    state > POOL_STATE_L2CACHE) {
 			nvlist_free(*config);
 			*config = NULL;
 			continue;
 		}
 
-		if (nvlist_lookup_uint64(*config, ZPOOL_CONFIG_POOL_TXG,
-		    &txg) != 0 || txg == 0) {
+		if (state != POOL_STATE_SPARE && state != POOL_STATE_L2CACHE &&
+		    (nvlist_lookup_uint64(*config, ZPOOL_CONFIG_POOL_TXG,
+		    &txg) != 0 || txg == 0)) {
 			nvlist_free(*config);
 			*config = NULL;
 			continue;
@@ -330,7 +332,7 @@ vdev_geom_attach_taster(struct g_consumer *cp, struct g_provider *pp)
 }
 
 static void
-vdev_geom_dettach_taster(struct g_consumer *cp)
+vdev_geom_detach_taster(struct g_consumer *cp)
 {
 	g_access(cp, -1, 0, 0);
 	g_detach(cp);
@@ -371,7 +373,7 @@ vdev_geom_read_pool_label(const char *name, nvlist_t **config)
 				g_topology_unlock();
 				error = vdev_geom_read_config(zcp, &vdev_cfg);
 				g_topology_lock();
-				vdev_geom_dettach_taster(zcp);
+				vdev_geom_detach_taster(zcp);
 				if (error)
 					continue;
 				ZFS_LOG(1, "successfully read vdev config");
@@ -440,7 +442,7 @@ vdev_geom_attach_by_guid(uint64_t guid)
 				g_topology_unlock();
 				pguid = vdev_geom_read_guid(zcp);
 				g_topology_lock();
-				vdev_geom_dettach_taster(zcp);
+				vdev_geom_detach_taster(zcp);
 				if (pguid != guid)
 					continue;
 				cp = vdev_geom_attach(pp);
