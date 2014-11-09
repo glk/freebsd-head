@@ -135,6 +135,7 @@ main(int argc, char **argv)
     static char temppackageroot[MAXPATHLEN];
     static char pkgaddpath[MAXPATHLEN];
 
+    warnpkgng();
     if (*argv[0] != '/' && strchr(argv[0], '/') != NULL)
 	PkgAddCmd = realpath(argv[0], pkgaddpath);
     else
@@ -288,7 +289,9 @@ main(int argc, char **argv)
     }
     /* Perform chroot if requested */
     if (Chroot != NULL) {
-	if (chroot(Chroot))
+	if (chdir(Chroot))
+	    errx(1, "chdir to %s failed", Chroot);
+	if (chroot("."))
 	    errx(1, "chroot to %s failed", Chroot);
     }
     /* Make sure the sub-execs we invoke get found */

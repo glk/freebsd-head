@@ -366,6 +366,7 @@ FBSD_1.3 {
 	alphasort;
 	devname;
 	devname_r;
+	clock_getcpuclockid;
 	dirfd;
 	 fdlopen;
 	__FreeBSD_libc_enter_restricted_mode;
@@ -379,6 +380,10 @@ FBSD_1.3 {
 	fts_set_clientptr;
 	ftw;
 	getcontextx;
+	gid_from_group;
+	pwcache_userdb;
+	pwcache_groupdb;
+	uid_from_user;
 	getmntinfo;
 	glob;
 	globfree;

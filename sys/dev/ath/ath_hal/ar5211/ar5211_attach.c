@@ -496,6 +496,8 @@ ar5211FillCapabilityInfo(struct ath_hal *ah)
 	pCap->halSleepAfterBeaconBroken = AH_TRUE;
 	pCap->halPSPollBroken = AH_TRUE;
 	pCap->halVEOLSupport = AH_TRUE;
+	pCap->halNumMRRetries = 1;	/* No hardware MRR support */
+	pCap->halNumTxMaps = 1;		/* Single TX ptr per descr */
 
 	pCap->halTotalQueues = HAL_NUM_TX_QUEUES;
 	pCap->halKeyCacheSize = 128;

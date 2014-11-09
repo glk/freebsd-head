@@ -435,15 +435,15 @@ options 	KTRACE_REQUEST_POOL=101
 #
 # KTR is a kernel tracing facility imported from BSD/OS.  It is
 # enabled with the KTR option.  KTR_ENTRIES defines the number of
-# entries in the circular trace buffer; it must be a power of two.
+# entries in the circular trace buffer; it may be an arbitrary number.
 # KTR_COMPILE defines the mask of events to compile into the kernel as
 # defined by the KTR_* constants in <sys/ktr.h>.  KTR_MASK defines the
 # initial value of the ktr_mask variable which determines at runtime
 # what events to trace.  KTR_CPUMASK determines which CPU's log
 # events, with bit X corresponding to CPU X.  The layout of the string
 # passed as KTR_CPUMASK must match a series of bitmasks each of them
-# separated by the ", " characters (ie:
-# KTR_CPUMASK=("0xAF, 0xFFFFFFFFFFFFFFFF")).  KTR_VERBOSE enables
+# separated by the "," character (ie:
+# KTR_CPUMASK=0xAF,0xFFFFFFFFFFFFFFFF).  KTR_VERBOSE enables
 # dumping of KTR events to the console by default.  This functionality
 # can be toggled via the debug.ktr_verbose sysctl and defaults to off
 # if KTR_VERBOSE is not defined.  See ktr(4) and ktrdump(8) for details.
@@ -452,7 +452,7 @@ options 	KTR
 options 	KTR_ENTRIES=1024
 options 	KTR_COMPILE=(KTR_INTR|KTR_PROC)
 options 	KTR_MASK=KTR_INTR
-options 	KTR_CPUMASK=("0x3")
+options 	KTR_CPUMASK=0x3
 options 	KTR_VERBOSE
 
 #
@@ -570,16 +570,8 @@ options		IPSEC_NAT_T		#NAT-T support, UDP encap of ESP
 
 options 	IPX			#IPX/SPX communications protocols
 
-options 	NCP			#NetWare Core protocol
-
 options 	NETATALK		#Appletalk communications protocols
 options 	NETATALKDEBUG		#Appletalk debugging
-
-#
-# SMB/CIFS requester
-# NETSMB enables support for SMB protocol, it requires LIBMCHAIN and LIBICONV
-# options.
-options 	NETSMB			#SMB/CIFS requester
 
 # mchain library. It can be either loaded as KLD or compiled into kernel
 options 	LIBMCHAIN
@@ -918,6 +910,8 @@ device		lagg
 # packets without touching the TTL).  This can be useful to hide firewalls
 # from traceroute and similar tools.
 #
+# PF_DEFAULT_TO_DROP causes the default pf(4) rule to deny everything.
+#
 # TCPDEBUG enables code which keeps traces of the TCP state machine
 # for sockets with the SO_DEBUG option set, which can then be examined
 # using the trpt(8) utility.
@@ -937,6 +931,7 @@ options 	IPFILTER_LOG		#ipfilter logging
 options 	IPFILTER_LOOKUP		#ipfilter pools
 options 	IPFILTER_DEFAULT_BLOCK	#block all packets by default
 options 	IPSTEALTH		#support for stealth forwarding
+options 	PF_DEFAULT_TO_DROP	#drop everything by default
 options 	TCPDEBUG
 options 	RADIX_MPATH
 
@@ -985,10 +980,7 @@ options 	ZERO_COPY_SOCKETS
 # time.  Some people still prefer to statically compile other
 # filesystems as well.
 #
-# NB: The PORTAL filesystem is known to be buggy, and WILL panic your
-# system if you attempt to do anything with it.  It is included here
-# as an incentive for some enterprising soul to sit down and fix it.
-# The UNION filesystem was known to be buggy in the past.  It is now
+# NB: The UNION filesystem was known to be buggy in the past.  It is now
 # being actively maintained, although there are still some issues being
 # resolved.
 #
@@ -1000,7 +992,7 @@ options 	NFSCLIENT		#Network File System client
 # The rest are optional:
 options 	CD9660			#ISO 9660 filesystem
 options 	FDESCFS			#File descriptor filesystem
-options 	HPFS			#OS/2 File system
+options 	FUSE			#FUSE support module
 options 	MSDOSFS			#MS DOS File System (FAT, FAT32)
 options 	NFSSERVER		#Network File System server
 options 	NFSLOCKD		#Network Lock Manager
@@ -1008,19 +1000,10 @@ options 	NFSCL			#experimental NFS client with NFSv4
 options 	NFSD			#experimental NFS server with NFSv4
 options 	KGSSAPI			#Kernel GSSAPI implementation
 
-# NT File System. Read-mostly, see mount_ntfs(8) for details.
-# For a full read-write NTFS support consider sysutils/fusefs-ntfs
-# port/package.
-options 	NTFS
-
 options 	NULLFS			#NULL filesystem
-# Broken (depends on NCP):
-#options 	NWFS			#NetWare filesystem
-options 	PORTALFS		#Portal filesystem
 options 	PROCFS			#Process filesystem (requires PSEUDOFS)
 options 	PSEUDOFS		#Pseudo-filesystem framework
 options 	PSEUDOFS_TRACE		#Debugging support for PSEUDOFS
-options 	SMBFS			#SMB/CIFS filesystem
 options 	TMPFS			#Efficient memory filesystem
 options 	UDF			#Universal Disk Format
 options 	UNIONFS			#Union filesystem
@@ -1086,13 +1069,6 @@ options 	NFS_GATHERDELAY=10	# Default write gather delay (msec)
 options 	NFS_WDELAYHASHSIZ=16	# and with this
 options 	NFS_DEBUG		# Enable NFS Debugging
 
-# Coda stuff:
-options 	CODA			#CODA filesystem.
-device		vcoda			#coda minicache <-> venus comm.
-# Use the old Coda 5.x venus<->kernel interface instead of the new
-# realms-aware 6.x protocol.
-#options 	CODA_COMPAT_5
-
 #
 # Add support for the EXT2FS filesystem of Linux fame.  Be a bit
 # careful with this - the ext2fs code has a tendency to lag behind
@@ -1106,12 +1082,6 @@ options 	EXT2FS
 # this is limited to read-only access.
 #
 options 	REISERFS
-
-#
-# Add support for the SGI XFS filesystem. Currently,
-# this is limited to read-only access.
-#
-options 	XFS
 
 # Use real implementations of the aio_* system calls.  There are numerous
 # stability and security issues in the current aio code that make it
@@ -1134,7 +1104,6 @@ device		ksyms
 # Each option requires their base file system and LIBICONV.
 options 	CD9660_ICONV
 options 	MSDOSFS_ICONV
-options 	NTFS_ICONV
 options 	UDF_ICONV
 
 
@@ -1968,6 +1937,8 @@ device		xmphy		# XaQti XMAC II
 #	SMC TigerCard 1000 (SMC9462SX), and some Addtron cards.
 # malo: Marvell Libertas wireless NICs.
 # mwl:  Marvell 88W8363 802.11n wireless NICs.
+#	Requires the mwl firmware module
+# mwlfw: Marvell 88W8363 firmware
 # msk:	Support for gigabit ethernet adapters based on the Marvell/SysKonnect
 #	Yukon II Gigabit controllers, including 88E8021, 88E8022, 88E8061,
 #	88E8062, 88E8035, 88E8036, 88E8038, 88E8050, 88E8052, 88E8053,
@@ -2163,6 +2134,7 @@ device		bwi		# Broadcom BCM430* BCM431*
 device		bwn		# Broadcom BCM43xx
 device		malo		# Marvell Libertas wireless NICs.
 device		mwl		# Marvell 88W8363 802.11n wireless NICs.
+device		mwlfw
 device		ral		# Ralink Technology RT2500 wireless NICs.
 
 # Use sf_buf(9) interface for jumbo buffers on ti(4) controllers.
@@ -2555,10 +2527,12 @@ device		iicoc		# OpenCores I2C controller support
 # ds133x	Dallas Semiconductor DS1337, DS1338 and DS1339 RTC
 # ds1374	Dallas Semiconductor DS1374 RTC
 # ds1672	Dallas Semiconductor DS1672 RTC
+# s35390a	Seiko Instruments S-35390A RTC
 #
 device		ds133x
 device		ds1374
 device		ds1672
+device		s35390a
 
 # Parallel-Port Bus
 #

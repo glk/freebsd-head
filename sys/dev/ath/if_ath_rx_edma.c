@@ -421,13 +421,15 @@ ath_edma_recv_proc_queue(struct ath_softc *sc, HAL_RX_QUEUE qtype,
 	if (ngood)
 		sc->sc_lastrx = tsf;
 
-	CTR2(ATH_KTR_INTR, "ath edma rx proc: npkts=%d, ngood=%d",
+	ATH_KTR(sc, ATH_KTR_INTERRUPTS, 2,
+	    "ath edma rx proc: npkts=%d, ngood=%d",
 	    npkts, ngood);
 
 	/* Handle resched and kickpcu appropriately */
 	ATH_PCU_LOCK(sc);
 	if (dosched && sc->sc_kickpcu) {
-		CTR0(ATH_KTR_ERR, "ath_edma_recv_proc_queue(): kickpcu");
+		ATH_KTR(sc, ATH_KTR_ERROR, 0,
+		    "ath_edma_recv_proc_queue(): kickpcu");
 		device_printf(sc->sc_dev,
 		    "%s: handled npkts %d ngood %d\n",
 		    __func__, npkts, ngood);
@@ -506,8 +508,6 @@ ath_edma_rxbuf_init(struct ath_softc *sc, struct ath_buf *bf)
 	int len;
 
 	ATH_RX_LOCK_ASSERT(sc);
-
-//	device_printf(sc->sc_dev, "%s: called; bf=%p\n", __func__, bf);
 
 	m = m_getm(NULL, sc->sc_edma_bufsize, M_DONTWAIT, MT_DATA);
 	if (! m)
@@ -799,8 +799,6 @@ static int
 ath_edma_dma_rxteardown(struct ath_softc *sc)
 {
 
-	device_printf(sc->sc_dev, "%s: called\n", __func__);
-
 	ATH_RX_LOCK(sc);
 	ath_edma_rxfifo_flush(sc, HAL_RX_QUEUE_HP);
 	ath_edma_rxfifo_free(sc, HAL_RX_QUEUE_HP);
@@ -821,16 +819,11 @@ void
 ath_recv_setup_edma(struct ath_softc *sc)
 {
 
-	device_printf(sc->sc_dev, "DMA setup: EDMA\n");
-
 	/* Set buffer size to 4k */
 	sc->sc_edma_bufsize = 4096;
 
 	/* Fetch EDMA field and buffer sizes */
 	(void) ath_hal_getrxstatuslen(sc->sc_ah, &sc->sc_rx_statuslen);
-	(void) ath_hal_gettxdesclen(sc->sc_ah, &sc->sc_tx_desclen);
-	(void) ath_hal_gettxstatuslen(sc->sc_ah, &sc->sc_tx_statuslen);
-	(void) ath_hal_getntxmaps(sc->sc_ah, &sc->sc_tx_nmaps);
 
 	/* Configure the hardware with the RX buffer size */
 	(void) ath_hal_setrxbufsize(sc->sc_ah, sc->sc_edma_bufsize -
@@ -838,14 +831,8 @@ ath_recv_setup_edma(struct ath_softc *sc)
 
 	device_printf(sc->sc_dev, "RX status length: %d\n",
 	    sc->sc_rx_statuslen);
-	device_printf(sc->sc_dev, "TX descriptor length: %d\n",
-	    sc->sc_tx_desclen);
-	device_printf(sc->sc_dev, "TX status length: %d\n",
-	    sc->sc_tx_statuslen);
-	device_printf(sc->sc_dev, "TX/RX buffer size: %d\n",
+	device_printf(sc->sc_dev, "RX buffer size: %d\n",
 	    sc->sc_edma_bufsize);
-	device_printf(sc->sc_dev, "TX buffers per descriptor: %d\n",
-	    sc->sc_tx_nmaps);
 
 	sc->sc_rx.recv_stop = ath_edma_stoprecv;
 	sc->sc_rx.recv_start = ath_edma_startrecv;
