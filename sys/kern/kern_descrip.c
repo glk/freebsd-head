@@ -113,6 +113,7 @@ static uma_zone_t file_zone;
 /* Flags for do_dup() */
 #define DUP_FIXED	0x1	/* Force fixed allocation */
 #define DUP_FCNTL	0x2	/* fcntl()-style errors */
+#define	DUP_CLOEXEC	0x4	/* Atomically set FD_CLOEXEC. */
 
 static int	closefp(struct filedesc *fdp, int fd, struct file *fp,
 		    struct thread *td, int holdleaders);
@@ -366,7 +367,7 @@ int
 sys_fcntl(struct thread *td, struct fcntl_args *uap)
 {
 	struct flock fl;
-	struct oflock ofl;
+	struct __oflock ofl;
 	intptr_t arg;
 	int error;
 	int cmd;
@@ -477,6 +478,12 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 	case F_DUPFD:
 		tmp = arg;
 		error = do_dup(td, DUP_FCNTL, fd, tmp, td->td_retval);
+		break;
+
+	case F_DUPFD_CLOEXEC:
+		tmp = arg;
+		error = do_dup(td, DUP_FCNTL | DUP_CLOEXEC, fd, tmp,
+		    td->td_retval);
 		break;
 
 	case F_DUP2FD:
@@ -895,7 +902,10 @@ do_dup(struct thread *td, int flags, int old, int new,
 	 * Duplicate the source descriptor.
 	 */
 	fdp->fd_ofiles[new] = fp;
-	fdp->fd_ofileflags[new] = fdp->fd_ofileflags[old] &~ UF_EXCLOSE;
+	if ((flags & DUP_CLOEXEC) != 0)
+		fdp->fd_ofileflags[new] = fdp->fd_ofileflags[old] | UF_EXCLOSE;
+	else
+		fdp->fd_ofileflags[new] = fdp->fd_ofileflags[old] & ~UF_EXCLOSE;
 	if (new > fdp->fd_lastfile)
 		fdp->fd_lastfile = new;
 	*retval = new;
@@ -2304,8 +2314,8 @@ _fget(struct thread *td, int fd, struct file **fpp, int flags,
 	struct file *fp;
 #ifdef CAPABILITIES
 	struct file *fp_fromcap;
-	int error;
 #endif
+	int error;
 
 	*fpp = NULL;
 	if (td == NULL || (fdp = td->td_proc->p_fd) == NULL)
@@ -2344,7 +2354,7 @@ _fget(struct thread *td, int fd, struct file **fpp, int flags,
 		else
 			error = cap_funwrap_mmap(fp, needrights, maxprotp,
 			    &fp_fromcap);
-		if (error) {
+		if (error != 0) {
 			fdrop(fp, td);
 			return (error);
 		}
@@ -2369,14 +2379,30 @@ _fget(struct thread *td, int fd, struct file **fpp, int flags,
 
 	/*
 	 * FREAD and FWRITE failure return EBADF as per POSIX.
-	 *
-	 * Only one flag, or 0, may be specified.
 	 */
-	if ((flags == FREAD && (fp->f_flag & FREAD) == 0) ||
-	    (flags == FWRITE && (fp->f_flag & FWRITE) == 0)) {
-		fdrop(fp, td);
-		return (EBADF);
+	error = 0;
+	switch (flags) {
+	case FREAD:
+	case FWRITE:
+		if ((fp->f_flag & flags) == 0)
+			error = EBADF;
+		break;
+	case FEXEC:
+	    	if ((fp->f_flag & (FREAD | FEXEC)) == 0 ||
+		    ((fp->f_flag & FWRITE) != 0))
+			error = EBADF;
+		break;
+	case 0:
+		break;
+	default:
+		KASSERT(0, ("wrong flags"));
 	}
+
+	if (error != 0) {
+		fdrop(fp, td);
+		return (error);
+	}
+
 	*fpp = fp;
 	return (0);
 }
@@ -2471,6 +2497,13 @@ fgetvp_read(struct thread *td, int fd, cap_rights_t rights, struct vnode **vpp)
 {
 
 	return (_fgetvp(td, fd, FREAD, rights, NULL, vpp));
+}
+
+int
+fgetvp_exec(struct thread *td, int fd, cap_rights_t rights, struct vnode **vpp)
+{
+
+	return (_fgetvp(td, fd, FEXEC, rights, NULL, vpp));
 }
 
 #ifdef notyet
