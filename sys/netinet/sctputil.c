@@ -2573,15 +2573,13 @@ sctp_pad_lastmbuf(struct mbuf *m, int padval, struct mbuf *last_mbuf)
 	/* find the last mbuf in chain and pad it */
 	struct mbuf *m_at;
 
-	m_at = m;
 	if (last_mbuf) {
 		return (sctp_add_pad_tombuf(last_mbuf, padval));
 	} else {
-		while (m_at) {
+		for (m_at = m; m_at; m_at = SCTP_BUF_NEXT(m_at)) {
 			if (SCTP_BUF_NEXT(m_at) == NULL) {
 				return (sctp_add_pad_tombuf(m_at, padval));
 			}
-			m_at = SCTP_BUF_NEXT(m_at);
 		}
 	}
 	SCTP_LTRACE_ERR_RET_PKT(m, NULL, NULL, NULL, SCTP_FROM_SCTPUTIL, EFAULT);
@@ -3825,7 +3823,9 @@ sctp_abort_notification(struct sctp_tcb *stcb, uint8_t from_peer, uint16_t error
 
 void
 sctp_abort_association(struct sctp_inpcb *inp, struct sctp_tcb *stcb,
-    struct mbuf *m, int iphlen, struct sctphdr *sh, struct mbuf *op_err,
+    struct mbuf *m, int iphlen, struct sctphdr *sh,
+    struct mbuf *op_err,
+    uint8_t use_mflowid, uint32_t mflowid,
     uint32_t vrf_id, uint16_t port)
 {
 	uint32_t vtag;
@@ -3844,7 +3844,9 @@ sctp_abort_association(struct sctp_inpcb *inp, struct sctp_tcb *stcb,
 		vrf_id = stcb->asoc.vrf_id;
 		stcb->asoc.state |= SCTP_STATE_WAS_ABORTED;
 	}
-	sctp_send_abort(m, iphlen, sh, vtag, op_err, vrf_id, port);
+	sctp_send_abort(m, iphlen, sh, vtag, op_err,
+	    use_mflowid, mflowid,
+	    vrf_id, port);
 	if (stcb != NULL) {
 		/* Ok, now lets free it */
 #if defined (__APPLE__) || defined(SCTP_SO_LOCK_TESTING)
@@ -3994,7 +3996,9 @@ sctp_abort_an_association(struct sctp_inpcb *inp, struct sctp_tcb *stcb,
 
 void
 sctp_handle_ootb(struct mbuf *m, int iphlen, int offset, struct sctphdr *sh,
-    struct sctp_inpcb *inp, struct mbuf *op_err, uint32_t vrf_id, uint16_t port)
+    struct sctp_inpcb *inp,
+    uint8_t use_mflowid, uint32_t mflowid,
+    uint32_t vrf_id, uint16_t port)
 {
 	struct sctp_chunkhdr *ch, chunk_buf;
 	unsigned int chk_length;
@@ -4037,7 +4041,9 @@ sctp_handle_ootb(struct mbuf *m, int iphlen, int offset, struct sctphdr *sh,
 			 */
 			return;
 		case SCTP_SHUTDOWN_ACK:
-			sctp_send_shutdown_complete2(m, sh, vrf_id, port);
+			sctp_send_shutdown_complete2(m, sh,
+			    use_mflowid, mflowid,
+			    vrf_id, port);
 			return;
 		default:
 			break;
@@ -4049,7 +4055,9 @@ sctp_handle_ootb(struct mbuf *m, int iphlen, int offset, struct sctphdr *sh,
 	if ((SCTP_BASE_SYSCTL(sctp_blackhole) == 0) ||
 	    ((SCTP_BASE_SYSCTL(sctp_blackhole) == 1) &&
 	    (contains_init_chunk == 0))) {
-		sctp_send_abort(m, iphlen, sh, 0, op_err, vrf_id, port);
+		sctp_send_abort(m, iphlen, sh, 0, NULL,
+		    use_mflowid, mflowid,
+		    vrf_id, port);
 	}
 }
 
@@ -6829,83 +6837,61 @@ sctp_recv_udp_tunneled_packet(struct mbuf *m, int off, struct inpcb *ignored)
 	struct ip *iph;
 	struct mbuf *sp, *last;
 	struct udphdr *uhdr;
-	uint16_t port = 0;
-	int header_size = sizeof(struct udphdr) + sizeof(struct sctphdr);
+	uint16_t port;
 
-	/*
-	 * Split out the mbuf chain. Leave the IP header in m, place the
-	 * rest in the sp.
-	 */
 	if ((m->m_flags & M_PKTHDR) == 0) {
 		/* Can't handle one that is not a pkt hdr */
 		goto out;
 	}
-	/* pull the src port */
+	/* Pull the src port */
 	iph = mtod(m, struct ip *);
 	uhdr = (struct udphdr *)((caddr_t)iph + off);
-
 	port = uhdr->uh_sport;
+	/*
+	 * Split out the mbuf chain. Leave the IP header in m, place the
+	 * rest in the sp.
+	 */
 	sp = m_split(m, off, M_DONTWAIT);
 	if (sp == NULL) {
 		/* Gak, drop packet, we can't do a split */
 		goto out;
 	}
-	if (sp->m_pkthdr.len < header_size) {
-		/* Gak, packet can't have an SCTP header in it - to small */
+	if (sp->m_pkthdr.len < sizeof(struct udphdr) + sizeof(struct sctphdr)) {
+		/* Gak, packet can't have an SCTP header in it - too small */
 		m_freem(sp);
 		goto out;
 	}
-	/* ok now pull up the UDP header and SCTP header together */
-	sp = m_pullup(sp, header_size);
+	/* Now pull up the UDP header and SCTP header together */
+	sp = m_pullup(sp, sizeof(struct udphdr) + sizeof(struct sctphdr));
 	if (sp == NULL) {
 		/* Gak pullup failed */
 		goto out;
 	}
-	/* trim out the UDP header */
+	/* Trim out the UDP header */
 	m_adj(sp, sizeof(struct udphdr));
 
 	/* Now reconstruct the mbuf chain */
-	/* 1) find last one */
-	last = m;
-	while (last->m_next != NULL) {
-		last = last->m_next;
-	}
+	for (last = m; last->m_next; last = last->m_next);
 	last->m_next = sp;
 	m->m_pkthdr.len += sp->m_pkthdr.len;
-	last = m;
-	while (last != NULL) {
-		last = last->m_next;
-	}
-	/* Now its ready for sctp_input or sctp6_input */
 	iph = mtod(m, struct ip *);
 	switch (iph->ip_v) {
 #ifdef INET
 	case IPVERSION:
-		{
-			uint16_t len;
-
-			/* its IPv4 */
-			len = SCTP_GET_IPV4_LENGTH(iph);
-			len -= sizeof(struct udphdr);
-			SCTP_GET_IPV4_LENGTH(iph) = len;
-			sctp_input_with_port(m, off, port);
-			break;
-		}
+		iph->ip_len -= sizeof(struct udphdr);
+		sctp_input_with_port(m, off, port);
+		break;
 #endif
 #ifdef INET6
 	case IPV6_VERSION >> 4:
-		{
-			/* its IPv6 - NOT supported */
-			goto out;
-			break;
+		/* Not yet supported. */
+		goto out;
+		break;
 
-		}
 #endif
 	default:
-		{
-			m_freem(m);
-			break;
-		}
+		goto out;
+		break;
 	}
 	return;
 out:

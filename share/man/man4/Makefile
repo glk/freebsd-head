@@ -116,6 +116,7 @@ MAN=	aac.4 \
 	enc.4 \
 	epair.4 \
 	esp.4 \
+	est.4 \
 	et.4 \
 	eventtimers.4 \
 	exca.4 \
@@ -126,6 +127,7 @@ MAN=	aac.4 \
 	fdt.4 \
 	fdtbus.4 \
 	ffclock.4 \
+	filemon.4 \
 	firewire.4 \
 	fpa.4 \
 	fwe.4 \
@@ -522,6 +524,7 @@ MAN=	aac.4 \
 	${_vxge.4} \
 	watchdog.4 \
 	wb.4 \
+	${_wbwd.4} \
 	wi.4 \
 	witness.4 \
 	wlan.4 \
@@ -735,6 +738,7 @@ _spkr.4=	spkr.4
 _tpm.4=		tpm.4
 _urtw.4=	urtw.4
 _viawd.4=	viawd.4
+_wbwd.4=	wbwd.4
 _wpi.4=		wpi.4
 _xen.4=		xen.4
 _xnb.4=		xnb.4

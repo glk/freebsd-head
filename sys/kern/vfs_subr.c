@@ -73,9 +73,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/vmmeter.h>
 #include <sys/vnode.h>
-#ifdef SW_WATCHDOG
 #include <sys/watchdog.h>
-#endif
 
 #include <machine/stdarg.h>
 
@@ -1029,6 +1027,7 @@ alloc:
 		if ((mp->mnt_kern_flag & MNTK_NOKNOTE) != 0)
 			vp->v_vflag |= VV_NOKNOTE;
 	}
+	rangelock_init(&vp->v_rl);
 
 	*vpp = vp;
 	return (0);
@@ -1870,10 +1869,10 @@ sched_sync(void)
 				LIST_INSERT_HEAD(next, bo, bo_synclist);
 				continue;
 			}
-#ifdef SW_WATCHDOG
+
 			if (first_printf == 0)
 				wdog_kern_pat(WD_LASTVAL);
-#endif
+
 		}
 		if (!LIST_EMPTY(gslp)) {
 			mtx_unlock(&sync_mtx);
@@ -2470,6 +2469,7 @@ vdropl(struct vnode *vp)
 	/* XXX Elsewhere we detect an already freed vnode via NULL v_op. */
 	vp->v_op = NULL;
 #endif
+	rangelock_destroy(&vp->v_rl);
 	lockdestroy(vp->v_vnlock);
 	mtx_destroy(&vp->v_interlock);
 	mtx_destroy(BO_MTX(bo));

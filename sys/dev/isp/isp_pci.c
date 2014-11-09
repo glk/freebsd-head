@@ -372,6 +372,8 @@ static driver_t isp_pci_driver = {
 };
 static devclass_t isp_devclass;
 DRIVER_MODULE(isp, pci, isp_pci_driver, isp_devclass, 0, 0);
+MODULE_DEPEND(isp, cam, 1, 1, 1);
+MODULE_DEPEND(isp, firmware, 1, 1, 1);
 
 static int
 isp_pci_probe(device_t dev)
@@ -481,6 +483,7 @@ isp_get_generic_options(device_t dev, ispsoftc_t *isp, int *nvp)
 	if (bootverbose) {
 		isp->isp_dblev |= ISP_LOGCONFIG|ISP_LOGINFO;
 	}
+	tval = 0;
 	(void) resource_int_value(device_get_name(dev), device_get_unit(dev), "vports", &tval);
 	if (tval > 0 && tval < 127) {
 		*nvp =  tval;
@@ -493,11 +496,6 @@ isp_get_generic_options(device_t dev, ispsoftc_t *isp, int *nvp)
 	tval = 7;
 	(void) resource_int_value(device_get_name(dev), device_get_unit(dev), "quickboot_time", &tval);
 	isp_quickboot_time = tval;
-
-	tval = 0;
-	if (resource_int_value(device_get_name(dev), device_get_unit(dev), "forcemulti", &tval) == 0 && tval != 0) {
-		isp->isp_osinfo.forcemulti = 1;
-	}
 }
 
 static void
@@ -862,7 +860,7 @@ isp_pci_attach(device_t dev)
 	if (IS_SCSI(isp) && (ISP_SPI_PC(isp, 0)->def_role & ISP_ROLE_TARGET)) {
 		snprintf(fwname, sizeof (fwname), "isp_%04x_it", did);
 		isp->isp_osinfo.fw = firmware_get(fwname);
-	} else if (IS_24XX(isp) && (isp->isp_nchan > 1 || isp->isp_osinfo.forcemulti)) {
+	} else if (IS_24XX(isp)) {
 		snprintf(fwname, sizeof (fwname), "isp_%04x_multi", did);
 		isp->isp_osinfo.fw = firmware_get(fwname);
 	}
@@ -871,12 +869,12 @@ isp_pci_attach(device_t dev)
 		isp->isp_osinfo.fw = firmware_get(fwname);
 	}
 	if (isp->isp_osinfo.fw != NULL) {
+		isp_prt(isp, ISP_LOGCONFIG, "loaded firmware %s", fwname);
 		isp->isp_mdvec->dv_ispfw = isp->isp_osinfo.fw->data;
 	}
 
 	/*
-	 * Make sure that SERR, PERR, WRITE INVALIDATE and BUSMASTER
-	 * are set.
+	 * Make sure that SERR, PERR, WRITE INVALIDATE and BUSMASTER are set.
 	 */
 	cmd |= PCIM_CMD_SEREN | PCIM_CMD_PERRESPEN |
 		PCIM_CMD_BUSMASTEREN | PCIM_CMD_INVEN;
@@ -900,7 +898,7 @@ isp_pci_attach(device_t dev)
 	 */
 	data = pci_read_config(dev, PCIR_CACHELNSZ, 1);
 	if (data == 0 || (linesz != PCI_DFLT_LNSZ && data != linesz)) {
-		isp_prt(isp, ISP_LOGCONFIG, "set PCI line size to %d from %d", linesz, data);
+		isp_prt(isp, ISP_LOGDEBUG0, "set PCI line size to %d from %d", linesz, data);
 		data = linesz;
 		pci_write_config(dev, PCIR_CACHELNSZ, data, 1);
 	}
@@ -911,7 +909,7 @@ isp_pci_attach(device_t dev)
 	data = pci_read_config(dev, PCIR_LATTIMER, 1);
 	if (data < PCI_DFLT_LTNCY) {
 		data = PCI_DFLT_LTNCY;
-		isp_prt(isp, ISP_LOGCONFIG, "set PCI latency to %d", data);
+		isp_prt(isp, ISP_LOGDEBUG0, "set PCI latency to %d", data);
 		pci_write_config(dev, PCIR_LATTIMER, data, 1);
 	}
 

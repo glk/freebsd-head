@@ -93,7 +93,7 @@ static struct cdevsw enc_cdevsw = {
 	.d_close =	enc_close,
 	.d_ioctl =	enc_ioctl,
 	.d_name =	"ses",
-	.d_flags =	0,
+	.d_flags =	D_TRACKCLOSE,
 };
 
 static void
@@ -111,6 +111,16 @@ enc_init(void)
 		printf("enc: Failed to attach master async callback "
 		       "due to status 0x%x!\n", status);
 	}
+}
+
+static void
+enc_devgonecb(void *arg)
+{
+	struct cam_periph *periph;
+
+	periph = (struct cam_periph *)arg;
+
+	cam_periph_release(periph);
 }
 
 static void
@@ -141,6 +151,8 @@ enc_oninvalidate(struct cam_periph *periph)
 	}
 	callout_drain(&enc->status_updater);
 
+	destroy_dev_sched_cb(enc->enc_dev, enc_devgonecb, periph);
+
 	xpt_print(periph->path, "lost device\n");
 }
 
@@ -152,9 +164,7 @@ enc_dtor(struct cam_periph *periph)
 	enc = periph->softc;
 
 	xpt_print(periph->path, "removing device entry\n");
-	cam_periph_unlock(periph);
-	destroy_dev(enc->enc_dev);
-	cam_periph_lock(periph);
+
 
 	/* If the sub-driver has a cleanup routine, call it */
 	if (enc->enc_vec.softc_cleanup != NULL)
@@ -254,12 +264,12 @@ enc_open(struct cdev *dev, int flags, int fmt, struct thread *td)
 		error = ENXIO;
 		goto out;
 	}
-
 out:
+	if (error != 0)
+		cam_periph_release_locked(periph);
+
 	cam_periph_unlock(periph);
-	if (error) {
-		cam_periph_release(periph);
-	}
+
 	return (error);
 }
 
@@ -267,17 +277,11 @@ static int
 enc_close(struct cdev *dev, int flag, int fmt, struct thread *td)
 {
 	struct cam_periph *periph;
-	struct enc_softc *softc;
 
 	periph = (struct cam_periph *)dev->si_drv1;
 	if (periph == NULL)
 		return (ENXIO);
 
-	cam_periph_lock(periph);
-
-	softc = (struct enc_softc *)periph->softc;
-
-	cam_periph_unlock(periph);
 	cam_periph_release(periph);
 
 	return (0);
@@ -957,9 +961,19 @@ enc_ctor(struct cam_periph *periph, void *arg)
 			goto out;
 		}
 	}
+
+	if (cam_periph_acquire(periph) != CAM_REQ_CMP) {
+		xpt_print(periph->path, "%s: lost periph during "
+			  "registration!\n", __func__);
+		cam_periph_lock(periph);
+
+		return (CAM_REQ_CMP_ERR);
+	}
+
 	enc->enc_dev = make_dev(&enc_cdevsw, periph->unit_number,
 	    UID_ROOT, GID_OPERATOR, 0600, "%s%d",
 	    periph->periph_name, periph->unit_number);
+
 	cam_periph_lock(periph);
 	enc->enc_dev->si_drv1 = periph;
 

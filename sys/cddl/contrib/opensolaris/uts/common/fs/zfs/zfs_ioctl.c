@@ -18,13 +18,14 @@
  *
  * CDDL HEADER END
  */
+
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2011-2012 Pawel Jakub Dawidek <pawel@dawidek.net>.
  * All rights reserved.
  * Portions Copyright 2011 Martin Matuska <mm@FreeBSD.org>
  * Copyright 2011 Nexenta Systems, Inc.  All rights reserved.
- * Copyright (c) 2011 by Delphix. All rights reserved.
+ * Copyright (c) 2012 by Delphix. All rights reserved.
  * Copyright (c) 2012, Joyent, Inc. All rights reserved.
  */
 
@@ -1157,6 +1158,8 @@ getzfsvfs(const char *dsname, zfsvfs_t **zfvp)
 /*
  * Find a zfsvfs_t for a mounted filesystem, or create our own, in which
  * case its z_vfs will be NULL, and it will be opened as the owner.
+ * If 'writer' is set, the z_teardown_lock will be held for RW_WRITER,
+ * which prevents all vnode ops from running.
  */
 static int
 zfsvfs_hold(const char *name, void *tag, zfsvfs_t **zfvp, boolean_t writer)
@@ -1220,7 +1223,7 @@ zfs_ioc_pool_create(zfs_cmd_t *zc)
 
 		(void) nvlist_lookup_uint64(props,
 		    zpool_prop_to_name(ZPOOL_PROP_VERSION), &version);
-		if (version < SPA_VERSION_INITIAL || version > SPA_VERSION) {
+		if (!SPA_VERSION_IS_SUPPORTED(version)) {
 			error = EINVAL;
 			goto pool_props_bad;
 		}
@@ -1344,6 +1347,15 @@ zfs_ioc_pool_configs(zfs_cmd_t *zc)
 	return (error);
 }
 
+/*
+ * inputs:
+ * zc_name		name of the pool
+ *
+ * outputs:
+ * zc_cookie		real errno
+ * zc_nvlist_dst	config nvlist
+ * zc_nvlist_dst_size	size of config nvlist
+ */
 static int
 zfs_ioc_pool_stats(zfs_cmd_t *zc)
 {
@@ -1445,7 +1457,8 @@ zfs_ioc_pool_upgrade(zfs_cmd_t *zc)
 	if ((error = spa_open(zc->zc_name, &spa, FTAG)) != 0)
 		return (error);
 
-	if (zc->zc_cookie < spa_version(spa) || zc->zc_cookie > SPA_VERSION) {
+	if (zc->zc_cookie < spa_version(spa) ||
+	    !SPA_VERSION_IS_SUPPORTED(zc->zc_cookie)) {
 		spa_close(spa, FTAG);
 		return (EINVAL);
 	}
@@ -4125,6 +4138,22 @@ zfs_ioc_clear(zfs_cmd_t *zc)
 	return (error);
 }
 
+static int
+zfs_ioc_pool_reopen(zfs_cmd_t *zc)
+{
+	spa_t *spa;
+	int error;
+
+	error = spa_open(zc->zc_name, &spa, FTAG);
+	if (error)
+		return (error);
+
+	spa_vdev_state_enter(spa, SCL_NONE);
+	vdev_reopen(spa->spa_root_vdev);
+	(void) spa_vdev_state_exit(spa, NULL, 0);
+	spa_close(spa, FTAG);
+	return (0);
+}
 /*
  * inputs:
  * zc_name	name of filesystem
@@ -4994,7 +5023,9 @@ static zfs_ioc_vec_t zfs_ioc_vec[] = {
 	{ zfs_ioc_space_snaps, zfs_secpolicy_read, DATASET_NAME, B_FALSE,
 	    B_TRUE },
 	{ zfs_ioc_send_progress, zfs_secpolicy_read, DATASET_NAME, B_FALSE,
-	    B_FALSE }
+	    B_FALSE },
+	{ zfs_ioc_pool_reopen, zfs_secpolicy_config, POOL_NAME, B_TRUE,
+	    B_TRUE },
 };
 
 int
@@ -5434,7 +5465,7 @@ zfs_modevent(module_t mod, int type, void *unused __unused)
 		tsd_create(&zfs_fsyncer_key, NULL);
 		tsd_create(&rrw_tsd_key, NULL);
 
-		printf("ZFS storage pool version " SPA_VERSION_STRING "\n");
+		printf("ZFS storage pool version: features support (" SPA_VERSION_STRING ")\n");
 		root_mount_rel(zfs_root_token);
 
 		zfsdev_init();
