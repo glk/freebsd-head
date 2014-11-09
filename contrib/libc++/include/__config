@@ -51,6 +51,9 @@
 #   define _LIBCPP_LITTLE_ENDIAN 0
 #   define _LIBCPP_BIG_ENDIAN    1
 # endif  // _BYTE_ORDER == _LITTLE_ENDIAN
+# ifndef __LONG_LONG_SUPPORTED
+#  define _LIBCPP_HAS_NO_LONG_LONG
+# endif  // __LONG_LONG_SUPPORTED
 #endif  // __FreeBSD__
 
 #ifdef _WIN32
@@ -62,6 +65,12 @@
 #    define _LIBCP_HAS_IS_BASE_OF
 #  endif
 #endif  // _WIN32
+
+#ifdef __linux__
+#  if defined(__GNUC__) && _GNUC_VER >= 403
+#    define _LIBCP_HAS_IS_BASE_OF
+#  endif
+#endif
 
 #ifdef __sun__
 # include <sys/isa_defs.h>

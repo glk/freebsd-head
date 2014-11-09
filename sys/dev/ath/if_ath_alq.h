@@ -31,6 +31,72 @@
 #ifndef	__IF_ATH_ALQ_H__
 #define	__IF_ATH_ALQ_H__
 
+#define	ATH_ALQ_INIT_STATE		1
+struct if_ath_alq_init_state {
+	uint32_t	sc_mac_version;
+	uint32_t	sc_mac_revision;
+	uint32_t	sc_phy_rev;
+	uint32_t	sc_hal_magic;
+};
+
+#define	ATH_ALQ_EDMA_TXSTATUS		2
+#define	ATH_ALQ_EDMA_RXSTATUS		3
+#define	ATH_ALQ_EDMA_TXDESC		4
+
+#define	ATH_ALQ_TDMA_BEACON_STATE	5
+struct if_ath_alq_tdma_beacon_state {
+	uint64_t	rx_tsf;		/* RX TSF of beacon frame */
+	uint64_t	beacon_tsf;	/* TSF inside beacon frame */
+	uint64_t	tsf64;
+	uint64_t	nextslot_tsf;
+	uint32_t	nextslot_tu;
+	uint32_t	txtime;
+};
+
+#define	ATH_ALQ_TDMA_TIMER_CONFIG	6
+struct if_ath_alq_tdma_timer_config {
+	uint32_t	tdma_slot;
+	uint32_t	tdma_slotlen;
+	uint32_t	tdma_slotcnt;
+	uint32_t	tdma_bintval;
+	uint32_t	tdma_guard;
+	uint32_t	tdma_scbintval;
+	uint32_t	tdma_dbaprep;
+};
+
+#define	ATH_ALQ_TDMA_SLOT_CALC		7
+struct if_ath_alq_tdma_slot_calc {
+	uint64_t	nexttbtt;
+	uint64_t	next_slot;
+	int32_t		tsfdelta;
+	int32_t		avg_plus;
+	int32_t		avg_minus;
+};
+
+#define	ATH_ALQ_TDMA_TSF_ADJUST		8
+struct if_ath_alq_tdma_tsf_adjust {
+	uint64_t	tsf64_old;
+	uint64_t	tsf64_new;
+	int32_t		tsfdelta;
+};
+
+#define	ATH_ALQ_TDMA_TIMER_SET		9
+struct if_ath_alq_tdma_timer_set {
+	uint32_t	bt_intval;
+	uint32_t	bt_nexttbtt;
+	uint32_t	bt_nextdba;
+	uint32_t	bt_nextswba;
+	uint32_t	bt_nextatim;
+	uint32_t	bt_flags;
+	uint32_t	sc_tdmadbaprep;
+	uint32_t	sc_tdmaswbaprep;
+};
+
+/*
+ * These will always be logged, regardless.
+ */
+#define	ATH_ALQ_LOG_ALWAYS_MASK		0x00000001
+
 #define	ATH_ALQ_FILENAME_LEN	128
 #define	ATH_ALQ_DEVNAME_LEN	32
 
@@ -42,18 +108,16 @@ struct if_ath_alq {
 	int		sc_alq_isactive;
 	char		sc_alq_devname[ATH_ALQ_DEVNAME_LEN];
 	char		sc_alq_filename[ATH_ALQ_FILENAME_LEN];
+	struct if_ath_alq_init_state sc_alq_cfg;
 };
-
-#define	ATH_ALQ_EDMA_TXSTATUS		1
-#define	ATH_ALQ_EDMA_RXSTATUS		2
-#define	ATH_ALQ_EDMA_TXDESC		3
 
 /* 128 bytes in total */
 #define	ATH_ALQ_PAYLOAD_LEN		112
 
 struct if_ath_alq_hdr {
 	uint64_t	threadid;
-	uint32_t	tstamp;
+	uint32_t	tstamp_sec;
+	uint32_t	tstamp_usec;
 	uint16_t	op;
 	uint16_t	len;	/* Length of (optional) payload */
 };
@@ -68,10 +132,13 @@ static inline int
 if_ath_alq_checkdebug(struct if_ath_alq *alq, uint16_t op)
 {
 
-	return (alq->sc_alq_debug & (1 << (op - 1)));
+	return ((alq->sc_alq_debug | ATH_ALQ_LOG_ALWAYS_MASK)
+	    & (1 << (op - 1)));
 }
 
 extern	void if_ath_alq_init(struct if_ath_alq *alq, const char *devname);
+extern	void if_ath_alq_setcfg(struct if_ath_alq *alq, uint32_t macVer,
+	    uint32_t macRev, uint32_t phyRev, uint32_t halMagic);
 extern	void if_ath_alq_tidyup(struct if_ath_alq *alq);
 extern	int if_ath_alq_start(struct if_ath_alq *alq);
 extern	int if_ath_alq_stop(struct if_ath_alq *alq);

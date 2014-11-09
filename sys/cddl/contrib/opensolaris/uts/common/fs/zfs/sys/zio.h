@@ -22,6 +22,7 @@
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2012 by Delphix. All rights reserved.
+ * Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
  */
 
 #ifndef _ZIO_H
@@ -106,14 +107,17 @@ enum zio_compress {
 	ZIO_COMPRESS_GZIP_8,
 	ZIO_COMPRESS_GZIP_9,
 	ZIO_COMPRESS_ZLE,
+	ZIO_COMPRESS_LZ4,
 	ZIO_COMPRESS_FUNCTIONS
 };
 
+/* N.B. when altering this value, also change BOOTFS_COMPRESS_VALID below */
 #define	ZIO_COMPRESS_ON_VALUE	ZIO_COMPRESS_LZJB
 #define	ZIO_COMPRESS_DEFAULT	ZIO_COMPRESS_OFF
 
 #define	BOOTFS_COMPRESS_VALID(compress)			\
 	((compress) == ZIO_COMPRESS_LZJB ||		\
+	(compress) == ZIO_COMPRESS_LZ4 ||		\
 	((compress) == ZIO_COMPRESS_ON &&		\
 	ZIO_COMPRESS_ON_VALUE == ZIO_COMPRESS_LZJB) ||	\
 	(compress) == ZIO_COMPRESS_OFF)
@@ -188,7 +192,9 @@ enum zio_flag {
 	ZIO_FLAG_RAW		= 1 << 21,
 	ZIO_FLAG_GANG_CHILD	= 1 << 22,
 	ZIO_FLAG_DDT_CHILD	= 1 << 23,
-	ZIO_FLAG_GODFATHER	= 1 << 24
+	ZIO_FLAG_GODFATHER	= 1 << 24,
+	ZIO_FLAG_NOPWRITE	= 1 << 25,
+	ZIO_FLAG_REEXECUTED	= 1 << 26,
 };
 
 #define	ZIO_FLAG_MUSTSUCCEED		0
@@ -287,8 +293,9 @@ typedef struct zio_prop {
 	dmu_object_type_t	zp_type;
 	uint8_t			zp_level;
 	uint8_t			zp_copies;
-	uint8_t			zp_dedup;
-	uint8_t			zp_dedup_verify;
+	boolean_t		zp_dedup;
+	boolean_t		zp_dedup_verify;
+	boolean_t		zp_nopwrite;
 } zio_prop_t;
 
 typedef struct zio_cksum_report zio_cksum_report_t;
@@ -369,23 +376,23 @@ typedef struct zio_trim_stats {
 	/*
 	 * Number of bytes successfully TRIMmed.
 	 */
-	kstat_named_t zio_trim_bytes;
+	kstat_named_t bytes;
 
 	/*
 	 * Number of successful TRIM requests.
 	 */
-	kstat_named_t zio_trim_success;
+	kstat_named_t success;
 
 	/*
 	 * Number of TRIM requests that failed because TRIM is not
 	 * supported.
 	 */
-	kstat_named_t zio_trim_unsupported;
+	kstat_named_t unsupported;
 
 	/*
 	 * Number of TRIM requests that failed for other reasons.
 	 */
-	kstat_named_t zio_trim_failed;
+	kstat_named_t failed;
 } zio_trim_stats_t;
 
 extern zio_trim_stats_t zio_trim_stats;
@@ -491,7 +498,8 @@ extern zio_t *zio_rewrite(zio_t *pio, spa_t *spa, uint64_t txg, blkptr_t *bp,
     void *data, uint64_t size, zio_done_func_t *done, void *priv,
     int priority, enum zio_flag flags, zbookmark_t *zb);
 
-extern void zio_write_override(zio_t *zio, blkptr_t *bp, int copies);
+extern void zio_write_override(zio_t *zio, blkptr_t *bp, int copies,
+    boolean_t nopwrite);
 
 extern void zio_free(spa_t *spa, uint64_t txg, const blkptr_t *bp);
 

@@ -111,6 +111,7 @@ __FBSDID("$FreeBSD$");
 #include <dev/ath/if_ath_rx_edma.h>
 #include <dev/ath/if_ath_tx_edma.h>
 #include <dev/ath/if_ath_beacon.h>
+#include <dev/ath/if_ath_spectral.h>
 #include <dev/ath/if_athdfs.h>
 
 #ifdef ATH_TX99_DIAG
@@ -296,6 +297,7 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	if (ifp == NULL) {
 		device_printf(sc->sc_dev, "can not if_alloc()\n");
 		error = ENOSPC;
+		CURVNET_RESTORE();
 		goto bad;
 	}
 	ic = ifp->if_l2com;
@@ -431,8 +433,11 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	TASK_INIT(&sc->sc_bmisstask, 0, ath_bmiss_proc, sc);
 	TASK_INIT(&sc->sc_bstucktask,0, ath_bstuck_proc, sc);
 	TASK_INIT(&sc->sc_resettask,0, ath_reset_proc, sc);
-	TASK_INIT(&sc->sc_txqtask,0, ath_txq_sched_tasklet, sc);
-	TASK_INIT(&sc->sc_fataltask,0, ath_fatal_proc, sc);
+	TASK_INIT(&sc->sc_txqtask, 0, ath_txq_sched_tasklet, sc);
+	TASK_INIT(&sc->sc_fataltask, 0, ath_fatal_proc, sc);
+
+	/* XXX make this a higher priority taskqueue? */
+	TASK_INIT(&sc->sc_txpkttask, 0, ath_start_task, sc);
 
 	/*
 	 * Allocate hardware transmit queues: one queue for
@@ -505,6 +510,14 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	if (! ath_dfs_attach(sc)) {
 		device_printf(sc->sc_dev,
 		    "%s: unable to attach DFS\n", __func__);
+		error = EIO;
+		goto bad2;
+	}
+
+	/* Attach spectral module */
+	if (ath_spectral_attach(sc) < 0) {
+		device_printf(sc->sc_dev,
+		    "%s: unable to attach spectral\n", __func__);
 		error = EIO;
 		goto bad2;
 	}
@@ -890,6 +903,11 @@ ath_attach(u_int16_t devid, struct ath_softc *sc)
 	 */
 #ifdef	ATH_DEBUG_ALQ
 	if_ath_alq_init(&sc->sc_alq, device_get_nameunit(sc->sc_dev));
+	if_ath_alq_setcfg(&sc->sc_alq,
+	    sc->sc_ah->ah_macVersion,
+	    sc->sc_ah->ah_macRev,
+	    sc->sc_ah->ah_phyRev,
+	    sc->sc_ah->ah_magic);
 #endif
 
 	/*
@@ -912,11 +930,16 @@ bad2:
 bad:
 	if (ah)
 		ath_hal_detach(ah);
-	if (ifp != NULL) {
+
+	/*
+	 * To work around scoping issues with CURVNET_SET/CURVNET_RESTORE..
+	 */
+	if (ifp != NULL && ifp->if_vnet) {
 		CURVNET_SET(ifp->if_vnet);
 		if_free(ifp);
 		CURVNET_RESTORE();
-	}
+	} else if (ifp != NULL)
+		if_free(ifp);
 	sc->sc_invalid = 1;
 	return error;
 }
@@ -951,11 +974,10 @@ ath_detach(struct ath_softc *sc)
 		sc->sc_tx99->detach(sc->sc_tx99);
 #endif
 	ath_rate_detach(sc->sc_rc);
-
 #ifdef	ATH_DEBUG_ALQ
 	if_ath_alq_tidyup(&sc->sc_alq);
 #endif
-
+	ath_spectral_detach(sc);
 	ath_dfs_detach(sc);
 	ath_desc_free(sc);
 	ath_txdma_teardown(sc);
@@ -1358,7 +1380,6 @@ ath_vap_delete(struct ieee80211vap *vap)
 		 * Reclaim any pending mcast frames for the vap.
 		 */
 		ath_tx_draintxq(sc, &avp->av_mcastq);
-		ATH_TXQ_LOCK_DESTROY(&avp->av_mcastq);
 	}
 	/*
 	 * Update bookkeeping.
@@ -1478,6 +1499,9 @@ ath_resume(struct ath_softc *sc)
 
 	/* Let DFS at it in case it's a DFS channel */
 	ath_dfs_radar_enable(sc, ic->ic_curchan);
+
+	/* Let spectral at in case spectral is enabled */
+	ath_spectral_enable(sc, ic->ic_curchan);
 
 	/* Restore the LED configuration */
 	ath_led_config(sc);
@@ -1840,11 +1864,19 @@ ath_bmiss_proc(void *arg, int pending)
 
 	DPRINTF(sc, ATH_DEBUG_ANY, "%s: pending %u\n", __func__, pending);
 
+	/*
+	 * Do a reset upon any becaon miss event.
+	 *
+	 * It may be a non-recognised RX clear hang which needs a reset
+	 * to clear.
+	 */
 	if (ath_hal_gethangstate(sc->sc_ah, 0xff, &hangs) && hangs != 0) {
-		if_printf(ifp, "bb hang detected (0x%x), resetting\n", hangs);
 		ath_reset(ifp, ATH_RESET_NOLOSS);
-	} else
+		if_printf(ifp, "bb hang detected (0x%x), resetting\n", hangs);
+	} else {
+		ath_reset(ifp, ATH_RESET_NOLOSS);
 		ieee80211_beacon_miss(ifp->if_l2com);
+	}
 }
 
 /*
@@ -1907,6 +1939,9 @@ ath_init(void *arg)
 
 	/* Let DFS at it in case it's a DFS channel */
 	ath_dfs_radar_enable(sc, ic->ic_curchan);
+
+	/* Let spectral at in case spectral is enabled */
+	ath_spectral_enable(sc, ic->ic_curchan);
 
 	/*
 	 * Likewise this is set during reset so update
@@ -2216,6 +2251,9 @@ ath_reset(struct ifnet *ifp, ATH_RESET_TYPE reset_type)
 	/* Let DFS at it in case it's a DFS channel */
 	ath_dfs_radar_enable(sc, ic->ic_curchan);
 
+	/* Let spectral at in case spectral is enabled */
+	ath_spectral_enable(sc, ic->ic_curchan);
+
 	if (ath_startrecv(sc) != 0)	/* restart recv */
 		if_printf(ifp, "%s: unable to start recv logic\n", __func__);
 	/*
@@ -2260,16 +2298,16 @@ ath_reset(struct ifnet *ifp, ATH_RESET_TYPE reset_type)
 	/* Restart TX/RX as needed */
 	ath_txrx_start(sc);
 
-	/* XXX Restart TX completion and pending TX */
+	/* Restart TX completion and pending TX */
 	if (reset_type == ATH_RESET_NOLOSS) {
+		ATH_TX_LOCK(sc);
 		for (i = 0; i < HAL_NUM_TX_QUEUES; i++) {
 			if (ATH_TXQ_SETUP(sc, i)) {
-				ATH_TXQ_LOCK(&sc->sc_txq[i]);
 				ath_txq_restart_dma(sc, &sc->sc_txq[i]);
 				ath_txq_sched(sc, &sc->sc_txq[i]);
-				ATH_TXQ_UNLOCK(&sc->sc_txq[i]);
 			}
 		}
+		ATH_TX_UNLOCK(sc);
 	}
 
 	/*
@@ -2425,6 +2463,14 @@ ath_buf_clone(struct ath_softc *sc, const struct ath_buf *bf)
 	tbf->bf_flags = bf->bf_flags & ~ATH_BUF_BUSY;
 	tbf->bf_status = bf->bf_status;
 	tbf->bf_m = bf->bf_m;
+	/*
+	 * XXX Copy the node reference, the caller is responsible
+	 * for deleting the node reference before it frees its
+	 * buffer.
+	 *
+	 * XXX It's done like this so we don't call the net80211
+	 * code whilst having active TX queue locks held.
+	 */
 	tbf->bf_node = bf->bf_node;
 	/* will be setup by the chain/setup function */
 	tbf->bf_lastds = NULL;
@@ -2502,7 +2548,9 @@ ath_start_task(void *arg, int npending)
 	sc->sc_txstart_cnt++;
 	ATH_PCU_UNLOCK(sc);
 
+	ATH_TX_LOCK(sc);
 	ath_start(sc->sc_ifp);
+	ATH_TX_UNLOCK(sc);
 
 	ATH_PCU_LOCK(sc);
 	sc->sc_txstart_cnt--;
@@ -2522,6 +2570,8 @@ ath_start(struct ifnet *ifp)
 
 	if ((ifp->if_drv_flags & IFF_DRV_RUNNING) == 0 || sc->sc_invalid)
 		return;
+
+	ATH_TX_LOCK_ASSERT(sc);
 
 	ATH_KTR(sc, ATH_KTR_TX, 0, "ath_start: called");
 
@@ -2594,6 +2644,10 @@ ath_start(struct ifnet *ifp)
 			ath_returnbuf_head(sc, bf);
 			ath_txfrag_cleanup(sc, &frags, ni);
 			ATH_TXBUF_UNLOCK(sc);
+			/*
+			 * XXX todo, free the node outside of
+			 * the TX lock context!
+			 */
 			if (ni != NULL)
 				ieee80211_free_node(ni);
 			continue;
@@ -2628,7 +2682,6 @@ ath_start(struct ifnet *ifp)
 	}
 	ATH_KTR(sc, ATH_KTR_TX, 1, "ath_start: finished; npkts=%d", npkts);
 }
-
 static int
 ath_media_change(struct ifnet *ifp)
 {
@@ -2804,9 +2857,6 @@ ath_updateslot(struct ifnet *ifp)
 void
 ath_txqmove(struct ath_txq *dst, struct ath_txq *src)
 {
-
-	ATH_TXQ_LOCK_ASSERT(dst);
-	ATH_TXQ_LOCK_ASSERT(src);
 
 	TAILQ_CONCAT(&dst->axq_q, &src->axq_q, bf_list);
 	dst->axq_link = src->axq_link;
@@ -3287,7 +3337,6 @@ ath_txq_init(struct ath_softc *sc, struct ath_txq *txq, int qnum)
 	txq->axq_softc = sc;
 	TAILQ_INIT(&txq->axq_q);
 	TAILQ_INIT(&txq->axq_tidq);
-	ATH_TXQ_LOCK_INIT(sc, txq);
 }
 
 /*
@@ -3471,7 +3520,6 @@ ath_tx_cleanupq(struct ath_softc *sc, struct ath_txq *txq)
 {
 
 	ath_hal_releasetxqueue(sc->sc_ah, txq->axq_qnum);
-	ATH_TXQ_LOCK_DESTROY(txq);
 	sc->sc_txqsetup &= ~(1<<txq->axq_qnum);
 }
 
@@ -3680,7 +3728,7 @@ ath_tx_process_buf_completion(struct ath_softc *sc, struct ath_txq *txq,
 	struct ieee80211_node *ni = bf->bf_node;
 	struct ath_node *an = NULL;
 
-	ATH_TXQ_UNLOCK_ASSERT(txq);
+	ATH_TX_UNLOCK_ASSERT(sc);
 
 	/* If unicast frame, update general statistics */
 	if (ni != NULL) {
@@ -3749,11 +3797,11 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq, int dosched)
 
 	nacked = 0;
 	for (;;) {
-		ATH_TXQ_LOCK(txq);
+		ATH_TX_LOCK(sc);
 		txq->axq_intrcnt = 0;	/* reset periodic desc intr count */
 		bf = TAILQ_FIRST(&txq->axq_q);
 		if (bf == NULL) {
-			ATH_TXQ_UNLOCK(txq);
+			ATH_TX_UNLOCK(sc);
 			break;
 		}
 		ds = bf->bf_lastds;	/* XXX must be setup correctly! */
@@ -3768,12 +3816,20 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq, int dosched)
 			ath_printtxbuf(sc, bf, txq->axq_qnum, 0,
 			    status == HAL_OK);
 #endif
+#ifdef	ATH_DEBUG_ALQ
+		if (if_ath_alq_checkdebug(&sc->sc_alq,
+		    ATH_ALQ_EDMA_TXSTATUS)) {
+			if_ath_alq_post(&sc->sc_alq, ATH_ALQ_EDMA_TXSTATUS,
+			sc->sc_tx_statuslen,
+			(char *) ds);
+		}
+#endif
 
 		if (status == HAL_EINPROGRESS) {
 			ATH_KTR(sc, ATH_KTR_TXCOMP, 3,
 			    "ath_tx_processq: txq=%u, bf=%p ds=%p, HAL_EINPROGRESS",
 			    txq->axq_qnum, bf, ds);
-			ATH_TXQ_UNLOCK(txq);
+			ATH_TX_UNLOCK(sc);
 			break;
 		}
 		ATH_TXQ_REMOVE(txq, bf, bf_list);
@@ -3814,7 +3870,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq, int dosched)
 			ATH_RSSI_LPF(sc->sc_halstats.ns_avgtxrssi,
 				ts->ts_rssi);
 		}
-		ATH_TXQ_UNLOCK(txq);
+		ATH_TX_UNLOCK(sc);
 
 		/*
 		 * Update statistics and call completion
@@ -3831,11 +3887,11 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq, int dosched)
 		ieee80211_ff_flush(ic, txq->axq_ac);
 #endif
 
-	/* Kick the TXQ scheduler */
+	/* Kick the software TXQ scheduler */
 	if (dosched) {
-		ATH_TXQ_LOCK(txq);
+		ATH_TX_LOCK(sc);
 		ath_txq_sched(sc, txq);
-		ATH_TXQ_UNLOCK(txq);
+		ATH_TX_UNLOCK(sc);
 	}
 
 	ATH_KTR(sc, ATH_KTR_TXCOMP, 1,
@@ -4008,13 +4064,13 @@ ath_txq_sched_tasklet(void *arg, int npending)
 	sc->sc_txproc_cnt++;
 	ATH_PCU_UNLOCK(sc);
 
+	ATH_TX_LOCK(sc);
 	for (i = 0; i < HAL_NUM_TX_QUEUES; i++) {
 		if (ATH_TXQ_SETUP(sc, i)) {
-			ATH_TXQ_LOCK(&sc->sc_txq[i]);
 			ath_txq_sched(sc, &sc->sc_txq[i]);
-			ATH_TXQ_UNLOCK(&sc->sc_txq[i]);
 		}
 	}
+	ATH_TX_UNLOCK(sc);
 
 	ATH_PCU_LOCK(sc);
 	sc->sc_txproc_cnt--;
@@ -4147,7 +4203,7 @@ ath_tx_draintxq(struct ath_softc *sc, struct ath_txq *txq)
 	ATH_TXBUF_UNLOCK(sc);
 
 	for (ix = 0;; ix++) {
-		ATH_TXQ_LOCK(txq);
+		ATH_TX_LOCK(sc);
 		bf = TAILQ_FIRST(&txq->axq_q);
 		if (bf == NULL) {
 			txq->axq_link = NULL;
@@ -4162,7 +4218,7 @@ ath_tx_draintxq(struct ath_softc *sc, struct ath_txq *txq)
 			 * very fruity very quickly.
 			 */
 			txq->axq_fifo_depth = 0;
-			ATH_TXQ_UNLOCK(txq);
+			ATH_TX_UNLOCK(sc);
 			break;
 		}
 		ATH_TXQ_REMOVE(txq, bf, bf_list);
@@ -4198,7 +4254,7 @@ ath_tx_draintxq(struct ath_softc *sc, struct ath_txq *txq)
 		 * Clear ATH_BUF_BUSY; the completion handler
 		 * will free the buffer.
 		 */
-		ATH_TXQ_UNLOCK(txq);
+		ATH_TX_UNLOCK(sc);
 		bf->bf_flags &= ~ATH_BUF_BUSY;
 		if (bf->bf_comp)
 			bf->bf_comp(sc, bf, 1);
@@ -4380,6 +4436,9 @@ ath_chan_set(struct ath_softc *sc, struct ieee80211_channel *chan)
 
 		/* Let DFS at it in case it's a DFS channel */
 		ath_dfs_radar_enable(sc, chan);
+
+		/* Let spectral at in case spectral is enabled */
+		ath_spectral_enable(sc, chan);
 
 		/*
 		 * Re-enable rx framework.
@@ -4676,6 +4735,7 @@ ath_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 	int i, error, stamode;
 	u_int32_t rfilt;
 	int csa_run_transition = 0;
+
 	static const HAL_LED_STATE leds[] = {
 	    HAL_LED_INIT,	/* IEEE80211_S_INIT */
 	    HAL_LED_SCAN,	/* IEEE80211_S_SCAN */
@@ -4820,10 +4880,32 @@ ath_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 			 * force a beacon update so we pick up a lack of
 			 * beacons from an AP in CAC and thus force a
 			 * scan.
+			 *
+			 * And, there's also corner cases here where
+			 * after a scan, the AP may have disappeared.
+			 * In that case, we may not receive an actual
+			 * beacon to update the beacon timer and thus we
+			 * won't get notified of the missing beacons.
 			 */
 			sc->sc_syncbeacon = 1;
+#if 0
 			if (csa_run_transition)
+#endif
 				ath_beacon_config(sc, vap);
+
+			/*
+			 * PR: kern/175227
+			 *
+			 * Reconfigure beacons during reset; as otherwise
+			 * we won't get the beacon timers reprogrammed
+			 * after a reset and thus we won't pick up a
+			 * beacon miss interrupt.
+			 *
+			 * Hopefully we'll see a beacon before the BMISS
+			 * timer fires (too often), leading to a STA
+			 * disassociation.
+			 */
+			sc->sc_beacons = 1;
 			break;
 		case IEEE80211_M_MONITOR:
 			/*
@@ -5363,6 +5445,9 @@ ath_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		error = ath_ioctl_phyerr(sc,(struct ath_diag*) ifr);
 		break;
 #endif
+	case SIOCGATHSPECTRAL:
+		error = ath_ioctl_spectral(sc,(struct ath_diag*) ifr);
+		break;
 	case SIOCGATHNODERATESTATS:
 		error = ath_ioctl_ratestats(sc, (struct ath_rateioctl *) ifr);
 		break;
@@ -5599,7 +5684,7 @@ ath_node_set_tim(struct ieee80211_node *ni, int enable)
 	struct ath_vap *avp = ATH_VAP(ni->ni_vap);
 
 	/*
-	 * Some operating omdes don't set av_set_tim(), so don't
+	 * Some operating modes don't set av_set_tim(), so don't
 	 * update it here.
 	 */
 	if (avp->av_set_tim == NULL)

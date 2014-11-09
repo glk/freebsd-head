@@ -150,6 +150,7 @@ SUBDIR=	\
 	${_ipfw} \
 	ipfw_nat \
 	${_ipmi} \
+	ip6_mroute_mod \
 	ip_mroute_mod \
 	${_ips} \
 	${_ipw} \
@@ -334,6 +335,7 @@ SUBDIR=	\
 	vge \
 	${_viawd} \
 	vkbd \
+	${_vmm} \
 	${_vpo} \
 	vr \
 	vte \
@@ -719,6 +721,7 @@ _twa=		twa
 _vesa=		vesa
 _viawd=		viawd
 _virtio=	virtio
+_vmm=		vmm
 _vxge=  	vxge
 _x86bios=	x86bios
 _wbwd=		wbwd

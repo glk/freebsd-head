@@ -266,7 +266,7 @@ exit1(struct thread *td, int rv)
 	PROC_LOCK(p);
 	rv = p->p_xstat;	/* Event handler could change exit status */
 	stopprofclock(p);
-	p->p_flag &= ~(P_TRACED | P_PPWAIT);
+	p->p_flag &= ~(P_TRACED | P_PPWAIT | P_PPTRACE);
 
 	/*
 	 * Stop the real interval timer.  If the handler is currently
@@ -710,10 +710,10 @@ int
 sys_wait6(struct thread *td, struct wait6_args *uap)
 {
 	struct __wrusage wru, *wrup;
-	siginfo_t  si, *sip;
-	int error, status;
+	siginfo_t si, *sip;
 	idtype_t idtype;
 	id_t id;
+	int error, status;
 
 	idtype = uap->idtype;
 	id = uap->id;
@@ -932,7 +932,6 @@ proc_to_reap(struct thread *td, struct proc *p, idtype_t idtype, id_t id,
 	default:
 		PROC_UNLOCK(p);
 		return (0);
-		break;
 	}
 
 	if (p_canwait(td, p)) {
@@ -962,7 +961,7 @@ proc_to_reap(struct thread *td, struct proc *p, idtype_t idtype, id_t id,
 	PROC_SLOCK(p);
 
 	if (siginfo != NULL) {
-		bzero (siginfo, sizeof (*siginfo));
+		bzero(siginfo, sizeof(*siginfo));
 		siginfo->si_errno = 0;
 
 		/*
@@ -1029,25 +1028,30 @@ kern_wait(struct thread *td, pid_t pid, int *status, int options,
 	id_t id;
 	int ret;
 
+	/*
+	 * Translate the special pid values into the (idtype, pid)
+	 * pair for kern_wait6.  The WAIT_MYPGRP case is handled by
+	 * kern_wait6() on its own.
+	 */
 	if (pid == WAIT_ANY) {
 		idtype = P_ALL;
 		id = 0;
-	}
-	else if (pid <= 0) {
+	} else if (pid < 0) {
 		idtype = P_PGID;
 		id = (id_t)-pid;
-	}
-	else {
+	} else {
 		idtype = P_PID;
 		id = (id_t)pid;
 	}
+
 	if (rusage != NULL)
 		wrup = &wru;
 	else
 		wrup = NULL;
+
 	/*
-	 *  For backward compatibility we implicitly add flags WEXITED
-	 *  and WTRAPPED here.
+	 * For backward compatibility we implicitly add flags WEXITED
+	 * and WTRAPPED here.
 	 */
 	options |= WEXITED | WTRAPPED;
 	ret = kern_wait6(td, idtype, id, status, options, wrup, NULL);
@@ -1069,9 +1073,10 @@ kern_wait6(struct thread *td, idtype_t idtype, id_t id, int *status,
 
 	q = td->td_proc;
 
-	if ((pid_t)id == WAIT_MYPGRP &&
-	    (idtype == P_PID || idtype == P_PGID)) {
+	if ((pid_t)id == WAIT_MYPGRP && (idtype == P_PID || idtype == P_PGID)) {
+		PROC_LOCK(q);
 		id = (id_t)q->p_pgid;
+		PROC_UNLOCK(q);
 		idtype = P_PGID;
 	}
 

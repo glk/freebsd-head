@@ -6,7 +6,6 @@
 FILES=	\
 	bsd.README \
 	bsd.arch.inc.mk \
-	bsd.compat.mk \
 	bsd.compiler.mk \
 	bsd.cpu.mk \
 	bsd.crunchgen.mk \
@@ -32,6 +31,7 @@ FILES=	\
 	bsd.port.pre.mk \
 	bsd.port.subdir.mk \
 	bsd.prog.mk \
+	bsd.progs.mk \
 	bsd.snmpmod.mk \
 	bsd.subdir.mk \
 	bsd.symver.mk \

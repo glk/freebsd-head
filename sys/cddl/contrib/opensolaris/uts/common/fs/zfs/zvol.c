@@ -78,6 +78,7 @@
 #include <sys/vdev_impl.h>
 #include <sys/zvol.h>
 #include <sys/zil_impl.h>
+#include <sys/dbuf.h>
 #include <geom/geom.h>
 
 #include "zfs_namecheck.h"
@@ -266,7 +267,7 @@ struct maparg {
 
 /*ARGSUSED*/
 static int
-zvol_map_block(spa_t *spa, zilog_t *zilog, const blkptr_t *bp, arc_buf_t *pbuf,
+zvol_map_block(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
     const zbookmark_t *zb, const dnode_phys_t *dnp, void *arg)
 {
 	struct maparg *ma = arg;
@@ -1051,6 +1052,12 @@ zvol_get_data(void *arg, lr_write_t *lr, char *buf, zio_t *zio)
 		error = dmu_buf_hold(os, object, offset, zgd, &db,
 		    DMU_READ_NO_PREFETCH);
 		if (error == 0) {
+			blkptr_t *obp = dmu_buf_get_blkptr(db);
+			if (obp) {
+				ASSERT(BP_IS_HOLE(bp));
+				*bp = *obp;
+			}
+
 			zgd->zgd_db = db;
 			zgd->zgd_bp = bp;
 

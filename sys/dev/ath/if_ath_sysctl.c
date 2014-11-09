@@ -505,6 +505,33 @@ ath_sysctl_forcebstuck(SYSCTL_HANDLER_ARGS)
 	return 0;
 }
 
+static int
+ath_sysctl_hangcheck(SYSCTL_HANDLER_ARGS)
+{
+	struct ath_softc *sc = arg1;
+	int val = 0;
+	int error;
+	uint32_t mask = 0xffffffff;
+	uint32_t *sp;
+	uint32_t rsize;
+	struct ath_hal *ah = sc->sc_ah;
+
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error || !req->newptr)
+		return error;
+	if (val == 0)
+		return 0;
+
+	/* Do a hang check */
+	if (!ath_hal_getdiagstate(ah, HAL_DIAG_CHECK_HANGS,
+	    &mask, sizeof(mask),
+	    (void *) &sp, &rsize))
+		return (0);
+	device_printf(sc->sc_dev, "%s: sp=0x%08x\n", __func__, *sp);
+
+	val = 0;
+	return 0;
+}
 
 #ifdef ATH_DEBUG_ALQ
 static int
@@ -569,10 +596,12 @@ ath_sysctlattach(struct ath_softc *sc)
 	SYSCTL_ADD_UINT(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 		"regdomain", CTLFLAG_RD, &sc->sc_eerd, 0,
 		"EEPROM regdomain code");
-#ifdef	ATH_DEBUG_ALQ
+#ifdef	ATH_DEBUG
 	SYSCTL_ADD_QUAD(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 		"debug", CTLFLAG_RW, &sc->sc_debug,
 		"control debugging printfs");
+#endif
+#ifdef	ATH_DEBUG_ALQ
 	SYSCTL_ADD_QUAD(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 		"ktrdebug", CTLFLAG_RW, &sc->sc_ktrdebug,
 		"control debugging KTR");
@@ -658,6 +687,10 @@ ath_sysctlattach(struct ath_softc *sc)
 	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
 		"forcebstuck", CTLTYPE_INT | CTLFLAG_RW, sc, 0,
 		ath_sysctl_forcebstuck, "I", "");
+
+	SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,
+		"hangcheck", CTLTYPE_INT | CTLFLAG_RW, sc, 0,
+		ath_sysctl_hangcheck, "I", "");
 
 	if (ath_hal_hasintmit(ah)) {
 		SYSCTL_ADD_PROC(ctx, SYSCTL_CHILDREN(tree), OID_AUTO,

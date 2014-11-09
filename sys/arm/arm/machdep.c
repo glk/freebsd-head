@@ -72,6 +72,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/ptrace.h>
 #include <sys/signalvar.h>
 #include <sys/syscallsubr.h>
+#include <sys/sysctl.h>
 #include <sys/sysent.h>
 #include <sys/sysproto.h>
 #include <sys/uio.h>
@@ -162,14 +163,37 @@ const struct pmap_devmap *pmap_devmap_bootstrap_table;
 
 uint32_t board_id;
 struct arm_lbabi_tag *atag_list;
-uint32_t revision;
-uint64_t serial;
 char linux_command_line[LBABI_MAX_COMMAND_LINE + 1];
 char atags[LBABI_MAX_COMMAND_LINE * 2];
 uint32_t memstart[LBABI_MAX_BANKS];
 uint32_t memsize[LBABI_MAX_BANKS];
 uint32_t membanks;
 #endif
+
+static uint32_t board_revision;
+/* hex representation of uint64_t */
+static char board_serial[32];
+
+SYSCTL_NODE(_hw, OID_AUTO, board, CTLFLAG_RD, 0, "Board attributes");
+SYSCTL_UINT(_hw_board, OID_AUTO, revision, CTLFLAG_RD,
+    &board_revision, 0, "Board revision");
+SYSCTL_STRING(_hw_board, OID_AUTO, serial, CTLFLAG_RD,
+    board_serial, 0, "Board serial");
+
+void
+board_set_serial(uint64_t serial)
+{
+
+	snprintf(board_serial, sizeof(board_serial)-1, 
+		    "%016jx", serial);
+}
+
+void
+board_set_revision(uint32_t revision)
+{
+
+	board_revision = revision;
+}
 
 void
 sendsig(catcher, ksi, mask)
@@ -849,6 +873,8 @@ vm_offset_t
 linux_parse_boot_param(struct arm_boot_params *abp)
 {
 	struct arm_lbabi_tag *walker;
+	uint32_t revision;
+	uint64_t serial;
 
 	/*
 	 * Linux boot ABI: r0 = 0, r1 is the board type (!= 0) and r2
@@ -883,9 +909,11 @@ linux_parse_boot_param(struct arm_boot_params *abp)
 		case ATAG_SERIAL:
 			serial = walker->u.tag_sn.low |
 			    ((uint64_t)walker->u.tag_sn.high << 32);
+			board_set_serial(serial);
 			break;
 		case ATAG_REVISION:
 			revision = walker->u.tag_rev.rev;
+			board_set_revision(revision);
 			break;
 		case ATAG_CMDLINE:
 			/* XXX open question: Parse this for boothowto? */
@@ -1038,18 +1066,6 @@ print_kenv(void)
 }
 
 static void
-print_kernel_section_addr(void)
-{
-
-	debugf("kernel image addresses:\n");
-	debugf(" kernbase       = 0x%08x\n", (uint32_t)kernbase);
-	debugf(" _etext (sdata) = 0x%08x\n", (uint32_t)_etext);
-	debugf(" _edata         = 0x%08x\n", (uint32_t)_edata);
-	debugf(" __bss_start    = 0x%08x\n", (uint32_t)__bss_start);
-	debugf(" _end           = 0x%08x\n", (uint32_t)_end);
-}
-
-static void
 physmap_init(struct mem_region *availmem_regions, int availmem_regions_sz)
 {
 	int i, j, cnt;
@@ -1156,7 +1172,9 @@ physmap_init(struct mem_region *availmem_regions, int availmem_regions_sz)
 void *
 initarm(struct arm_boot_params *abp)
 {
+	struct mem_region memory_regions[FDT_MEM_REGIONS];
 	struct mem_region availmem_regions[FDT_MEM_REGIONS];
+	struct mem_region reserved_regions[FDT_MEM_REGIONS];
 	struct pv_addr kernel_l1pt;
 	struct pv_addr dpcpu;
 	vm_offset_t dtbp, freemempos, l2_start, lastaddr;
@@ -1166,7 +1184,12 @@ initarm(struct arm_boot_params *abp)
 	void *kmdp;
 	u_int l1pagetable;
 	int i = 0, j = 0, err_devmap = 0;
+	int memory_regions_sz;
 	int availmem_regions_sz;
+	int reserved_regions_sz;
+	vm_offset_t start, end;
+	vm_offset_t rstart, rend;
+	int curr;
 
 	lastaddr = parse_boot_param(abp);
 	memsize = 0;
@@ -1197,9 +1220,72 @@ initarm(struct arm_boot_params *abp)
 		while (1);
 
 	/* Grab physical memory regions information from device tree. */
-	if (fdt_get_mem_regions(availmem_regions, &availmem_regions_sz,
+	if (fdt_get_mem_regions(memory_regions, &memory_regions_sz,
 	    &memsize) != 0)
 		while(1);
+
+	/* Grab physical memory regions information from device tree. */
+	if (fdt_get_reserved_regions(reserved_regions, &reserved_regions_sz) != 0)
+		reserved_regions_sz = 0;
+		
+	/*
+	 * Now exclude all the reserved regions
+	 */
+	curr = 0;
+	for (i = 0; i < memory_regions_sz; i++) {
+		start = memory_regions[i].mr_start;
+		end = start + memory_regions[i].mr_size;
+		for (j = 0; j < reserved_regions_sz; j++) {
+			rstart = reserved_regions[j].mr_start;
+			rend = rstart + reserved_regions[j].mr_size;
+			/* 
+			 * Restricted region is before available
+			 * Skip restricted region
+			 */
+			if (rend <= start)
+				continue;
+			/* 
+			 * Restricted region is behind available
+			 * No  further processing required
+			 */
+			if (rstart >= end)
+				break;
+			/*
+			 * Restricted region includes memory region
+			 * skip availble region
+			 */
+			if ((start >= rstart) && (rend >= end)) {
+				start = rend;
+				end = rend;
+				break;
+			}
+			/*
+			 * Memory region includes restricted region
+			 */
+			if ((rstart > start) && (end > rend)) {
+				availmem_regions[curr].mr_start = start;
+				availmem_regions[curr++].mr_size = rstart - start;
+				start = rend;
+				break;
+			}
+			/*
+			 * Memory region partially overlaps with restricted
+			 */
+			if ((rstart >= start) && (rstart <= end)) {
+				end = rstart;
+			}
+			else if ((rend >= start) && (rend <= end)) {
+				start = rend;
+			}
+		}
+
+		if (end > start) {
+			availmem_regions[curr].mr_start = start;
+			availmem_regions[curr++].mr_size = end - start;
+		}
+	}
+
+	availmem_regions_sz = curr;
 
 	/* Platform-specific initialisation */
 	pmap_bootstrap_lastaddr = initarm_lastaddr();
@@ -1344,7 +1430,6 @@ initarm(struct arm_boot_params *abp)
 	debugf(" arg1 kmdp = 0x%08x\n", (uint32_t)kmdp);
 	debugf(" boothowto = 0x%08x\n", boothowto);
 	debugf(" dtbp = 0x%08x\n", (uint32_t)dtbp);
-	print_kernel_section_addr();
 	print_kenv();
 
 	env = getenv("kernelname");
@@ -1389,6 +1474,7 @@ initarm(struct arm_boot_params *abp)
 
 	init_proc0(kernelstack.pv_va);
 
+	arm_intrnames_init();
 	arm_vector_init(ARM_VECTORS_HIGH, ARM_VEC_ALL);
 	arm_dump_avail_init(memsize, sizeof(dump_avail) / sizeof(dump_avail[0]));
 	pmap_bootstrap(freemempos, pmap_bootstrap_lastaddr, &kernel_l1pt);

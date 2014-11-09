@@ -658,7 +658,7 @@ ath_tx_form_aggr(struct ath_softc *sc, struct ath_node *an,
 	int prev_frames = 0;	/* XXX for AR5416 burst, not done here */
 	int prev_al = 0;	/* XXX also for AR5416 burst */
 
-	ATH_TXQ_LOCK_ASSERT(sc->sc_ac2q[tid->ac]);
+	ATH_TX_LOCK_ASSERT(sc);
 
 	tap = ath_tx_get_tx_tid(an, tid->tid);
 	if (tap == NULL) {
@@ -686,11 +686,6 @@ ath_tx_form_aggr(struct ath_softc *sc, struct ath_node *an,
 
 		/* Set this early just so things don't get confused */
 		bf->bf_next = NULL;
-
-		/*
-		 * Don't unlock the tid lock until we're sure we are going
-		 * to queue this frame.
-		 */
 
 		/*
 		 * If the frame doesn't have a sequence number that we're
@@ -749,11 +744,13 @@ ath_tx_form_aggr(struct ath_softc *sc, struct ath_node *an,
 		 * that differs from the first frame, override the
 		 * subsequent frame with this config.
 		 */
-		bf->bf_state.bfs_txflags &=
-		    ~ (HAL_TXDESC_RTSENA | HAL_TXDESC_CTSENA);
-		bf->bf_state.bfs_txflags |=
-		    bf_first->bf_state.bfs_txflags &
-		    (HAL_TXDESC_RTSENA | HAL_TXDESC_CTSENA);
+		if (bf != bf_first) {
+			bf->bf_state.bfs_txflags &=
+			    ~ (HAL_TXDESC_RTSENA | HAL_TXDESC_CTSENA);
+			bf->bf_state.bfs_txflags |=
+			    bf_first->bf_state.bfs_txflags &
+			    (HAL_TXDESC_RTSENA | HAL_TXDESC_CTSENA);
+		}
 
 		/*
 		 * If the packet has a sequence number, do not
