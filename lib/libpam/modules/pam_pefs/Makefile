@@ -16,6 +16,7 @@ SRCS+=  crypto_verify_bytes.c
 
 CFLAGS+= -I${PEFSDIR}
 CFLAGS+= -I${SYS}
+WARNS?=	2
 
 DPADD= ${LIBUTIL}
 LDADD= -lutil
