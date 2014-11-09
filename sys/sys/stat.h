@@ -99,7 +99,7 @@ typedef	__uid_t		uid_t;
 #include <sys/time.h>
 #endif
 
-#if __BSD_VISIBLE
+#ifdef _KERNEL
 struct ostat {
 	__uint16_t st_dev;		/* inode's device */
 	__uint32_t st_ino;		/* inode's number */
@@ -117,7 +117,9 @@ struct ostat {
 	fflags_t  st_flags;		/* user defined flags for file */
 	__uint32_t st_gen;		/* file generation number */
 };
+#endif
 
+#if __BSD_VISIBLE
 struct freebsd9_stat {
 	__uint32_t st_dev;		/* inode's device */
 	__uint32_t st_ino;		/* inode's number */
@@ -147,7 +149,7 @@ struct freebsd9_stat {
 	unsigned int :(8 / 2) * (16 - (int)sizeof(struct timespec));
 	unsigned int :(8 / 2) * (16 - (int)sizeof(struct timespec));
 };
-#endif /* __BSD_VISIBLE */
+#endif
 
 struct stat {
 	dev_t     st_dev;		/* inode's device */
@@ -180,7 +182,7 @@ struct stat {
 	unsigned int :(8 / 2) * (16 - (int)sizeof(struct timespec));
 };
 
-#if __BSD_VISIBLE
+#ifdef _KERNEL
 struct nstat {
 	__uint32_t st_dev;		/* inode's device */
 	__uint32_t st_ino;		/* inode's number */
