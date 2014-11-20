@@ -55,7 +55,7 @@ typedef	__off_t		off_t;
 #define	_OFF_T_DECLARED
 #endif
 
-#if __BSD_VISIBLE || __XSI_VISIBLE
+#if __XSI_VISIBLE
 /*
  * XXX this is probably illegal in the __XSI_VISIBLE case, but brings us closer
  * to the specification.
