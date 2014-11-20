@@ -96,11 +96,14 @@ union ctl_modepage_info {
 /*
  * Device ID length, for VPD page 0x83.
  */
-#define	CTL_DEVID_LEN	16
+#define	CTL_DEVID_LEN	64
+#define	CTL_DEVID_MIN_LEN	16
 /*
  * WWPN length, for VPD page 0x83.
  */
 #define CTL_WWPN_LEN   8
+
+#define	CTL_DRIVER_NAME_LEN	32
 
 /*
  * Unit attention types. ASC/ASCQ values for these should be placed in
@@ -128,21 +131,6 @@ typedef enum {
 #ifdef	_KERNEL
 
 MALLOC_DECLARE(M_CTL);
-
-typedef enum {
-	CTL_THREAD_NONE		= 0x00,
-	CTL_THREAD_WAKEUP	= 0x01
-} ctl_thread_flags;
-
-struct ctl_thread {
-	void			(*thread_func)(void *arg);
-	void			*arg;
-	struct cv		wait_queue;
-	const char		*thread_name;
-	ctl_thread_flags	thread_flags;
-	struct completion	*thread_event;
-	struct task_struct	*task;
-};
 
 struct ctl_page_index;
 
@@ -195,19 +183,26 @@ int ctl_debugconf_sp_select_handler(struct ctl_scsiio *ctsio,
 int ctl_config_move_done(union ctl_io *io);
 void ctl_datamove(union ctl_io *io);
 void ctl_done(union ctl_io *io);
+void ctl_data_submit_done(union ctl_io *io);
 void ctl_config_write_done(union ctl_io *io);
-#if 0
-int ctl_thread(void *arg);
-#endif
-void ctl_wakeup_thread(void);
-#if 0
-struct ctl_thread *ctl_create_thread(void (*thread_func)
-	(void *thread_arg), void *thread_arg, const char *thread_name);
-void ctl_signal_thread(struct ctl_thread *thread);
-void ctl_shutdown_thread(struct ctl_thread *thread);
-#endif
 void ctl_portDB_changed(int portnum);
 void ctl_init_isc_msg(void);
+
+/*
+ * KPI to manipulate LUN/port options
+ */
+
+struct ctl_option {
+	STAILQ_ENTRY(ctl_option)	links;
+	char			*name;
+	char			*value;
+};
+typedef STAILQ_HEAD(ctl_options, ctl_option) ctl_options_t;
+
+struct ctl_be_arg;
+void ctl_init_opts(ctl_options_t *opts, int num_args, struct ctl_be_arg *args);
+void ctl_free_opts(ctl_options_t *opts);
+char * ctl_get_opt(ctl_options_t *opts, const char *name);
 
 #endif	/* _KERNEL */
 

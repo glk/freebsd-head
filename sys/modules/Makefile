@@ -2,6 +2,8 @@
 
 .include <src.opts.mk>
 
+SUBDIR_PARALLEL=
+
 # Modules that include binary-only blobs of microcode should be selectable by
 # MK_SOURCELESS_UCODE option (see below).
 
@@ -80,6 +82,7 @@ SUBDIR=	\
 	${_ct} \
 	${_ctau} \
 	ctl \
+	cuse \
 	${_cxgb} \
 	${_cxgbe} \
 	${_cyclic} \
@@ -148,7 +151,7 @@ SUBDIR=	\
 	if_vlan \
 	${_igb} \
 	${_iir} \
-	${_imgact_binmisc} \
+	imgact_binmisc \
 	${_io} \
         ${_ipoib} \
 	${_ipdivert} \
@@ -375,7 +378,6 @@ SUBDIR=	\
 
 .if ${MACHINE_CPUARCH} == "i386" || ${MACHINE_CPUARCH} == "amd64"
 _filemon=	filemon
-_imgact_binmisc=	imgact_binmisc
 _vmware=	vmware
 .endif
 
@@ -777,6 +779,7 @@ _zfs=		zfs
 .if ${MACHINE_CPUARCH} == "arm"
 _cfi=		cfi
 _cpsw=		cpsw
+_sound=		sound
 .endif
 
 .if ${MACHINE_CPUARCH} == "ia64"
