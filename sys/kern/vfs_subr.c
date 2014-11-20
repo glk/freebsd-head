@@ -2911,7 +2911,7 @@ vn_printf(struct vnode *vp, const char *fmt, ...)
  */
 DB_SHOW_COMMAND(lockedvnods, lockedvnodes)
 {
-	struct mount *mp, *nmp;
+	struct mount *mp;
 	struct vnode *vp;
 
 	/*
@@ -2921,14 +2921,11 @@ DB_SHOW_COMMAND(lockedvnods, lockedvnodes)
 	 * about that.
 	 */
 	db_printf("Locked vnodes\n");
-	for (mp = TAILQ_FIRST(&mountlist); mp != NULL; mp = nmp) {
-		nmp = TAILQ_NEXT(mp, mnt_list);
+	TAILQ_FOREACH(mp, &mountlist, mnt_list) {
 		TAILQ_FOREACH(vp, &mp->mnt_nvnodelist, v_nmntvnodes) {
-			if (vp->v_type != VMARKER &&
-			    VOP_ISLOCKED(vp))
+			if (vp->v_type != VMARKER && VOP_ISLOCKED(vp))
 				vprint("", vp);
 		}
-		nmp = TAILQ_NEXT(mp, mnt_list);
 	}
 }
 
@@ -3458,12 +3455,21 @@ vfs_msync(struct mount *mp, int flags)
 }
 
 static void
-destroy_vpollinfo(struct vpollinfo *vi)
+destroy_vpollinfo_free(struct vpollinfo *vi)
 {
-	seldrain(&vi->vpi_selinfo);
+
 	knlist_destroy(&vi->vpi_selinfo.si_note);
 	mtx_destroy(&vi->vpi_lock);
 	uma_zfree(vnodepoll_zone, vi);
+}
+
+static void
+destroy_vpollinfo(struct vpollinfo *vi)
+{
+
+	knlist_clear(&vi->vpi_selinfo.si_note, 1);
+	seldrain(&vi->vpi_selinfo);
+	destroy_vpollinfo_free(vi);
 }
 
 /*
@@ -3483,7 +3489,7 @@ v_addpollinfo(struct vnode *vp)
 	VI_LOCK(vp);
 	if (vp->v_pollinfo != NULL) {
 		VI_UNLOCK(vp);
-		destroy_vpollinfo(vi);
+		destroy_vpollinfo_free(vi);
 		return;
 	}
 	vp->v_pollinfo = vi;

@@ -3920,6 +3920,15 @@ badfo_chown(struct file *fp, uid_t uid, gid_t gid, struct ucred *active_cred,
 	return (EBADF);
 }
 
+static int
+badfo_sendfile(struct file *fp, int sockfd, struct uio *hdr_uio,
+    struct uio *trl_uio, off_t offset, size_t nbytes, off_t *sent, int flags,
+    int kflags, struct thread *td)
+{
+
+	return (EBADF);
+}
+
 struct fileops badfileops = {
 	.fo_read = badfo_readwrite,
 	.fo_write = badfo_readwrite,
@@ -3931,6 +3940,7 @@ struct fileops badfileops = {
 	.fo_close = badfo_close,
 	.fo_chmod = badfo_chmod,
 	.fo_chown = badfo_chown,
+	.fo_sendfile = badfo_sendfile,
 };
 
 int
@@ -3944,6 +3954,15 @@ invfo_chmod(struct file *fp, mode_t mode, struct ucred *active_cred,
 int
 invfo_chown(struct file *fp, uid_t uid, gid_t gid, struct ucred *active_cred,
     struct thread *td)
+{
+
+	return (EINVAL);
+}
+
+int
+invfo_sendfile(struct file *fp, int sockfd, struct uio *hdr_uio,
+    struct uio *trl_uio, off_t offset, size_t nbytes, off_t *sent, int flags,
+    int kflags, struct thread *td)
 {
 
 	return (EINVAL);

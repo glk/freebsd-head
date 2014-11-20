@@ -367,7 +367,8 @@ FBSD_1.3 {
 	devname_r;
 	clock_getcpuclockid;
 	dirfd;
-	 fdlopen;
+	dup3;
+	fdlopen;
 	__FreeBSD_libc_enter_restricted_mode;
 	fts_children;
 	fts_close;

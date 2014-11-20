@@ -245,6 +245,7 @@ __DEFAULT_YES_OPTIONS = \
     ACPI \
     AMD \
     APM \
+    ARM_EABI \
     ASSERT_DEBUG \
     AT \
     ATF \
@@ -291,6 +292,7 @@ __DEFAULT_YES_OPTIONS = \
     GPIO \
     GROFF \
     HTML \
+    ICONV \
     INET \
     INET6 \
     INFO \
@@ -363,8 +365,6 @@ __DEFAULT_YES_OPTIONS = \
     ZONEINFO
 
 __DEFAULT_NO_OPTIONS = \
-    ARM_EABI \
-    BSD_PATCH \
     BIND_IDN \
     BIND_LARGE_FILE \
     BIND_LIBS \
@@ -375,9 +375,10 @@ __DEFAULT_NO_OPTIONS = \
     CLANG_EXTRAS \
     CTF \
     DEBUG_FILES \
+    GNU_PATCH \
     GPL_DTC \
     HESIOD \
-    ICONV \
+    LIBICONV_COMPAT \
     INSTALL_AS_USER \
     LDNS_UTILS \
     NMTREE \
@@ -385,7 +386,8 @@ __DEFAULT_NO_OPTIONS = \
     OFED \
     OPENSSH_NONE_CIPHER \
     SHARED_TOOLCHAIN \
-    SVN
+    SVN \
+    USB_GADGET_EXAMPLES
 
 #
 # Default behaviour of some options depends on the architecture.  Unfortunately
@@ -481,6 +483,10 @@ MK_BIND_LIBS_LWRES:= no
 MK_BIND_MTREE:=	no
 MK_BIND_NAMED:=	no
 MK_BIND_UTILS:=	no
+.endif
+
+.if ${MK_ICONV} == "no"
+MK_LIBICONV_COMPAT:=	no
 .endif
 
 .if ${MK_LDNS} == "no"

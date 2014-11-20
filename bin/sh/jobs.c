@@ -77,8 +77,8 @@ __FBSDID("$FreeBSD$");
 
 static struct job *jobtab;	/* array of jobs */
 static int njobs;		/* size of array */
-MKINIT pid_t backgndpid = -1;	/* pid of last background process */
-MKINIT struct job *bgjob = NULL; /* last background process */
+static pid_t backgndpid = -1;	/* pid of last background process */
+static struct job *bgjob = NULL; /* last background process */
 #if JOBS
 static struct job *jobmru;	/* most recently used job list */
 static pid_t initialpgrp;	/* pgrp of shell on invocation */
@@ -116,7 +116,7 @@ static void showjob(struct job *, int);
  * Turn job control on and off.
  */
 
-MKINIT int jobctl;
+static int jobctl;
 
 #if JOBS
 void
@@ -183,13 +183,14 @@ out:				out2fmt_flush("sh: can't access tty; job control turned off\n");
 
 #if JOBS
 int
-fgcmd(int argc __unused, char **argv)
+fgcmd(int argc __unused, char **argv __unused)
 {
 	struct job *jp;
 	pid_t pgrp;
 	int status;
 
-	jp = getjob(argv[1]);
+	nextopt("");
+	jp = getjob(*argptr);
 	if (jp->jobctl == 0)
 		error("job not created under job control");
 	printjobcmd(jp);
@@ -210,8 +211,9 @@ bgcmd(int argc, char **argv)
 {
 	struct job *jp;
 
+	nextopt("");
 	do {
-		jp = getjob(*++argv);
+		jp = getjob(*argptr);
 		if (jp->jobctl == 0)
 			error("job not created under job control");
 		if (jp->state == JOBDONE)
@@ -220,7 +222,7 @@ bgcmd(int argc, char **argv)
 		jp->foreground = 0;
 		out1fmt("[%td] ", jp - jobtab + 1);
 		printjobcmd(jp);
-	} while (--argc > 1);
+	} while (*argptr != NULL && *++argptr != NULL);
 	return 0;
 }
 
@@ -542,12 +544,13 @@ waitcmdloop(struct job *job)
 
 
 int
-jobidcmd(int argc __unused, char **argv)
+jobidcmd(int argc __unused, char **argv __unused)
 {
 	struct job *jp;
 	int i;
 
-	jp = getjob(argv[1]);
+	nextopt("");
+	jp = getjob(*argptr);
 	for (i = 0 ; i < jp->nprocs ; ) {
 		out1fmt("%d", (int)jp->ps[i].pid);
 		out1c(++i < jp->nprocs? ' ' : '\n');
