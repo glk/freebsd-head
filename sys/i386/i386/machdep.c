@@ -54,6 +54,7 @@ __FBSDID("$FreeBSD$");
 #include "opt_mp_watchdog.h"
 #include "opt_npx.h"
 #include "opt_perfmon.h"
+#include "opt_platform.h"
 #include "opt_xbox.h"
 #include "opt_kdtrace.h"
 
@@ -81,6 +82,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/pcpu.h>
 #include <sys/ptrace.h>
 #include <sys/reboot.h>
+#include <sys/rwlock.h>
 #include <sys/sched.h>
 #include <sys/signalvar.h>
 #ifdef SMP
@@ -136,6 +138,9 @@ __FBSDID("$FreeBSD$");
 #endif
 #ifdef SMP
 #include <machine/smp.h>
+#endif
+#ifdef FDT
+#include <x86/fdt.h>
 #endif
 
 #ifdef DEV_APIC
@@ -3112,6 +3117,10 @@ init386(first)
 
 	cpu_probe_amdc1e();
 	cpu_probe_cmpxchg8b();
+
+#ifdef FDT
+	x86_init_fdt();
+#endif
 }
 #endif
 
@@ -3479,7 +3488,7 @@ get_fpcontext(struct thread *td, mcontext_t *mcp)
 	bzero(mcp->mc_fpstate, sizeof(mcp->mc_fpstate));
 #else
 	mcp->mc_ownedfp = npxgetregs(td);
-	bcopy(&td->td_pcb->pcb_user_save, &mcp->mc_fpstate,
+	bcopy(&td->td_pcb->pcb_user_save, &mcp->mc_fpstate[0],
 	    sizeof(mcp->mc_fpstate));
 	mcp->mc_fpformat = npxformat();
 #endif
