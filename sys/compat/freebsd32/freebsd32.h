@@ -365,7 +365,7 @@ struct kinfo_proc32 {
 	char	ki_sparestrings[50];
 	int	ki_spareints[KI_NSPARE_INT];
 	uint64_t ki_tdev;
-	int	ki_spareint0;
+	int	ki_fibnum;
 	u_int	ki_cr_flags;
 	int	ki_jid;
 	int	ki_numthreads;

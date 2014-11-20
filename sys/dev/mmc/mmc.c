@@ -106,7 +106,7 @@ struct mmc_ivars {
 
 #define CMD_RETRIES	3
 
-#define	CARD_ID_FREQUENCY 400000 /* Spec requires 400KHz max during ID phase. */
+#define	CARD_ID_FREQUENCY 400000 /* Spec requires 400kHz max during ID phase. */
 
 static SYSCTL_NODE(_hw, OID_AUTO, mmc, CTLFLAG_RD, NULL, "mmc driver");
 
@@ -447,8 +447,8 @@ mmc_wait_for_app_cmd(struct mmc_softc *sc, uint32_t rca,
 			err = appcmd.error;
 		if (err == MMC_ERR_NONE) {
 			if (!(appcmd.resp[0] & R1_APP_CMD))
-				return MMC_ERR_FAILED; /* Retries won't help. */
-			if (mmc_wait_for_cmd(sc, cmd, 0) != 0)
+				err = MMC_ERR_FAILED;
+			else if (mmc_wait_for_cmd(sc, cmd, 0) != 0)
 				err = MMC_ERR_FAILED;
 			else
 				err = cmd->error;
@@ -1761,3 +1761,4 @@ DRIVER_MODULE(mmc, at91_mci, mmc_driver, mmc_devclass, NULL, NULL);
 DRIVER_MODULE(mmc, sdhci_pci, mmc_driver, mmc_devclass, NULL, NULL);
 DRIVER_MODULE(mmc, sdhci_bcm, mmc_driver, mmc_devclass, NULL, NULL);
 DRIVER_MODULE(mmc, sdhci_fdt, mmc_driver, mmc_devclass, NULL, NULL);
+DRIVER_MODULE(mmc, sdhci_ti, mmc_driver, mmc_devclass, NULL, NULL);
