@@ -75,8 +75,6 @@ __FBSDID("$FreeBSD$");
 #include <netinet/tcp_debug.h>
 #endif /* TCPDEBUG */
 
-static int tcp_reass_sysctl_qsize(SYSCTL_HANDLER_ARGS);
-
 static SYSCTL_NODE(_net_inet_tcp, OID_AUTO, reass, CTLFLAG_RW, 0,
     "TCP Segment Reassembly Queue");
 
@@ -85,10 +83,6 @@ static VNET_DEFINE(int, tcp_reass_maxseg) = 0;
 SYSCTL_VNET_INT(_net_inet_tcp_reass, OID_AUTO, maxsegments, CTLFLAG_RDTUN,
     &VNET_NAME(tcp_reass_maxseg), 0,
     "Global maximum number of TCP Segments in Reassembly Queue");
-
-SYSCTL_VNET_PROC(_net_inet_tcp_reass, OID_AUTO, cursegments,
-    (CTLTYPE_INT | CTLFLAG_RD), NULL, 0, &tcp_reass_sysctl_qsize, "I",
-    "Global number of TCP Segments currently in Reassembly Queue");
 
 static VNET_DEFINE(int, tcp_reass_overflows) = 0;
 #define	V_tcp_reass_overflows		VNET(tcp_reass_overflows)
@@ -99,6 +93,9 @@ SYSCTL_VNET_INT(_net_inet_tcp_reass, OID_AUTO, overflows,
 
 static VNET_DEFINE(uma_zone_t, tcp_reass_zone);
 #define	V_tcp_reass_zone		VNET(tcp_reass_zone)
+SYSCTL_UMA_CUR(_net_inet_tcp_reass, OID_AUTO, cursegments, CTLFLAG_VNET,
+    &VNET_NAME(tcp_reass_zone),
+    "Global number of TCP Segments currently in Reassembly Queue");
 
 /* Initialize TCP reassembly queue */
 static void
@@ -155,15 +152,6 @@ tcp_reass_flush(struct tcpcb *tp)
 	    tp, tp->t_segqlen));
 }
 
-static int
-tcp_reass_sysctl_qsize(SYSCTL_HANDLER_ARGS)
-{
-	int qsize;
-
-	qsize = uma_zone_get_cur(V_tcp_reass_zone);
-	return (sysctl_handle_int(oidp, &qsize, 0, req));
-}
-
 int
 tcp_reass(struct tcpcb *tp, struct tcphdr *th, int *tlenp, struct mbuf *m)
 {
@@ -206,7 +194,7 @@ tcp_reass(struct tcpcb *tp, struct tcphdr *th, int *tlenp, struct mbuf *m)
 	 * Investigate why and re-evaluate the below limit after the behaviour
 	 * is understood.
 	 */
-	if (th->th_seq != tp->rcv_nxt &&
+	if ((th->th_seq != tp->rcv_nxt || !TCPS_HAVEESTABLISHED(tp->t_state)) &&
 	    tp->t_segqlen >= (so->so_rcv.sb_hiwat / tp->t_maxseg) + 1) {
 		V_tcp_reass_overflows++;
 		TCPSTAT_INC(tcps_rcvmemdrop);
@@ -229,7 +217,7 @@ tcp_reass(struct tcpcb *tp, struct tcphdr *th, int *tlenp, struct mbuf *m)
 	 */
 	te = uma_zalloc(V_tcp_reass_zone, M_NOWAIT);
 	if (te == NULL) {
-		if (th->th_seq != tp->rcv_nxt) {
+		if (th->th_seq != tp->rcv_nxt || !TCPS_HAVEESTABLISHED(tp->t_state)) {
 			TCPSTAT_INC(tcps_rcvmemdrop);
 			m_freem(m);
 			*tlenp = 0;
@@ -277,7 +265,8 @@ tcp_reass(struct tcpcb *tp, struct tcphdr *th, int *tlenp, struct mbuf *m)
 				TCPSTAT_INC(tcps_rcvduppack);
 				TCPSTAT_ADD(tcps_rcvdupbyte, *tlenp);
 				m_freem(m);
-				uma_zfree(V_tcp_reass_zone, te);
+				if (te != &tqs)
+					uma_zfree(V_tcp_reass_zone, te);
 				tp->t_segqlen--;
 				/*
 				 * Try to present any queued data

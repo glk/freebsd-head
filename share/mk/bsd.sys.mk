@@ -30,10 +30,9 @@ CFLAGS+=	-std=${CSTD}
 .if defined(WARNS)
 .if ${WARNS} >= 1
 CWARNFLAGS+=	-Wsystem-headers
-.if !defined(NO_WERROR) && (${COMPILER_TYPE} != "clang" \
-    || !defined(NO_WERROR.clang))
+.if !defined(NO_WERROR) && !defined(NO_WERROR.${COMPILER_TYPE})
 CWARNFLAGS+=	-Werror
-.endif # !NO_WERROR && (!CLANG || !NO_WERROR.clang)
+.endif # !NO_WERROR && !NO_WERROR.${COMPILER_TYPE}
 .endif # WARNS >= 1
 .if ${WARNS} >= 2
 CWARNFLAGS+=	-Wall -Wno-format-y2k
@@ -45,10 +44,9 @@ CWARNFLAGS+=	-W -Wno-unused-parameter -Wstrict-prototypes\
 .if ${WARNS} >= 4
 CWARNFLAGS+=	-Wreturn-type -Wcast-qual -Wwrite-strings -Wswitch -Wshadow\
 		-Wunused-parameter
-.if !defined(NO_WCAST_ALIGN) && (${COMPILER_TYPE} != "clang" \
-    || !defined(NO_WCAST_ALIGN.clang))
+.if !defined(NO_WCAST_ALIGN) && !defined(NO_WCAST_ALIGN.${COMPILER_TYPE})
 CWARNFLAGS+=	-Wcast-align
-.endif # !NO_WCAST_ALIGN && (!CLANG || !NO_WCAST_ALIGN.clang)
+.endif # !NO_WCAST_ALIGN !NO_WCAST_ALIGN.${COMPILER_TYPE}
 .endif # WARNS >= 4
 # BDECFLAGS
 .if ${WARNS} >= 6
@@ -69,7 +67,7 @@ CWARNFLAGS+=	-Wno-pointer-sign
 # is set to low values, these have to be disabled explicitly.
 .if ${COMPILER_TYPE} == "clang" && !defined(EARLY_BUILD)
 .if ${WARNS} <= 6
-CWARNFLAGS+=	-Wno-empty-body -Wno-string-plus-int
+CWARNFLAGS+=	-Wno-empty-body -Wno-string-plus-int -Wno-unused-const-variable
 .endif # WARNS <= 6
 .if ${WARNS} <= 3
 CWARNFLAGS+=	-Wno-tautological-compare -Wno-unused-value\
@@ -99,15 +97,14 @@ CWARNFLAGS+=	-Wformat=2 -Wno-format-extra-args
 CWARNFLAGS+=	-Wno-format-nonliteral
 .endif # WARNS <= 3
 .endif # CLANG
-.if !defined(NO_WERROR) && (${COMPILER_TYPE} != "clang" \
-    || !defined(NO_WERROR.clang))
+.if !defined(NO_WERROR) && !defined(NO_WERROR.${COMPILER_TYPE})
 CWARNFLAGS+=	-Werror
-.endif # !NO_WERROR && (!CLANG || !NO_WERROR.clang)
+.endif # !NO_WERROR && !NO_WERROR.${COMPILER_TYPE}
 .endif # WFORMAT > 0
 .endif # WFORMAT
-.if defined(NO_WFORMAT) || (${COMPILER_TYPE} == "clang" && defined(NO_WFORMAT.clang))
+.if defined(NO_WFORMAT) || defined(NO_WFORMAT.${COMPILER_TYPE})
 CWARNFLAGS+=	-Wno-format
-.endif # NO_WFORMAT || (CLANG && NO_WFORMAT.clang)
+.endif # NO_WFORMAT || NO_WFORMAT.${COMPILER_TYPE}
 .endif # !NO_WARNS
 
 .if defined(IGNORE_PRAGMA)
@@ -120,12 +117,19 @@ CLANG_NO_IAS=	 -no-integrated-as
 CLANG_OPT_SMALL= -mstack-alignment=8 -mllvm -inline-threshold=3\
 		 -mllvm -enable-load-pre=false -mllvm -simplifycfg-dup-ret
 CFLAGS+=	 -Qunused-arguments
-CFLAGS+=	 ${CFLAGS.clang}
-CXXFLAGS+=	 ${CXXFLAGS.clang}
-.else # !CLANG
-CFLAGS+=	 ${CFLAGS.gcc}
-CXXFLAGS+=	 ${CXXFLAGS.gcc}
+.if ${MACHINE_CPUARCH} == "sparc64"
+# Don't emit .cfi directives, since we must use GNU as on sparc64, for now.
+CFLAGS+=	 -fno-dwarf2-cfi-asm
+.endif # SPARC64
+# The libc++ headers use c++11 extensions.  These are normally silenced because
+# they are treated as system headers, but we explicitly disable that warning
+# suppression when building the base system to catch bugs in our headers.
+# Eventually we'll want to start building the base system C++ code as C++11,
+# but not yet.
+CXXFLAGS+=	 -Wno-c++11-extensions
 .endif # CLANG
+CFLAGS+=	 ${CFLAGS.${COMPILER_TYPE}}
+CXXFLAGS+=	 ${CXXFLAGS.${COMPILER_TYPE}}
 .endif # !EARLY_BUILD
 
 .if ${MK_SSP} != "no" && ${MACHINE_CPUARCH} != "ia64" && \
@@ -144,11 +148,15 @@ CFLAGS+=	${CWARNFLAGS}
 PHONY_NOTMAIN = afterdepend afterinstall all beforedepend beforeinstall \
 		beforelinking build build-tools buildfiles buildincludes \
 		checkdpadd clean cleandepend cleandir cleanobj configure \
-		depend dependall distclean distribute exe extract fetch \
+		depend dependall distclean distribute exe extract \
 		html includes install installfiles installincludes lint \
-		obj objlink objs objwarn patch realall realdepend \
+		obj objlink objs objwarn realall realdepend \
 		realinstall regress subdir-all subdir-depend subdir-install \
 		tags whereobj
+
+.if defined(PORTNAME)
+PHONY_NOTMAIN+=	fetch patch
+.endif
 
 .PHONY: ${PHONY_NOTMAIN}
 .NOTMAIN: ${PHONY_NOTMAIN}

@@ -29,6 +29,7 @@
       <year>2011</year>
       <year>2012</year>
       <year>2013</year>
+      <year>2014</year>
       <holder role="mailto:doc@FreeBSD.org">The &os; Documentation Project</holder>
     </copyright>
 
@@ -732,6 +733,8 @@
 
       &hwlist.mly;
 
+      &hwlist.mpr;
+
       &hwlist.mps;
 
       &hwlist.mpt;
@@ -757,6 +760,8 @@
       &hwlist.twa;
 
       &hwlist.twe;
+
+      &hwlist.tws;
 
       &hwlist.vpo;
 
@@ -883,8 +888,6 @@
 
       &hwlist.nge;
 
-      &hwlist.nve;
-
       &hwlist.nxge;
 
       &hwlist.oce;
@@ -892,6 +895,10 @@
       &hwlist.pcn;
 
       &hwlist.qlxgb;
+
+      &hwlist.qlxgbe;
+
+      &hwlist.qlxge;
 
       &hwlist.re;
 

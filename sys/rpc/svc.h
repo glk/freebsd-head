@@ -411,7 +411,7 @@ struct svc_req {
 	(*(xprt)->xp_ops->xp_stat)(xprt)
 
 #define SVC_ACK(xprt, ack)				\
-	((xprt)->xp_ops->xp_stat == NULL ? FALSE :	\
+	((xprt)->xp_ops->xp_ack == NULL ? FALSE :	\
 	    ((ack) == NULL ? TRUE : (*(xprt)->xp_ops->xp_ack)((xprt), (ack))))
 
 #define SVC_REPLY(xprt, msg, addr, m, seq)			\
@@ -516,6 +516,7 @@ extern void	svc_unreg(const rpcprog_t, const rpcvers_t);
 #endif
 __END_DECLS
 
+#ifdef _KERNEL
 /*
  * Service connection loss registration
  *
@@ -539,6 +540,7 @@ __END_DECLS
 __BEGIN_DECLS
 extern void	svc_loss_unreg(SVCPOOL *, void (*)(SVCXPRT *));
 __END_DECLS
+#endif
 
 /*
  * Transport registration.

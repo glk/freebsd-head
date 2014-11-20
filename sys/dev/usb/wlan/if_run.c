@@ -100,7 +100,8 @@ SYSCTL_INT(_hw_usb_run, OID_AUTO, debug, CTLFLAG_RW, &run_debug, 0,
 static const STRUCT_USB_HOST_ID run_devs[] = {
 #define	RUN_DEV(v,p)	{ USB_VP(USB_VENDOR_##v, USB_PRODUCT_##v##_##p) }
 #define	RUN_DEV_EJECT(v,p)	\
-	{ USB_VPI(USB_VENDOR_##v, USB_PRODUCT_##v##_##p, 0) }
+	{ USB_VPI(USB_VENDOR_##v, USB_PRODUCT_##v##_##p, RUN_EJECT) }
+#define	RUN_EJECT	1
     RUN_DEV(ABOCOM,		RT2770),
     RUN_DEV(ABOCOM,		RT2870),
     RUN_DEV(ABOCOM,		RT3070),
@@ -315,7 +316,8 @@ static const STRUCT_USB_HOST_ID run_devs[] = {
     RUN_DEV(ZINWELL,		RT3072_2),
     RUN_DEV(ZYXEL,		RT2870_1),
     RUN_DEV(ZYXEL,		RT2870_2),
-    RUN_DEV(ZYXEL,		NWD2705),
+    RUN_DEV(ZYXEL,		RT3070),
+    RUN_DEV_EJECT(ZYXEL,	NWD2705),
     RUN_DEV_EJECT(RALINK,	RT_STOR),
 #undef RUN_DEV_EJECT
 #undef RUN_DEV
@@ -359,8 +361,6 @@ static int	run_write(struct run_softc *, uint16_t, uint32_t);
 static int	run_write_region_1(struct run_softc *, uint16_t,
 		    const uint8_t *, int);
 static int	run_set_region_4(struct run_softc *, uint16_t, uint32_t, int);
-static int	run_rf3593_efuse_read_1(struct run_softc *, uint16_t,
-		    uint16_t *);
 static int	run_efuse_read(struct run_softc *, uint16_t, uint16_t *, int);
 static int	run_efuse_read_2(struct run_softc *, uint16_t, uint16_t *);
 static int	run_eeprom_read_2(struct run_softc *, uint16_t, uint16_t *);
@@ -709,6 +709,8 @@ run_attach(device_t self)
 	device_set_usb_desc(self);
 	sc->sc_udev = uaa->device;
 	sc->sc_dev = self;
+	if (USB_GET_DRIVER_INFO(uaa) != RUN_EJECT)
+		sc->sc_flags |= RUN_FLAG_FWLOAD_NEEDED;
 
 	mtx_init(&sc->sc_mtx, device_get_nameunit(sc->sc_dev),
 	    MTX_NETWORK_LOCK, MTX_DEF);
@@ -1153,7 +1155,7 @@ run_load_microcode(struct run_softc *sc)
 	}
 
 	/* write microcode image */
-	if (sc->mac_ver != 0x3593) {
+	if (sc->sc_flags & RUN_FLAG_FWLOAD_NEEDED) {
 		run_write_region_1(sc, RT2870_FW_BASE, base, 4096);
 		run_write(sc, RT2860_H2M_MAILBOX_CID, 0xffffffff);
 		run_write(sc, RT2860_H2M_MAILBOX_STATUS, 0xffffffff);
@@ -1344,12 +1346,6 @@ run_set_region_4(struct run_softc *sc, uint16_t reg, uint32_t val, int len)
 }
 
 static int
-run_rf3593_efuse_read_1(struct run_softc *sc, uint16_t addr, uint16_t *val)
-{
-	return (run_efuse_read(sc, addr * 2, val, 1));
-}
-
-static int
 run_efuse_read(struct run_softc *sc, uint16_t addr, uint16_t *val, int count)
 {
 	uint32_t tmp;
@@ -1390,16 +1386,13 @@ run_efuse_read(struct run_softc *sc, uint16_t addr, uint16_t *val, int count)
 	if ((error = run_read(sc, reg, &tmp)) != 0)
 		return (error);
 
-	if (count == 2)
-		*val = (addr & 2) ? tmp >> 16 : tmp & 0xffff;
-	else {
-		tmp >>= (8 *(addr & 0x3));
-		memmove(val, &tmp, sizeof(*val));
-	}
+	tmp >>= (8 * (addr & 0x3));
+	*val = (addr & 1) ? tmp >> 16 : tmp & 0xffff;
+
 	return (0);
 }
 
-/* Read 16-bit from eFUSE ROM (RT3070 only.) */
+/* Read 16-bit from eFUSE ROM for RT3xxx. */
 static int
 run_efuse_read_2(struct run_softc *sc, uint16_t addr, uint16_t *val)
 {
@@ -1650,12 +1643,12 @@ run_rt3593_get_txpower(struct run_softc *sc)
 	}
 	/* Fix broken Tx power entries. */
 	for (i = 0; i < 14; i++) {
-		if ((sc->txpow1[i] & 0x1f) > 31)
+		if (sc->txpow1[i] > 31)
 			sc->txpow1[i] = 5;
-		if ((sc->txpow2[i] & 0x1f) > 31)
+		if (sc->txpow2[i] > 31)
 			sc->txpow2[i] = 5;
 		if (sc->ntxchains == 3) {
-			if ((sc->txpow3[i] & 0x1f) > 31)
+			if (sc->txpow3[i] > 31)
 				sc->txpow3[i] = 5;
 		}
 	}
@@ -1753,10 +1746,8 @@ run_read_eeprom(struct run_softc *sc)
 	if (sc->mac_ver >= 0x3070) {
 		run_read(sc, RT3070_EFUSE_CTRL, &tmp);
 		DPRINTF("EFUSE_CTRL=0x%08x\n", tmp);
-		if ((tmp & RT3070_SEL_EFUSE) && sc->mac_ver != 0x3593)
+		if ((tmp & RT3070_SEL_EFUSE) || sc->mac_ver == 0x3593)
 			sc->sc_srom_read = run_efuse_read_2;
-		else
-			sc->sc_srom_read = run_rf3593_efuse_read_1;
 	}
 
 	/* read ROM version */
@@ -2518,9 +2509,7 @@ run_ratectl_cb(void *arg, int pending)
 	if (vap == NULL)
 		return;
 
-	if (sc->rvp_cnt <= 1 && vap->iv_opmode == IEEE80211_M_STA)
-		run_iter_func(sc, vap->iv_bss);
-	else {
+	if (sc->rvp_cnt > 1 || vap->iv_opmode != IEEE80211_M_STA) {
 		/*
 		 * run_reset_livelock() doesn't do anything with AMRR,
 		 * but Ralink wants us to call it every 1 sec. So, we
@@ -2533,8 +2522,9 @@ run_ratectl_cb(void *arg, int pending)
 		/* just in case, there are some stats to drain */
 		run_drain_fifo(sc);
 		RUN_UNLOCK(sc);
-		ieee80211_iterate_nodes(&ic->ic_sta, run_iter_func, sc);
 	}
+
+	ieee80211_iterate_nodes(&ic->ic_sta, run_iter_func, sc);
 
 	RUN_LOCK(sc);
 	if(sc->ratectl_run != RUN_RATECTL_OFF)
@@ -2614,6 +2604,11 @@ run_iter_func(void *arg, struct ieee80211_node *ni)
 	int txcnt, success, retrycnt, error;
 
 	RUN_LOCK(sc);
+
+	/* Check for special case */
+	if (sc->rvp_cnt <= 1 && vap->iv_opmode == IEEE80211_M_STA &&
+	    ni != vap->iv_bss)
+		goto fail;
 
 	if (sc->rvp_cnt <= 1 && (vap->iv_opmode == IEEE80211_M_IBSS ||
 	    vap->iv_opmode == IEEE80211_M_STA)) {
@@ -2743,7 +2738,10 @@ run_newassoc(struct ieee80211_node *ni, int isnew)
 	rn->mgt_ridx = ridx;
 	DPRINTF("rate=%d, mgmt_ridx=%d\n", rate, rn->mgt_ridx);
 
-	usb_callout_reset(&sc->ratectl_ch, hz, run_ratectl_to, sc);
+	RUN_LOCK(sc);
+	if(sc->ratectl_run != RUN_RATECTL_OFF)
+		usb_callout_reset(&sc->ratectl_ch, hz, run_ratectl_to, sc);
+	RUN_UNLOCK(sc);
 }
 
 /*
@@ -2807,8 +2805,8 @@ run_rx_frame(struct run_softc *sc, struct mbuf *m, uint32_t dmalen)
 
 	wh = mtod(m, struct ieee80211_frame *);
 
-	if (wh->i_fc[1] & IEEE80211_FC1_WEP) {
-		wh->i_fc[1] &= ~IEEE80211_FC1_WEP;
+	if (wh->i_fc[1] & IEEE80211_FC1_PROTECTED) {
+		wh->i_fc[1] &= ~IEEE80211_FC1_PROTECTED;
 		m->m_flags |= M_WEP;
 	}
 
@@ -3083,10 +3081,10 @@ tr_setup:
 		STAILQ_REMOVE_HEAD(&pq->tx_qh, next);
 
 		m = data->m;
-		size = (sc->mac_ver == 0x5592) ? 
-		    RUN_MAX_TXSZ + sizeof(uint32_t) : RUN_MAX_TXSZ;
+		size = (sc->mac_ver == 0x5592) ?
+		    sizeof(data->desc) + sizeof(uint32_t) : sizeof(data->desc);
 		if ((m->m_pkthdr.len +
-		    sizeof(data->desc) + 3 + 8) > size) {
+		    size + 3 + 8) > RUN_MAX_TXSZ) {
 			DPRINTF("data overflow, %u bytes\n",
 			    m->m_pkthdr.len);
 
@@ -3098,8 +3096,6 @@ tr_setup:
 		}
 
 		pc = usbd_xfer_get_frame(xfer, 0);
-		size = (sc->mac_ver == 0x5592) ?
-		    sizeof(data->desc) + sizeof(uint32_t) : sizeof(data->desc);
 		usbd_copy_in(pc, 0, &data->desc, size);
 		usbd_m_copy_in(pc, size, m, 0, m->m_pkthdr.len);
 		size += m->m_pkthdr.len;

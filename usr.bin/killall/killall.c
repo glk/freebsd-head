@@ -91,6 +91,7 @@ nosig(char *name)
 int
 main(int ac, char **av)
 {
+	char		**saved_av;
 	struct kinfo_proc *procs, *newprocs;
 	struct stat	sb;
 	struct passwd	*pw;
@@ -145,9 +146,6 @@ main(int ac, char **av)
 		if (**av == '-') {
 			++*av;
 			switch (**av) {
-			case 'I':
-				Iflag = 1;
-				break;
 			case 'j':
 				++*av;
 				if (**av == '\0') {
@@ -215,6 +213,7 @@ main(int ac, char **av)
 				zflag++;
 				break;
 			default:
+				saved_av = av;
 				if (isalpha((unsigned char)**av)) {
 					if (strncasecmp(*av, "SIG", 3) == 0)
 						*av += 3;
@@ -224,8 +223,14 @@ main(int ac, char **av)
 							sig = p - sys_signame;
 							break;
 						}
-					if (!sig)
-						nosig(*av);
+					if (!sig) {
+						if (**saved_av == 'I') {
+							av = saved_av;
+							Iflag = 1;
+							break;
+						} else
+							nosig(*av);
+					}
 				} else if (isdigit((unsigned char)**av)) {
 					sig = strtol(*av, &ep, 10);
 					if (!*av || *ep)
