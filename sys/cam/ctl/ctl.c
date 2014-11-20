@@ -280,7 +280,7 @@ static struct scsi_control_page control_page_default = {
 	/*page_code*/SMS_CONTROL_MODE_PAGE,
 	/*page_length*/sizeof(struct scsi_control_page) - 2,
 	/*rlec*/0,
-	/*queue_flags*/0,
+	/*queue_flags*/SCP_QUEUE_ALG_RESTRICTED,
 	/*eca_and_aen*/0,
 	/*flags4*/SCP_TAS,
 	/*aen_holdoff_period*/{0, 0},
@@ -292,7 +292,7 @@ static struct scsi_control_page control_page_changeable = {
 	/*page_code*/SMS_CONTROL_MODE_PAGE,
 	/*page_length*/sizeof(struct scsi_control_page) - 2,
 	/*rlec*/SCP_DSENSE,
-	/*queue_flags*/0,
+	/*queue_flags*/SCP_QUEUE_ALG_MASK,
 	/*eca_and_aen*/0,
 	/*flags4*/0,
 	/*aen_holdoff_period*/{0, 0},
@@ -390,10 +390,10 @@ static int ctl_inquiry_evpd_bdc(struct ctl_scsiio *ctsio, int alloc_len);
 static int ctl_inquiry_evpd_lbp(struct ctl_scsiio *ctsio, int alloc_len);
 static int ctl_inquiry_evpd(struct ctl_scsiio *ctsio);
 static int ctl_inquiry_std(struct ctl_scsiio *ctsio);
-static int ctl_get_lba_len(union ctl_io *io, uint64_t *lba, uint32_t *len);
+static int ctl_get_lba_len(union ctl_io *io, uint64_t *lba, uint64_t *len);
 static ctl_action ctl_extent_check(union ctl_io *io1, union ctl_io *io2);
-static ctl_action ctl_check_for_blockage(union ctl_io *pending_io,
-					 union ctl_io *ooa_io);
+static ctl_action ctl_check_for_blockage(struct ctl_lun *lun,
+    union ctl_io *pending_io, union ctl_io *ooa_io);
 static ctl_action ctl_check_ooa(struct ctl_lun *lun, union ctl_io *pending_io,
 				union ctl_io *starting_io);
 static int ctl_check_blocked(struct ctl_lun *lun);
@@ -440,7 +440,7 @@ static void ctl_enqueue_rtr(union ctl_io *io);
 static void ctl_enqueue_done(union ctl_io *io);
 static void ctl_enqueue_isc(union ctl_io *io);
 static const struct ctl_cmd_entry *
-    ctl_get_cmd_entry(struct ctl_scsiio *ctsio);
+    ctl_get_cmd_entry(struct ctl_scsiio *ctsio, int *sa);
 static const struct ctl_cmd_entry *
     ctl_validate_command(struct ctl_scsiio *ctsio);
 static int ctl_cmd_applicable(uint8_t lun_type,
@@ -644,7 +644,7 @@ ctl_isc_event_handler(ctl_ha_channel channel, ctl_ha_event event, int param)
 			if (ctl_softc->ha_mode == CTL_HA_MODE_XFER) {
 				const struct ctl_cmd_entry *entry;
 
-				entry = ctl_get_cmd_entry(&io->scsiio);
+				entry = ctl_get_cmd_entry(&io->scsiio, NULL);
 				io->io_hdr.flags &= ~CTL_FLAG_DATA_MASK;
 				io->io_hdr.flags |=
 					entry->flags & CTL_FLAG_DATA_MASK;
@@ -4095,6 +4095,7 @@ ctl_init_page_index(struct ctl_lun *lun)
 	int i;
 	struct ctl_page_index *page_index;
 	struct ctl_softc *softc;
+	const char *value;
 
 	memcpy(&lun->mode_pages.index, page_index_template,
 	       sizeof(page_index_template));
@@ -4244,51 +4245,60 @@ ctl_init_page_index(struct ctl_lun *lun)
 			break;
 		}
 		case SMS_CACHING_PAGE: {
+			struct scsi_caching_page *caching_page;
 
 			if (page_index->subpage != SMS_SUBPAGE_PAGE_0)
 				panic("invalid subpage value %d",
 				      page_index->subpage);
-			/*
-			 * Defaults should be okay here, no calculations
-			 * needed.
-			 */
-			memcpy(&lun->mode_pages.caching_page[CTL_PAGE_CURRENT],
+			memcpy(&lun->mode_pages.caching_page[CTL_PAGE_DEFAULT],
 			       &caching_page_default,
 			       sizeof(caching_page_default));
 			memcpy(&lun->mode_pages.caching_page[
 			       CTL_PAGE_CHANGEABLE], &caching_page_changeable,
 			       sizeof(caching_page_changeable));
-			memcpy(&lun->mode_pages.caching_page[CTL_PAGE_DEFAULT],
-			       &caching_page_default,
-			       sizeof(caching_page_default));
 			memcpy(&lun->mode_pages.caching_page[CTL_PAGE_SAVED],
 			       &caching_page_default,
+			       sizeof(caching_page_default));
+			caching_page = &lun->mode_pages.caching_page[
+			    CTL_PAGE_SAVED];
+			value = ctl_get_opt(&lun->be_lun->options, "writecache");
+			if (value != NULL && strcmp(value, "off") == 0)
+				caching_page->flags1 &= ~SCP_WCE;
+			value = ctl_get_opt(&lun->be_lun->options, "readcache");
+			if (value != NULL && strcmp(value, "off") == 0)
+				caching_page->flags1 |= SCP_RCD;
+			memcpy(&lun->mode_pages.caching_page[CTL_PAGE_CURRENT],
+			       &lun->mode_pages.caching_page[CTL_PAGE_SAVED],
 			       sizeof(caching_page_default));
 			page_index->page_data =
 				(uint8_t *)lun->mode_pages.caching_page;
 			break;
 		}
 		case SMS_CONTROL_MODE_PAGE: {
+			struct scsi_control_page *control_page;
 
 			if (page_index->subpage != SMS_SUBPAGE_PAGE_0)
 				panic("invalid subpage value %d",
 				      page_index->subpage);
 
-			/*
-			 * Defaults should be okay here, no calculations
-			 * needed.
-			 */
-			memcpy(&lun->mode_pages.control_page[CTL_PAGE_CURRENT],
+			memcpy(&lun->mode_pages.control_page[CTL_PAGE_DEFAULT],
 			       &control_page_default,
 			       sizeof(control_page_default));
 			memcpy(&lun->mode_pages.control_page[
 			       CTL_PAGE_CHANGEABLE], &control_page_changeable,
 			       sizeof(control_page_changeable));
-			memcpy(&lun->mode_pages.control_page[CTL_PAGE_DEFAULT],
-			       &control_page_default,
-			       sizeof(control_page_default));
 			memcpy(&lun->mode_pages.control_page[CTL_PAGE_SAVED],
 			       &control_page_default,
+			       sizeof(control_page_default));
+			control_page = &lun->mode_pages.control_page[
+			    CTL_PAGE_SAVED];
+			value = ctl_get_opt(&lun->be_lun->options, "reordering");
+			if (value != NULL && strcmp(value, "unrestricted") == 0) {
+				control_page->queue_flags &= ~SCP_QUEUE_ALG_MASK;
+				control_page->queue_flags |= SCP_QUEUE_ALG_UNRESTRICTED;
+			}
+			memcpy(&lun->mode_pages.control_page[CTL_PAGE_CURRENT],
+			       &lun->mode_pages.control_page[CTL_PAGE_SAVED],
 			       sizeof(control_page_default));
 			page_index->page_data =
 				(uint8_t *)lun->mode_pages.control_page;
@@ -5259,6 +5269,8 @@ ctl_data_submit_done(union ctl_io *io)
 void
 ctl_config_write_done(union ctl_io *io)
 {
+	uint8_t *buf;
+
 	/*
 	 * If the IO_CONT flag is set, we need to call the supplied
 	 * function to continue processing the I/O, instead of completing
@@ -5267,9 +5279,10 @@ ctl_config_write_done(union ctl_io *io)
 	 * If there is an error, though, we don't want to keep processing.
 	 * Instead, just send status back to the initiator.
 	 */
-	if ((io->io_hdr.flags & CTL_FLAG_IO_CONT)
-	 && (((io->io_hdr.status & CTL_STATUS_MASK) == CTL_STATUS_NONE)
-	  || ((io->io_hdr.status & CTL_STATUS_MASK) == CTL_SUCCESS))) {
+	if ((io->io_hdr.flags & CTL_FLAG_IO_CONT) &&
+	    (io->io_hdr.flags & CTL_FLAG_ABORT) == 0 &&
+	    ((io->io_hdr.status & CTL_STATUS_MASK) == CTL_STATUS_NONE ||
+	     (io->io_hdr.status & CTL_STATUS_MASK) == CTL_SUCCESS)) {
 		io->scsiio.io_cont(io);
 		return;
 	}
@@ -5278,9 +5291,13 @@ ctl_config_write_done(union ctl_io *io)
 	 * have data allocated, like write buffer, and commands that have
 	 * no data, like start/stop unit, we need to check here.
 	 */
-	if ((io->io_hdr.flags & CTL_FLAG_DATA_MASK) == CTL_FLAG_DATA_OUT)
-		free(io->scsiio.kern_data_ptr, M_CTL);
+	if (io->io_hdr.flags & CTL_FLAG_ALLOCATED)
+		buf = io->scsiio.kern_data_ptr;
+	else
+		buf = NULL;
 	ctl_done(io);
+	if (buf)
+		free(buf, M_CTL);
 }
 
 /*
@@ -5292,12 +5309,14 @@ ctl_scsi_release(struct ctl_scsiio *ctsio)
 	int length, longid, thirdparty_id, resv_id;
 	struct ctl_softc *ctl_softc;
 	struct ctl_lun *lun;
+	uint32_t residx;
 
 	length = 0;
 	resv_id = 0;
 
 	CTL_DEBUG_PRINT(("ctl_scsi_release\n"));
 
+	residx = ctl_get_resindex(&ctsio->io_hdr.nexus);
 	lun = (struct ctl_lun *)ctsio->io_hdr.ctl_private[CTL_PRIV_LUN].ptr;
 	ctl_softc = control_softc;
 
@@ -5355,14 +5374,8 @@ ctl_scsi_release(struct ctl_scsiio *ctsio)
 	 * released, though, by the initiator who made it or by one of
 	 * several reset type events.
 	 */
-	if (lun->flags & CTL_LUN_RESERVED) {
-		if ((ctsio->io_hdr.nexus.initid.id == lun->rsv_nexus.initid.id)
-		 && (ctsio->io_hdr.nexus.targ_port == lun->rsv_nexus.targ_port)
-		 && (ctsio->io_hdr.nexus.targ_target.id ==
-		     lun->rsv_nexus.targ_target.id)) {
+	if ((lun->flags & CTL_LUN_RESERVED) && (lun->res_idx == residx))
 			lun->flags &= ~CTL_LUN_RESERVED;
-		}
-	}
 
 	mtx_unlock(&lun->lun_lock);
 
@@ -5386,6 +5399,7 @@ ctl_scsi_reserve(struct ctl_scsiio *ctsio)
 	uint64_t thirdparty_id;
 	struct ctl_softc *ctl_softc;
 	struct ctl_lun *lun;
+	uint32_t residx;
 
 	extent = 0;
 	thirdparty = 0;
@@ -5396,6 +5410,7 @@ ctl_scsi_reserve(struct ctl_scsiio *ctsio)
 
 	CTL_DEBUG_PRINT(("ctl_reserve\n"));
 
+	residx = ctl_get_resindex(&ctsio->io_hdr.nexus);
 	lun = (struct ctl_lun *)ctsio->io_hdr.ctl_private[CTL_PRIV_LUN].ptr;
 	ctl_softc = control_softc;
 
@@ -5444,19 +5459,14 @@ ctl_scsi_reserve(struct ctl_scsiio *ctsio)
 		thirdparty_id = scsi_8btou64(ctsio->kern_data_ptr);
 
 	mtx_lock(&lun->lun_lock);
-	if (lun->flags & CTL_LUN_RESERVED) {
-		if ((ctsio->io_hdr.nexus.initid.id != lun->rsv_nexus.initid.id)
-		 || (ctsio->io_hdr.nexus.targ_port != lun->rsv_nexus.targ_port)
-		 || (ctsio->io_hdr.nexus.targ_target.id !=
-		     lun->rsv_nexus.targ_target.id)) {
-			ctsio->scsi_status = SCSI_STATUS_RESERV_CONFLICT;
-			ctsio->io_hdr.status = CTL_SCSI_ERROR;
-			goto bailout;
-		}
+	if ((lun->flags & CTL_LUN_RESERVED) && (lun->res_idx != residx)) {
+		ctsio->scsi_status = SCSI_STATUS_RESERV_CONFLICT;
+		ctsio->io_hdr.status = CTL_SCSI_ERROR;
+		goto bailout;
 	}
 
 	lun->flags |= CTL_LUN_RESERVED;
-	lun->rsv_nexus = ctsio->io_hdr.nexus;
+	lun->res_idx = residx;
 
 	ctsio->scsi_status = SCSI_STATUS_OK;
 	ctsio->io_hdr.status = CTL_SUCCESS;
@@ -5977,6 +5987,15 @@ ctl_write_same(struct ctl_scsiio *ctsio)
 		break; /* NOTREACHED */
 	}
 
+	/* NDOB and ANCHOR flags can be used only together with UNMAP */
+	if ((byte2 & SWS_UNMAP) == 0 &&
+	    (byte2 & (SWS_NDOB | SWS_ANCHOR)) != 0) {
+		ctl_set_invalid_field(ctsio, /*sks_valid*/ 1,
+		    /*command*/ 1, /*field*/ 1, /*bit_valid*/ 1, /*bit*/ 0);
+		ctl_done((union ctl_io *)ctsio);
+		return (CTL_RETVAL_COMPLETE);
+	}
+
 	/*
 	 * The first check is to make sure we're in bounds, the second
 	 * check is to catch wrap-around problems.  If the lba + num blocks
@@ -6011,7 +6030,8 @@ ctl_write_same(struct ctl_scsiio *ctsio)
 	 * If we've got a kernel request that hasn't been malloced yet,
 	 * malloc it and tell the caller the data buffer is here.
 	 */
-	if ((ctsio->io_hdr.flags & CTL_FLAG_ALLOCATED) == 0) {
+	if ((byte2 & SWS_NDOB) == 0 &&
+	    (ctsio->io_hdr.flags & CTL_FLAG_ALLOCATED) == 0) {
 		ctsio->kern_data_ptr = malloc(len, M_CTL, M_WAITOK);;
 		ctsio->kern_data_len = len;
 		ctsio->kern_total_len = len;
@@ -6041,7 +6061,7 @@ ctl_unmap(struct ctl_scsiio *ctsio)
 	struct scsi_unmap *cdb;
 	struct ctl_ptr_len_flags *ptrlen;
 	struct scsi_unmap_header *hdr;
-	struct scsi_unmap_desc *buf, *end;
+	struct scsi_unmap_desc *buf, *end, *endnz, *range;
 	uint64_t lba;
 	uint32_t num_blocks;
 	int len, retval;
@@ -6094,24 +6114,41 @@ ctl_unmap(struct ctl_scsiio *ctsio)
 	buf = (struct scsi_unmap_desc *)(hdr + 1);
 	end = buf + len / sizeof(*buf);
 
-	ptrlen = (struct ctl_ptr_len_flags *)&ctsio->io_hdr.ctl_private[CTL_PRIV_LBA_LEN];
-	ptrlen->ptr = (void *)buf;
-	ptrlen->len = len;
-	ptrlen->flags = byte2;
-
-	for (; buf < end; buf++) {
-		lba = scsi_8btou64(buf->lba);
-		num_blocks = scsi_4btoul(buf->length);
+	endnz = buf;
+	for (range = buf; range < end; range++) {
+		lba = scsi_8btou64(range->lba);
+		num_blocks = scsi_4btoul(range->length);
 		if (((lba + num_blocks) > (lun->be_lun->maxlba + 1))
 		 || ((lba + num_blocks) < lba)) {
 			ctl_set_lba_out_of_range(ctsio);
 			ctl_done((union ctl_io *)ctsio);
 			return (CTL_RETVAL_COMPLETE);
 		}
+		if (num_blocks != 0)
+			endnz = range + 1;
 	}
 
-	retval = lun->backend->config_write((union ctl_io *)ctsio);
+	/*
+	 * Block backend can not handle zero last range.
+	 * Filter it out and return if there is nothing left.
+	 */
+	len = (uint8_t *)endnz - (uint8_t *)buf;
+	if (len == 0) {
+		ctl_set_success(ctsio);
+		ctl_done((union ctl_io *)ctsio);
+		return (CTL_RETVAL_COMPLETE);
+	}
 
+	mtx_lock(&lun->lun_lock);
+	ptrlen = (struct ctl_ptr_len_flags *)
+	    &ctsio->io_hdr.ctl_private[CTL_PRIV_LBA_LEN];
+	ptrlen->ptr = (void *)buf;
+	ptrlen->len = len;
+	ptrlen->flags = byte2;
+	ctl_check_blocked(lun);
+	mtx_unlock(&lun->lun_lock);
+
+	retval = lun->backend->config_write((union ctl_io *)ctsio);
 	return (retval);
 }
 
@@ -6174,65 +6211,13 @@ ctl_control_page_handler(struct ctl_scsiio *ctsio,
 		lun->flags &= ~CTL_LUN_SENSE_DESC;
 		set_ua = 1;
 	}
-	if (current_cp->queue_flags & SCP_QUEUE_DQUE) {
-		if (user_cp->queue_flags & SCP_QUEUE_DQUE) {
-#ifdef NEEDTOPORT
-			csevent_log(CSC_CTL | CSC_SHELF_SW |
-				    CTL_UNTAG_TO_UNTAG,
-				    csevent_LogType_Trace,
-				    csevent_Severity_Information,
-				    csevent_AlertLevel_Green,
-				    csevent_FRU_Firmware,
-				    csevent_FRU_Unknown,
-				    "Received untagged to untagged transition");
-#endif /* NEEDTOPORT */
-		} else {
-#ifdef NEEDTOPORT
-			csevent_log(CSC_CTL | CSC_SHELF_SW |
-				    CTL_UNTAG_TO_TAG,
-				    csevent_LogType_ConfigChange,
-				    csevent_Severity_Information,
-				    csevent_AlertLevel_Green,
-				    csevent_FRU_Firmware,
-				    csevent_FRU_Unknown,
-				    "Received untagged to tagged "
-				    "queueing transition");
-#endif /* NEEDTOPORT */
-
-			current_cp->queue_flags &= ~SCP_QUEUE_DQUE;
-			saved_cp->queue_flags &= ~SCP_QUEUE_DQUE;
-			set_ua = 1;
-		}
-	} else {
-		if (user_cp->queue_flags & SCP_QUEUE_DQUE) {
-#ifdef NEEDTOPORT
-			csevent_log(CSC_CTL | CSC_SHELF_SW |
-				    CTL_TAG_TO_UNTAG,
-				    csevent_LogType_ConfigChange,
-				    csevent_Severity_Warning,
-				    csevent_AlertLevel_Yellow,
-				    csevent_FRU_Firmware,
-				    csevent_FRU_Unknown,
-				    "Received tagged queueing to untagged "
-				    "transition");
-#endif /* NEEDTOPORT */
-
-			current_cp->queue_flags |= SCP_QUEUE_DQUE;
-			saved_cp->queue_flags |= SCP_QUEUE_DQUE;
-			set_ua = 1;
-		} else {
-#ifdef NEEDTOPORT
-			csevent_log(CSC_CTL | CSC_SHELF_SW |
-				    CTL_TAG_TO_TAG,
-				    csevent_LogType_Trace,
-				    csevent_Severity_Information,
-				    csevent_AlertLevel_Green,
-				    csevent_FRU_Firmware,
-				    csevent_FRU_Unknown,
-				    "Received tagged queueing to tagged "
-				    "queueing transition");
-#endif /* NEEDTOPORT */
-		}
+	if ((current_cp->queue_flags & SCP_QUEUE_ALG_MASK) !=
+	    (user_cp->queue_flags & SCP_QUEUE_ALG_MASK)) {
+		current_cp->queue_flags &= ~SCP_QUEUE_ALG_MASK;
+		current_cp->queue_flags |= user_cp->queue_flags & SCP_QUEUE_ALG_MASK;
+		saved_cp->queue_flags &= ~SCP_QUEUE_ALG_MASK;
+		saved_cp->queue_flags |= user_cp->queue_flags & SCP_QUEUE_ALG_MASK;
+		set_ua = 1;
 	}
 	if (set_ua != 0) {
 		int i;
@@ -6275,12 +6260,13 @@ ctl_caching_sp_handler(struct ctl_scsiio *ctsio,
 
 	mtx_lock(&lun->lun_lock);
 	if ((current_cp->flags1 & (SCP_WCE | SCP_RCD)) !=
-	    (user_cp->flags1 & (SCP_WCE | SCP_RCD)))
+	    (user_cp->flags1 & (SCP_WCE | SCP_RCD))) {
+		current_cp->flags1 &= ~(SCP_WCE | SCP_RCD);
+		current_cp->flags1 |= user_cp->flags1 & (SCP_WCE | SCP_RCD);
+		saved_cp->flags1 &= ~(SCP_WCE | SCP_RCD);
+		saved_cp->flags1 |= user_cp->flags1 & (SCP_WCE | SCP_RCD);
 		set_ua = 1;
-	current_cp->flags1 &= ~(SCP_WCE | SCP_RCD);
-	current_cp->flags1 |= user_cp->flags1 & (SCP_WCE | SCP_RCD);
-	saved_cp->flags1 &= ~(SCP_WCE | SCP_RCD);
-	saved_cp->flags1 |= user_cp->flags1 & (SCP_WCE | SCP_RCD);
+	}
 	if (set_ua != 0) {
 		int i;
 		/*
@@ -7097,7 +7083,7 @@ ctl_mode_sense(struct ctl_scsiio *ctsio)
 	 * descriptor.  Otherwise, just set it to 0.
 	 */
 	if (dbd == 0) {
-		if (control_dev != 0)
+		if (control_dev == 0)
 			scsi_ulto3b(lun->be_lun->blocksize,
 				    block_desc->block_len);
 		else
@@ -7911,7 +7897,7 @@ retry:
 
 		res_cap = (struct scsi_per_res_cap *)ctsio->kern_data_ptr;
 		scsi_ulto2b(sizeof(*res_cap), res_cap->length);
-		res_cap->flags2 |= SPRI_TMV | SPRI_ALLOW_3;
+		res_cap->flags2 |= SPRI_TMV | SPRI_ALLOW_5;
 		type_mask = SPRI_TM_WR_EX_AR |
 			    SPRI_TM_EX_AC_RO |
 			    SPRI_TM_WR_EX_RO |
@@ -10616,9 +10602,7 @@ ctl_inquiry_std(struct ctl_scsiio *ctsio)
 	CTL_DEBUG_PRINT(("additional_length = %d\n",
 			 inq_ptr->additional_length));
 
-	inq_ptr->spc3_flags = SPC3_SID_3PC;
-	if (!ctl_is_single)
-		inq_ptr->spc3_flags |= SPC3_SID_TPGS_IMPLICIT;
+	inq_ptr->spc3_flags = SPC3_SID_3PC | SPC3_SID_TPGS_IMPLICIT;
 	/* 16 bit addressing */
 	if (port_type == CTL_PORT_SCSI)
 		inq_ptr->spc2_flags = SPC2_SID_ADDR16;
@@ -10748,45 +10732,23 @@ ctl_inquiry(struct ctl_scsiio *ctsio)
 	struct scsi_inquiry *cdb;
 	int retval;
 
-	cdb = (struct scsi_inquiry *)ctsio->cdb;
-
-	retval = 0;
-
 	CTL_DEBUG_PRINT(("ctl_inquiry\n"));
 
-	/*
-	 * Right now, we don't support the CmdDt inquiry information.
-	 * This would be nice to support in the future.  When we do
-	 * support it, we should change this test so that it checks to make
-	 * sure SI_EVPD and SI_CMDDT aren't both set at the same time.
-	 */
-#ifdef notyet
-	if (((cdb->byte2 & SI_EVPD)
-	 && (cdb->byte2 & SI_CMDDT)))
-#endif
-	if (cdb->byte2 & SI_CMDDT) {
-		/*
-		 * Point to the SI_CMDDT bit.  We might change this
-		 * when we support SI_CMDDT, but since both bits would be
-		 * "wrong", this should probably just stay as-is then.
-		 */
+	cdb = (struct scsi_inquiry *)ctsio->cdb;
+	if (cdb->byte2 & SI_EVPD)
+		retval = ctl_inquiry_evpd(ctsio);
+	else if (cdb->page_code == 0)
+		retval = ctl_inquiry_std(ctsio);
+	else {
 		ctl_set_invalid_field(ctsio,
 				      /*sks_valid*/ 1,
 				      /*command*/ 1,
-				      /*field*/ 1,
-				      /*bit_valid*/ 1,
-				      /*bit*/ 1);
+				      /*field*/ 2,
+				      /*bit_valid*/ 0,
+				      /*bit*/ 0);
 		ctl_done((union ctl_io *)ctsio);
 		return (CTL_RETVAL_COMPLETE);
 	}
-	if (cdb->byte2 & SI_EVPD)
-		retval = ctl_inquiry_evpd(ctsio);
-#ifdef notyet
-	else if (cdb->byte2 & SI_CMDDT)
-		retval = ctl_inquiry_cmddt(ctsio);
-#endif
-	else
-		retval = ctl_inquiry_std(ctsio);
 
 	return (retval);
 }
@@ -10795,7 +10757,7 @@ ctl_inquiry(struct ctl_scsiio *ctsio)
  * For known CDB types, parse the LBA and length.
  */
 static int
-ctl_get_lba_len(union ctl_io *io, uint64_t *lba, uint32_t *len)
+ctl_get_lba_len(union ctl_io *io, uint64_t *lba, uint64_t *len)
 {
 	if (io->io_hdr.io_type != CTL_IO_SCSI)
 		return (1);
@@ -10925,6 +10887,11 @@ ctl_get_lba_len(union ctl_io *io, uint64_t *lba, uint32_t *len)
 		*len = scsi_4btoul(cdb->length);
 		break;
 	}
+	case UNMAP: {
+		*lba = 0;
+		*len = UINT64_MAX;
+		break;
+	}
 	default:
 		return (1);
 		break; /* NOTREACHED */
@@ -10934,7 +10901,7 @@ ctl_get_lba_len(union ctl_io *io, uint64_t *lba, uint32_t *len)
 }
 
 static ctl_action
-ctl_extent_check_lba(uint64_t lba1, uint32_t len1, uint64_t lba2, uint32_t len2)
+ctl_extent_check_lba(uint64_t lba1, uint64_t len1, uint64_t lba2, uint64_t len2)
 {
 	uint64_t endlba1, endlba2;
 
@@ -10948,26 +10915,61 @@ ctl_extent_check_lba(uint64_t lba1, uint32_t len1, uint64_t lba2, uint32_t len2)
 		return (CTL_ACTION_BLOCK);
 }
 
+static int
+ctl_extent_check_unmap(union ctl_io *io, uint64_t lba2, uint64_t len2)
+{
+	struct ctl_ptr_len_flags *ptrlen;
+	struct scsi_unmap_desc *buf, *end, *range;
+	uint64_t lba;
+	uint32_t len;
+
+	/* If not UNMAP -- go other way. */
+	if (io->io_hdr.io_type != CTL_IO_SCSI ||
+	    io->scsiio.cdb[0] != UNMAP)
+		return (CTL_ACTION_ERROR);
+
+	/* If UNMAP without data -- block and wait for data. */
+	ptrlen = (struct ctl_ptr_len_flags *)
+	    &io->io_hdr.ctl_private[CTL_PRIV_LBA_LEN];
+	if ((io->io_hdr.flags & CTL_FLAG_ALLOCATED) == 0 ||
+	    ptrlen->ptr == NULL)
+		return (CTL_ACTION_BLOCK);
+
+	/* UNMAP with data -- check for collision. */
+	buf = (struct scsi_unmap_desc *)ptrlen->ptr;
+	end = buf + ptrlen->len / sizeof(*buf);
+	for (range = buf; range < end; range++) {
+		lba = scsi_8btou64(range->lba);
+		len = scsi_4btoul(range->length);
+		if ((lba < lba2 + len2) && (lba + len > lba2))
+			return (CTL_ACTION_BLOCK);
+	}
+	return (CTL_ACTION_PASS);
+}
+
 static ctl_action
 ctl_extent_check(union ctl_io *io1, union ctl_io *io2)
 {
 	uint64_t lba1, lba2;
-	uint32_t len1, len2;
+	uint64_t len1, len2;
 	int retval;
 
-	retval = ctl_get_lba_len(io1, &lba1, &len1);
-	if (retval != 0)
+	if (ctl_get_lba_len(io1, &lba1, &len1) != 0)
 		return (CTL_ACTION_ERROR);
 
-	retval = ctl_get_lba_len(io2, &lba2, &len2);
-	if (retval != 0)
+	retval = ctl_extent_check_unmap(io2, lba1, len1);
+	if (retval != CTL_ACTION_ERROR)
+		return (retval);
+
+	if (ctl_get_lba_len(io2, &lba2, &len2) != 0)
 		return (CTL_ACTION_ERROR);
 
 	return (ctl_extent_check_lba(lba1, len1, lba2, len2));
 }
 
 static ctl_action
-ctl_check_for_blockage(union ctl_io *pending_io, union ctl_io *ooa_io)
+ctl_check_for_blockage(struct ctl_lun *lun, union ctl_io *pending_io,
+    union ctl_io *ooa_io)
 {
 	const struct ctl_cmd_entry *pending_entry, *ooa_entry;
 	ctl_serialize_action *serialize_row;
@@ -11042,28 +11044,33 @@ ctl_check_for_blockage(union ctl_io *pending_io, union ctl_io *ooa_io)
 	  || (ooa_io->scsiio.tag_type == CTL_TAG_ORDERED)))
 		return (CTL_ACTION_BLOCK);
 
-	pending_entry = ctl_get_cmd_entry(&pending_io->scsiio);
-	ooa_entry = ctl_get_cmd_entry(&ooa_io->scsiio);
+	pending_entry = ctl_get_cmd_entry(&pending_io->scsiio, NULL);
+	ooa_entry = ctl_get_cmd_entry(&ooa_io->scsiio, NULL);
 
 	serialize_row = ctl_serialize_table[ooa_entry->seridx];
 
 	switch (serialize_row[pending_entry->seridx]) {
 	case CTL_SER_BLOCK:
 		return (CTL_ACTION_BLOCK);
-		break; /* NOTREACHED */
 	case CTL_SER_EXTENT:
 		return (ctl_extent_check(pending_io, ooa_io));
-		break; /* NOTREACHED */
+	case CTL_SER_EXTENTOPT:
+		if ((lun->mode_pages.control_page[CTL_PAGE_CURRENT].queue_flags
+		    & SCP_QUEUE_ALG_MASK) != SCP_QUEUE_ALG_UNRESTRICTED)
+			return (ctl_extent_check(pending_io, ooa_io));
+		/* FALLTHROUGH */
 	case CTL_SER_PASS:
 		return (CTL_ACTION_PASS);
-		break; /* NOTREACHED */
+	case CTL_SER_BLOCKOPT:
+		if ((lun->mode_pages.control_page[CTL_PAGE_CURRENT].queue_flags
+		    & SCP_QUEUE_ALG_MASK) != SCP_QUEUE_ALG_UNRESTRICTED)
+			return (CTL_ACTION_BLOCK);
+		return (CTL_ACTION_PASS);
 	case CTL_SER_SKIP:
 		return (CTL_ACTION_SKIP);
-		break;
 	default:
 		panic("invalid serialization value %d",
 		      serialize_row[pending_entry->seridx]);
-		break; /* NOTREACHED */
 	}
 
 	return (CTL_ACTION_ERROR);
@@ -11100,7 +11107,7 @@ ctl_check_ooa(struct ctl_lun *lun, union ctl_io *pending_io,
 		 * of it in the queue.  It doesn't queue/dequeue
 		 * cur_blocked.
 		 */
-		action = ctl_check_for_blockage(pending_io, ooa_io);
+		action = ctl_check_for_blockage(lun, pending_io, ooa_io);
 		switch (action) {
 		case CTL_ACTION_BLOCK:
 		case CTL_ACTION_OVERLAP:
@@ -11211,7 +11218,7 @@ ctl_check_blocked(struct ctl_lun *lun)
 				}
 				break;
 			}
-			entry = ctl_get_cmd_entry(&cur_blocked->scsiio);
+			entry = ctl_get_cmd_entry(&cur_blocked->scsiio, NULL);
 			softc = control_softc;
 
 			initidx = ctl_get_initindex(&cur_blocked->io_hdr.nexus);
@@ -11262,6 +11269,7 @@ ctl_scsiio_lun_check(struct ctl_softc *ctl_softc, struct ctl_lun *lun,
     const struct ctl_cmd_entry *entry, struct ctl_scsiio *ctsio)
 {
 	int retval;
+	uint32_t residx;
 
 	retval = 0;
 
@@ -11286,12 +11294,10 @@ ctl_scsiio_lun_check(struct ctl_softc *ctl_softc, struct ctl_lun *lun,
 	 * even on reserved LUNs, and if this initiator isn't the one who
 	 * reserved us, reject the command with a reservation conflict.
 	 */
+	residx = ctl_get_resindex(&ctsio->io_hdr.nexus);
 	if ((lun->flags & CTL_LUN_RESERVED)
 	 && ((entry->flags & CTL_CMD_FLAG_ALLOW_ON_RESV) == 0)) {
-		if ((ctsio->io_hdr.nexus.initid.id != lun->rsv_nexus.initid.id)
-		 || (ctsio->io_hdr.nexus.targ_port != lun->rsv_nexus.targ_port)
-		 || (ctsio->io_hdr.nexus.targ_target.id !=
-		     lun->rsv_nexus.targ_target.id)) {
+		if (lun->res_idx != residx) {
 			ctsio->scsi_status = SCSI_STATUS_RESERV_CONFLICT;
 			ctsio->io_hdr.status = CTL_SCSI_ERROR;
 			retval = 1;
@@ -11299,11 +11305,8 @@ ctl_scsiio_lun_check(struct ctl_softc *ctl_softc, struct ctl_lun *lun,
 		}
 	}
 
-	if ( (lun->flags & CTL_LUN_PR_RESERVED)
+	if ((lun->flags & CTL_LUN_PR_RESERVED)
 	 && ((entry->flags & CTL_CMD_FLAG_ALLOW_ON_PR_RESV) == 0)) {
-		uint32_t residx;
-
-		residx = ctl_get_resindex(&ctsio->io_hdr.nexus);
 		/*
 		 * if we aren't registered or it's a res holder type
 		 * reservation and this isn't the res holder then set a
@@ -11862,12 +11865,14 @@ ctl_scsiio_precheck(struct ctl_softc *ctl_softc, struct ctl_scsiio *ctsio)
 }
 
 const struct ctl_cmd_entry *
-ctl_get_cmd_entry(struct ctl_scsiio *ctsio)
+ctl_get_cmd_entry(struct ctl_scsiio *ctsio, int *sa)
 {
 	const struct ctl_cmd_entry *entry;
 	int service_action;
 
 	entry = &ctl_cmd_table[ctsio->cdb[0]];
+	if (sa)
+		*sa = ((entry->flags & CTL_CMD_FLAG_SA5) != 0);
 	if (entry->flags & CTL_CMD_FLAG_SA5) {
 		service_action = ctsio->cdb[1] & SERVICE_ACTION_MASK;
 		entry = &((const struct ctl_cmd_entry *)
@@ -11880,12 +11885,20 @@ const struct ctl_cmd_entry *
 ctl_validate_command(struct ctl_scsiio *ctsio)
 {
 	const struct ctl_cmd_entry *entry;
-	int i;
+	int i, sa;
 	uint8_t diff;
 
-	entry = ctl_get_cmd_entry(ctsio);
+	entry = ctl_get_cmd_entry(ctsio, &sa);
 	if (entry->execute == NULL) {
-		ctl_set_invalid_opcode(ctsio);
+		if (sa)
+			ctl_set_invalid_field(ctsio,
+					      /*sks_valid*/ 1,
+					      /*command*/ 1,
+					      /*field*/ 1,
+					      /*bit_valid*/ 1,
+					      /*bit*/ 4);
+		else
+			ctl_set_invalid_opcode(ctsio);
 		ctl_done((union ctl_io *)ctsio);
 		return (NULL);
 	}
@@ -11939,7 +11952,7 @@ ctl_scsiio(struct ctl_scsiio *ctsio)
 
 	CTL_DEBUG_PRINT(("ctl_scsiio cdb[0]=%02X\n", ctsio->cdb[0]));
 
-	entry = ctl_get_cmd_entry(ctsio);
+	entry = ctl_get_cmd_entry(ctsio, NULL);
 
 	/*
 	 * If this I/O has been aborted, just send it straight to
@@ -12159,9 +12172,10 @@ ctl_i_t_nexus_reset(union ctl_io *io)
 {
 	struct ctl_softc *softc = control_softc;
 	struct ctl_lun *lun;
-	uint32_t initindex;
+	uint32_t initindex, residx;
 
 	initindex = ctl_get_initindex(&io->io_hdr.nexus);
+	residx = ctl_get_resindex(&io->io_hdr.nexus);
 	mtx_lock(&softc->ctl_lock);
 	STAILQ_FOREACH(lun, &softc->lun_list, links) {
 		mtx_lock(&lun->lun_lock);
@@ -12171,6 +12185,8 @@ ctl_i_t_nexus_reset(union ctl_io *io)
 #ifdef CTL_WITH_CA
 		ctl_clear_mask(lun->have_ca, initindex);
 #endif
+		if ((lun->flags & CTL_LUN_RESERVED) && (lun->res_idx == residx))
+			lun->flags &= ~CTL_LUN_RESERVED;
 		lun->pending_ua[initindex] |= CTL_UA_I_T_NEXUS_LOSS;
 		mtx_unlock(&lun->lun_lock);
 	}
@@ -12469,7 +12485,7 @@ ctl_handle_isc(union ctl_io *io)
 		 * This is only used in SER_ONLY mode.
 		 */
 		free_io = 0;
-		entry = ctl_get_cmd_entry(&io->scsiio);
+		entry = ctl_get_cmd_entry(&io->scsiio, NULL);
 		mtx_lock(&lun->lun_lock);
 		if (ctl_scsiio_lun_check(ctl_softc, lun,
 		    entry, (struct ctl_scsiio *)io) != 0) {
@@ -12549,7 +12565,7 @@ ctl_cmd_pattern_match(struct ctl_scsiio *ctsio, struct ctl_error_desc *desc)
 	if ((pattern & CTL_LUN_PAT_MASK) == CTL_LUN_PAT_ANY)
 		return (CTL_LUN_PAT_ANY);
 
-	entry = ctl_get_cmd_entry(ctsio);
+	entry = ctl_get_cmd_entry(ctsio, NULL);
 
 	filtered_pattern = entry->pattern & pattern;
 
@@ -12571,7 +12587,7 @@ ctl_cmd_pattern_match(struct ctl_scsiio *ctsio, struct ctl_error_desc *desc)
 	 */
 	if (filtered_pattern & CTL_LUN_PAT_RANGE) {
 		uint64_t lba1;
-		uint32_t len1;
+		uint64_t len1;
 		ctl_action action;
 		int retval;
 
