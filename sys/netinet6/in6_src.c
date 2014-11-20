@@ -85,6 +85,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 
 #include <net/if.h>
+#include <net/if_var.h>
 #include <net/if_dl.h>
 #include <net/route.h>
 #include <net/if_llatbl.h>
@@ -620,7 +621,7 @@ selectroute(struct sockaddr_in6 *dstsock, struct ip6_pktopts *opts,
 		rt = ron->ro_rt;
 		ifp = rt->rt_ifp;
 		IF_AFDATA_RLOCK(ifp);
-		la = lla_lookup(LLTABLE6(ifp), 0, (struct sockaddr *)&sin6_next->sin6_addr);
+		la = lla_lookup(LLTABLE6(ifp), 0, (struct sockaddr *)sin6_next);
 		IF_AFDATA_RUNLOCK(ifp);
 		if (la != NULL) 
 			LLE_RUNLOCK(la);

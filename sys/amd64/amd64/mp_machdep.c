@@ -69,10 +69,7 @@ __FBSDID("$FreeBSD$");
 #include <machine/smp.h>
 #include <machine/specialreg.h>
 #include <machine/tss.h>
-
-#ifdef XENHVM
-#include <xen/hvm.h>
-#endif
+#include <machine/cpu.h>
 
 #define WARMBOOT_TARGET		0
 #define WARMBOOT_OFF		(KERNBASE + 0x0467)
@@ -125,6 +122,11 @@ u_long *ipi_rendezvous_counts[MAXCPU];
 static u_long *ipi_hardclock_counts[MAXCPU];
 #endif
 
+/* Default cpu_ops implementation. */
+struct cpu_ops cpu_ops = {
+	.ipi_vectored = lapic_ipi_vectored
+};
+
 extern inthand_t IDTVEC(fast_syscall), IDTVEC(fast_syscall32);
 
 extern int pmap_pcid_enabled;
@@ -155,7 +157,7 @@ int cpu_apic_ids[MAXCPU];
 int apic_cpuids[MAX_APIC_ID + 1];
 
 /* Holds pending bitmap based IPIs per CPU */
-static volatile u_int cpu_ipi_pending[MAXCPU];
+volatile u_int cpu_ipi_pending[MAXCPU];
 
 static u_int boot_address;
 static int cpu_logical;			/* logical cpus per core */
@@ -726,10 +728,8 @@ init_secondary(void)
 	/* set up FPU state on the AP */
 	fpuinit();
 
-#ifdef XENHVM
-	/* register vcpu_info area */
-	xen_hvm_init_cpu();
-#endif
+	if (cpu_ops.cpu_init)
+		cpu_ops.cpu_init();
 
 	/* A quick check from sanity claus */
 	cpuid = PCPU_GET(cpuid);
@@ -1125,7 +1125,7 @@ ipi_send_cpu(int cpu, u_int ipi)
 		if (old_pending)
 			return;
 	}
-	lapic_ipi_vectored(ipi, cpu_apic_ids[cpu]);
+	cpu_ops.ipi_vectored(ipi, cpu_apic_ids[cpu]);
 }
 
 /*
@@ -1395,7 +1395,7 @@ ipi_all_but_self(u_int ipi)
 		CPU_OR_ATOMIC(&ipi_nmi_pending, &other_cpus);
 
 	CTR2(KTR_SMP, "%s: ipi: %x", __func__, ipi);
-	lapic_ipi_vectored(ipi, APIC_IPI_DEST_OTHERS);
+	cpu_ops.ipi_vectored(ipi, APIC_IPI_DEST_OTHERS);
 }
 
 int
@@ -1460,8 +1460,9 @@ cpususpend_handler(void)
 {
 	u_int cpu;
 
-	cpu = PCPU_GET(cpuid);
+	mtx_assert(&smp_ipi_mtx, MA_NOTOWNED);
 
+	cpu = PCPU_GET(cpuid);
 	if (savectx(susppcbs[cpu])) {
 		ctx_fpusave(susppcbs[cpu]->pcb_fpususpend);
 		wbinvd();
@@ -1480,11 +1481,18 @@ cpususpend_handler(void)
 	while (!CPU_ISSET(cpu, &started_cpus))
 		ia32_pause();
 
+	if (cpu_ops.cpu_resume)
+		cpu_ops.cpu_resume();
+	if (vmm_resume_p)
+		vmm_resume_p();
+
 	/* Resume MCA and local APIC */
 	mca_resume();
 	lapic_setup(0);
 
 	CPU_CLR_ATOMIC(cpu, &started_cpus);
+	/* Indicate that we are resumed */
+	CPU_CLR_ATOMIC(cpu, &suspended_cpus);
 }
 
 /*

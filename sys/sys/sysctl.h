@@ -389,7 +389,7 @@ SYSCTL_ALLOWED_TYPES(UINT64, uint64_t *a; unsigned long long *b; );
 	    SYSCTL_ADD_ASSERT_TYPE(UINT64, ptr), 0,			\
 	    sysctl_handle_64, "QU", __DESCR(descr))
 
-/* Oid for a 64-bin unsigned counter(9).  The pointer must be non NULL. */
+/* Oid for a 64-bit unsigned counter(9).  The pointer must be non NULL. */
 #define	SYSCTL_COUNTER_U64(parent, nbr, name, access, ptr, val, descr)	\
 	SYSCTL_ASSERT_TYPE(UINT64, ptr, parent, name);			\
 	SYSCTL_OID(parent, nbr, name,					\
@@ -530,6 +530,7 @@ SYSCTL_ALLOWED_TYPES(UINT64, uint64_t *a; unsigned long long *b; );
 #define	KERN_PROC_PS_STRINGS	38	/* get ps_strings location */
 #define	KERN_PROC_UMASK		39	/* process umask */
 #define	KERN_PROC_OSREL		40	/* osreldate for process binary */
+#define	KERN_PROC_SIGTRAMP	41	/* signal trampoline location */
 
 /*
  * KERN_IPC identifiers

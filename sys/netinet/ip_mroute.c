@@ -96,6 +96,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/counter.h>
 
 #include <net/if.h>
+#include <net/if_var.h>
 #include <net/netisr.h>
 #include <net/route.h>
 #include <net/vnet.h>
@@ -609,7 +610,7 @@ static void
 if_detached_event(void *arg __unused, struct ifnet *ifp)
 {
     vifi_t vifi;
-    int i;
+    u_long i;
 
     MROUTER_LOCK();
 
@@ -634,8 +635,8 @@ if_detached_event(void *arg __unused, struct ifnet *ifp)
 		continue;
 	for (i = 0; i < mfchashsize; i++) {
 		struct mfc *rt, *nrt;
-		for (rt = LIST_FIRST(&V_mfchashtbl[i]); rt; rt = nrt) {
-			nrt = LIST_NEXT(rt, mfc_hash);
+
+		LIST_FOREACH_SAFE(rt, &V_mfchashtbl[i], mfc_hash, nrt) {
 			if (rt->mfc_parent == vifi) {
 				expire_mfc(rt);
 			}
@@ -705,7 +706,7 @@ static int
 X_ip_mrouter_done(void)
 {
     struct ifnet *ifp;
-    int i;
+    u_long i;
     vifi_t vifi;
 
     MROUTER_LOCK();
@@ -753,8 +754,8 @@ X_ip_mrouter_done(void)
      */
     for (i = 0; i < mfchashsize; i++) {
 	struct mfc *rt, *nrt;
-	for (rt = LIST_FIRST(&V_mfchashtbl[i]); rt; rt = nrt) {
-		nrt = LIST_NEXT(rt, mfc_hash);
+
+	LIST_FOREACH_SAFE(rt, &V_mfchashtbl[i], mfc_hash, nrt) {
 		expire_mfc(rt);
 	}
     }
@@ -797,7 +798,7 @@ set_assert(int i)
 int
 set_api_config(uint32_t *apival)
 {
-    int i;
+    u_long i;
 
     /*
      * We can set the API capabilities only if it is the first operation
@@ -1433,7 +1434,7 @@ non_fatal:
 static void
 expire_upcalls(void *arg)
 {
-    int i;
+    u_long i;
 
     CURVNET_SET((struct vnet *) arg);
 
@@ -1445,9 +1446,7 @@ expire_upcalls(void *arg)
 	if (V_nexpire[i] == 0)
 	    continue;
 
-	for (rt = LIST_FIRST(&V_mfchashtbl[i]); rt; rt = nrt) {
-		nrt = LIST_NEXT(rt, mfc_hash);
-
+	LIST_FOREACH_SAFE(rt, &V_mfchashtbl[i], mfc_hash, nrt) {
 		if (TAILQ_EMPTY(&rt->mfc_stall))
 			continue;
 

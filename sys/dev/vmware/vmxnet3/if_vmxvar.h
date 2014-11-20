@@ -228,7 +228,7 @@ struct vmxnet3_softc {
 	struct ifmedia			 vmx_media;
 	eventhandler_tag		 vmx_vlan_attach;
 	eventhandler_tag		 vmx_vlan_detach;
-	uint8_t				 vmx_vlan_filter[4096/32];
+	uint32_t			 vmx_vlan_filter[4096/32];
 	uint8_t				 vmx_lladdr[ETHER_ADDR_LEN];
 };
 
@@ -246,17 +246,6 @@ struct vmxnet3_softc {
  * this value constant.
  */
 #define VMXNET3_DRIVER_VERSION 0x00010000
-
-/*
- * Convert the FreeBSD version in to something the hypervisor
- * understands. This is apparently what VMware's driver reports
- * so mimic it even though it probably is not required.
- */
-#define VMXNET3_GUEST_OS_VERSION \
-   (((__FreeBSD_version / 100000) << 14)	| \
-    (((__FreeBSD_version / 1000) % 100)	<< 6 )	| \
-    (((__FreeBSD_version / 100) % 10) << 30)	| \
-    ((__FreeBSD_version % 100) << 22))
 
 /*
  * Max descriptors per Tx packet. We must limit the size of the

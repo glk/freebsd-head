@@ -45,6 +45,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/capability.h>
+#include <sys/condvar.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -57,11 +58,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/file.h>
 #include <sys/filio.h>
 #include <sys/jail.h>
+#include <sys/mman.h>
 #include <sys/mount.h>
 #include <sys/mbuf.h>
 #include <sys/protosw.h>
 #include <sys/rwlock.h>
 #include <sys/sf_buf.h>
+#include <sys/sf_sync.h>
 #include <sys/sysent.h>
 #include <sys/socket.h>
 #include <sys/socketvar.h>
@@ -86,9 +89,10 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_param.h>
 #include <vm/vm_object.h>
 #include <vm/vm_page.h>
-#include <vm/vm_pageout.h>
+#include <vm/vm_pager.h>
 #include <vm/vm_kern.h>
 #include <vm/vm_extern.h>
+#include <vm/uma.h>
 
 #if defined(INET) || defined(INET6)
 #ifdef SCTP
@@ -121,20 +125,13 @@ counter_u64_t sfstat[sizeof(struct sfstat) / sizeof(uint64_t)];
 /*
  * sendfile(2)-related variables and associated sysctls
  */
-int nsfbufs;
-int nsfbufspeak;
-int nsfbufsused;
+static SYSCTL_NODE(_kern_ipc, OID_AUTO, sendfile, CTLFLAG_RW, 0,
+    "sendfile(2) tunables");
 static int sfreadahead = 1;
+SYSCTL_INT(_kern_ipc_sendfile, OID_AUTO, readahead, CTLFLAG_RW,
+    &sfreadahead, 0, "Number of sendfile(2) read-ahead MAXBSIZE blocks");
 
-SYSCTL_INT(_kern_ipc, OID_AUTO, nsfbufs, CTLFLAG_RDTUN, &nsfbufs, 0,
-    "Maximum number of sendfile(2) sf_bufs available");
-SYSCTL_INT(_kern_ipc, OID_AUTO, nsfbufspeak, CTLFLAG_RD, &nsfbufspeak, 0,
-    "Number of sendfile(2) sf_bufs at peak usage");
-SYSCTL_INT(_kern_ipc, OID_AUTO, nsfbufsused, CTLFLAG_RD, &nsfbufsused, 0,
-    "Number of sendfile(2) sf_bufs in use");
-SYSCTL_INT(_kern_ipc, OID_AUTO, sfreadahead, CTLFLAG_RW, &sfreadahead, 0,
-    "Number of sendfile(2) read-ahead MAXBSIZE blocks");
-
+static uma_zone_t	zone_sfsync;
 
 static void
 sfstat_init(const void *unused)
@@ -144,6 +141,18 @@ sfstat_init(const void *unused)
 	    M_WAITOK);
 }
 SYSINIT(sfstat, SI_SUB_MBUF, SI_ORDER_FIRST, sfstat_init, NULL);
+
+static void
+sf_sync_init(const void *unused)
+{
+
+	zone_sfsync = uma_zcreate("sendfile_sync", sizeof(struct sendfile_sync),
+	    NULL, NULL,
+	    NULL, NULL,
+	    UMA_ALIGN_CACHE,
+	    0);
+}
+SYSINIT(sf_sync, SI_SUB_MBUF, SI_ORDER_FIRST, sf_sync_init, NULL);
 
 static int
 sfstat_sysctl(SYSCTL_HANDLER_ARGS)
@@ -1850,14 +1859,6 @@ getsockaddr(namp, uaddr, len)
 	return (error);
 }
 
-#include <sys/condvar.h>
-
-struct sendfile_sync {
-	struct mtx	mtx;
-	struct cv	cv;
-	unsigned	count;
-};
-
 /*
  * Detach mapped page and release resources back to the system.
  */
@@ -1879,15 +1880,94 @@ sf_buf_mext(struct mbuf *mb, void *addr, void *args)
 	if (m->wire_count == 0 && m->object == NULL)
 		vm_page_free(m);
 	vm_page_unlock(m);
-	if (addr == NULL)
-		return (EXT_FREE_OK);
-	sfs = addr;
+	if (addr != NULL) {
+		sfs = addr;
+		sf_sync_deref(sfs);
+	}
+	return (EXT_FREE_OK);
+}
+
+void
+sf_sync_deref(struct sendfile_sync *sfs)
+{
+
+	if (sfs == NULL)
+		return;
+
 	mtx_lock(&sfs->mtx);
 	KASSERT(sfs->count> 0, ("Sendfile sync botchup count == 0"));
 	if (--sfs->count == 0)
 		cv_signal(&sfs->cv);
 	mtx_unlock(&sfs->mtx);
-	return (EXT_FREE_OK);
+}
+
+/*
+ * Allocate a sendfile_sync state structure.
+ *
+ * For now this only knows about the "sleep" sync, but later it will
+ * grow various other personalities.
+ */
+struct sendfile_sync *
+sf_sync_alloc(uint32_t flags)
+{
+	struct sendfile_sync *sfs;
+
+	sfs = uma_zalloc(zone_sfsync, M_WAITOK | M_ZERO);
+	mtx_init(&sfs->mtx, "sendfile", NULL, MTX_DEF);
+	cv_init(&sfs->cv, "sendfile");
+	sfs->flags = flags;
+
+	return (sfs);
+}
+
+/*
+ * Take a reference to a sfsync instance.
+ *
+ * This has to map 1:1 to free calls coming in via sf_buf_mext(),
+ * so typically this will be referenced once for each mbuf allocated.
+ */
+void
+sf_sync_ref(struct sendfile_sync *sfs)
+{
+
+	if (sfs == NULL)
+		return;
+
+	mtx_lock(&sfs->mtx);
+	sfs->count++;
+	mtx_unlock(&sfs->mtx);
+}
+
+void
+sf_sync_syscall_wait(struct sendfile_sync *sfs)
+{
+
+	if (sfs == NULL)
+		return;
+
+	mtx_lock(&sfs->mtx);
+	if (sfs->count != 0)
+		cv_wait(&sfs->cv, &sfs->mtx);
+	KASSERT(sfs->count == 0, ("sendfile sync still busy"));
+	mtx_unlock(&sfs->mtx);
+}
+
+void
+sf_sync_free(struct sendfile_sync *sfs)
+{
+
+	if (sfs == NULL)
+		return;
+
+	/*
+	 * XXX we should ensure that nothing else has this
+	 * locked before freeing.
+	 */
+	mtx_lock(&sfs->mtx);
+	KASSERT(sfs->count == 0, ("sendfile sync still busy"));
+	cv_destroy(&sfs->cv);
+	mtx_destroy(&sfs->mtx);
+	uma_zfree(zone_sfsync, sfs);
 }
 
 /*
@@ -1916,11 +1996,18 @@ do_sendfile(struct thread *td, struct sendfile_args *uap, int compat)
 	struct file *fp;
 	cap_rights_t rights;
 	int error;
+	off_t sbytes;
+	struct sendfile_sync *sfs;
 
+	/*
+	 * File offset must be positive.  If it goes beyond EOF
+	 * we send only the header/trailer and no payload data.
+	 */
 	if (uap->offset < 0)
 		return (EINVAL);
 
 	hdr_uio = trl_uio = NULL;
+	sfs = NULL;
 
 	if (uap->hdtr != NULL) {
 		error = copyin(uap->hdtr, &hdtr, sizeof(hdtr));
@@ -1950,10 +2037,34 @@ do_sendfile(struct thread *td, struct sendfile_args *uap, int compat)
 		goto out;
 	}
 
+	/*
+	 * If we need to wait for completion, initialise the sfsync
+	 * state here.
+	 */
+	if (uap->flags & SF_SYNC)
+		sfs = sf_sync_alloc(uap->flags & SF_SYNC);
+
 	error = fo_sendfile(fp, uap->s, hdr_uio, trl_uio, uap->offset,
-	    uap->nbytes, uap->sbytes, uap->flags, compat ? SFK_COMPAT : 0, td);
+	    uap->nbytes, &sbytes, uap->flags, compat ? SFK_COMPAT : 0, sfs, td);
+
+	/*
+	 * If appropriate, do the wait and free here.
+	 */
+	if (sfs != NULL) {
+		sf_sync_syscall_wait(sfs);
+		sf_sync_free(sfs);
+	}
+
+	/*
+	 * XXX Should we wait until the send has completed before freeing the source
+	 * file handle? It's the previous behaviour, sure, but is it required?
+	 * We've wired down the page references after all.
+	 */
 	fdrop(fp, td);
 
+	if (uap->sbytes != NULL) {
+		copyout(&sbytes, uap->sbytes, sizeof(off_t));
+	}
 out:
 	free(hdr_uio, M_IOV);
 	free(trl_uio, M_IOV);
@@ -1978,79 +2089,239 @@ freebsd4_sendfile(struct thread *td, struct freebsd4_sendfile_args *uap)
 }
 #endif /* COMPAT_FREEBSD4 */
 
-int
-vn_sendfile(struct file *fp, int sockfd, struct uio *hdr_uio,
-    struct uio *trl_uio, off_t offset, size_t nbytes, off_t *sent, int flags,
-    int kflags, struct thread *td)
+static int
+sendfile_readpage(vm_object_t obj, struct vnode *vp, int nd,
+    off_t off, int xfsize, int bsize, struct thread *td, vm_page_t *res)
 {
-	struct vnode *vp = fp->f_vnode;
-	struct file *sock_fp;
-	struct vm_object *obj = NULL;
-	struct socket *so = NULL;
-	struct mbuf *m = NULL;
-	struct sf_buf *sf;
-	struct vm_page *pg;
-	struct vattr va;
-	struct sendfile_sync *sfs = NULL;
-	cap_rights_t rights;
-	off_t off, xfsize, fsbytes = 0, sbytes = 0, rem = 0;
-	int bsize, error, hdrlen = 0, mnw = 0;
+	vm_page_t m;
+	vm_pindex_t pindex;
+	ssize_t resid;
+	int error, readahead, rv;
 
-	vn_lock(vp, LK_SHARED | LK_RETRY);
-	if (vp->v_type == VREG) {
-		bsize = vp->v_mount->mnt_stat.f_iosize;
-		if (nbytes == 0) {
-			error = VOP_GETATTR(vp, &va, td->td_ucred);
-			if (error != 0) {
-				VOP_UNLOCK(vp, 0);
-				obj = NULL;
-				goto out;
+	pindex = OFF_TO_IDX(off);
+	VM_OBJECT_WLOCK(obj);
+	m = vm_page_grab(obj, pindex, (vp != NULL ? VM_ALLOC_NOBUSY |
+	    VM_ALLOC_IGN_SBUSY : 0) | VM_ALLOC_WIRED | VM_ALLOC_NORMAL);
+
+	/*
+	 * Check if page is valid for what we need, otherwise initiate I/O.
+	 *
+	 * The non-zero nd argument prevents disk I/O, instead we
+	 * return the caller what he specified in nd.  In particular,
+	 * if we already turned some pages into mbufs, nd == EAGAIN
+	 * and the main function send them the pages before we come
+	 * here again and block.
+	 */
+	if (m->valid != 0 && vm_page_is_valid(m, off & PAGE_MASK, xfsize)) {
+		if (vp == NULL)
+			vm_page_xunbusy(m);
+		VM_OBJECT_WUNLOCK(obj);
+		*res = m;
+		return (0);
+	} else if (nd != 0) {
+		if (vp == NULL)
+			vm_page_xunbusy(m);
+		error = nd;
+		goto free_page;
+	}
+
+	/*
+	 * Get the page from backing store.
+	 */
+	error = 0;
+	if (vp != NULL) {
+		VM_OBJECT_WUNLOCK(obj);
+		readahead = sfreadahead * MAXBSIZE;
+
+		/*
+		 * Use vn_rdwr() instead of the pager interface for
+		 * the vnode, to allow the read-ahead.
+		 *
+		 * XXXMAC: Because we don't have fp->f_cred here, we
+		 * pass in NOCRED.  This is probably wrong, but is
+		 * consistent with our original implementation.
+		 */
+		error = vn_rdwr(UIO_READ, vp, NULL, readahead, trunc_page(off),
+		    UIO_NOCOPY, IO_NODELOCKED | IO_VMIO | ((readahead /
+		    bsize) << IO_SEQSHIFT), td->td_ucred, NOCRED, &resid, td);
+		SFSTAT_INC(sf_iocnt);
+		VM_OBJECT_WLOCK(obj);
+	} else {
+		if (vm_pager_has_page(obj, pindex, NULL, NULL)) {
+			rv = vm_pager_get_pages(obj, &m, 1, 0);
+			SFSTAT_INC(sf_iocnt);
+			m = vm_page_lookup(obj, pindex);
+			if (m == NULL)
+				error = EIO;
+			else if (rv != VM_PAGER_OK) {
+				vm_page_lock(m);
+				vm_page_free(m);
+				vm_page_unlock(m);
+				m = NULL;
+				error = EIO;
 			}
-			rem = va.va_size;
-		} else
-			rem = nbytes;
-		obj = vp->v_object;
-		if (obj != NULL) {
-			/*
-			 * Temporarily increase the backing VM
-			 * object's reference count so that a forced
-			 * reclamation of its vnode does not
-			 * immediately destroy it.
-			 */
-			VM_OBJECT_WLOCK(obj);
-			if ((obj->flags & OBJ_DEAD) == 0) {
-				vm_object_reference_locked(obj);
-				VM_OBJECT_WUNLOCK(obj);
-			} else {
-				VM_OBJECT_WUNLOCK(obj);
-				obj = NULL;
-			}
+		} else {
+			pmap_zero_page(m);
+			m->valid = VM_PAGE_BITS_ALL;
+			m->dirty = 0;
 		}
-	} else
-		bsize = 0;	/* silence gcc */
-	VOP_UNLOCK(vp, 0);
-	if (obj == NULL) {
+		if (m != NULL)
+			vm_page_xunbusy(m);
+	}
+	if (error == 0) {
+		*res = m;
+	} else if (m != NULL) {
+free_page:
+		vm_page_lock(m);
+		vm_page_unwire(m, 0);
+
+		/*
+		 * See if anyone else might know about this page.  If
+		 * not and it is not valid, then free it.
+		 */
+		if (m->wire_count == 0 && m->valid == 0 && !vm_page_busied(m))
+			vm_page_free(m);
+		vm_page_unlock(m);
+	}
+	KASSERT(error != 0 || (m->wire_count > 0 &&
+	    vm_page_is_valid(m, off & PAGE_MASK, xfsize)),
+	    ("wrong page state m %p off %#jx xfsize %d", m, (uintmax_t)off,
+	    xfsize));
+	VM_OBJECT_WUNLOCK(obj);
+	return (error);
+}
+
+static int
+sendfile_getobj(struct thread *td, struct file *fp, vm_object_t *obj_res,
+    struct vnode **vp_res, struct shmfd **shmfd_res, off_t *obj_size,
+    int *bsize)
+{
+	struct vattr va;
+	vm_object_t obj;
+	struct vnode *vp;
+	struct shmfd *shmfd;
+	int error;
+
+	vp = *vp_res = NULL;
+	obj = NULL;
+	shmfd = *shmfd_res = NULL;
+	*bsize = 0;
+
+	/*
+	 * The file descriptor must be a regular file and have a
+	 * backing VM object.
+	 */
+	if (fp->f_type == DTYPE_VNODE) {
+		vp = fp->f_vnode;
+		vn_lock(vp, LK_SHARED | LK_RETRY);
+		if (vp->v_type != VREG) {
+			error = EINVAL;
+			goto out;
+		}
+		*bsize = vp->v_mount->mnt_stat.f_iosize;
+		error = VOP_GETATTR(vp, &va, td->td_ucred);
+		if (error != 0)
+			goto out;
+		*obj_size = va.va_size;
+		obj = vp->v_object;
+		if (obj == NULL) {
+			error = EINVAL;
+			goto out;
+		}
+	} else if (fp->f_type == DTYPE_SHM) {
+		shmfd = fp->f_data;
+		obj = shmfd->shm_object;
+		*obj_size = shmfd->shm_size;
+	} else {
 		error = EINVAL;
+		goto out;
+	}
+
+	VM_OBJECT_WLOCK(obj);
+	if ((obj->flags & OBJ_DEAD) != 0) {
+		VM_OBJECT_WUNLOCK(obj);
+		error = EBADF;
 		goto out;
 	}
 
 	/*
-	 * The socket must be a stream socket and connected.
-	 * Remember if it a blocking or non-blocking socket.
+	 * Temporarily increase the backing VM object's reference
+	 * count so that a forced reclamation of its vnode does not
+	 * immediately destroy it.
 	 */
-	error = getsock_cap(td->td_proc->p_fd, sockfd,
-	    cap_rights_init(&rights, CAP_SEND), &sock_fp, NULL);
+	vm_object_reference_locked(obj);
+	VM_OBJECT_WUNLOCK(obj);
+	*obj_res = obj;
+	*vp_res = vp;
+	*shmfd_res = shmfd;
+
+out:
+	if (vp != NULL)
+		VOP_UNLOCK(vp, 0);
+	return (error);
+}
+
+static int
+kern_sendfile_getsock(struct thread *td, int s, struct file **sock_fp,
+    struct socket **so)
+{
+	cap_rights_t rights;
+	int error;
+
+	*sock_fp = NULL;
+	*so = NULL;
+
+	/*
+	 * The socket must be a stream socket and connected.
+	 */
+	error = getsock_cap(td->td_proc->p_fd, s, cap_rights_init(&rights,
+	    CAP_SEND), sock_fp, NULL);
+	if (error != 0)
+		return (error);
+	*so = (*sock_fp)->f_data;
+	if ((*so)->so_type != SOCK_STREAM)
+		return (EINVAL);
+	if (((*so)->so_state & SS_ISCONNECTED) == 0)
+		return (ENOTCONN);
+	return (0);
+}
+
+int
+vn_sendfile(struct file *fp, int sockfd, struct uio *hdr_uio,
+    struct uio *trl_uio, off_t offset, size_t nbytes, off_t *sent, int flags,
+    int kflags, struct sendfile_sync *sfs, struct thread *td)
+{
+	struct file *sock_fp;
+	struct vnode *vp;
+	struct vm_object *obj;
+	struct socket *so;
+	struct mbuf *m;
+	struct sf_buf *sf;
+	struct vm_page *pg;
+	struct shmfd *shmfd;
+	struct vattr va;
+	off_t off, xfsize, fsbytes, sbytes, rem, obj_size;
+	int error, bsize, nd, hdrlen, mnw;
+
+	pg = NULL;
+	obj = NULL;
+	so = NULL;
+	m = NULL;
+	fsbytes = sbytes = 0;
+	hdrlen = mnw = 0;
+	rem = nbytes;
+	obj_size = 0;
+
+	error = sendfile_getobj(td, fp, &obj, &vp, &shmfd, &obj_size, &bsize);
+	if (error != 0)
+		return (error);
+	if (rem == 0)
+		rem = obj_size;
+
+	error = kern_sendfile_getsock(td, sockfd, &sock_fp, &so);
 	if (error != 0)
 		goto out;
-	so = sock_fp->f_data;
-	if (so->so_type != SOCK_STREAM) {
-		error = EINVAL;
-		goto out;
-	}
-	if ((so->so_state & SS_ISCONNECTED) == 0) {
-		error = ENOTCONN;
-		goto out;
-	}
+
 	/*
 	 * Do not wait on memory allocations but return ENOMEM for
 	 * caller to retry later.
@@ -2058,12 +2329,6 @@ vn_sendfile(struct file *fp, int sockfd, struct uio *hdr_uio,
 	 */
 	if (flags & SF_MNOWAIT)
 		mnw = 1;
-
-	if (flags & SF_SYNC) {
-		sfs = malloc(sizeof *sfs, M_TEMP, M_WAITOK | M_ZERO);
-		mtx_init(&sfs->mtx, "sendfile", NULL, MTX_DEF);
-		cv_init(&sfs->cv, "sendfile");
-	}
 
 #ifdef MAC
 	error = mac_socket_check_send(td->td_ucred, so);
@@ -2123,7 +2388,7 @@ vn_sendfile(struct file *fp, int sockfd, struct uio *hdr_uio,
 		int done;
 
 		if ((nbytes != 0 && nbytes == fsbytes) ||
-		    (nbytes == 0 && va.va_size == fsbytes))
+		    (nbytes == 0 && obj_size == fsbytes))
 			break;
 
 		mtail = NULL;
@@ -2197,13 +2462,16 @@ retry_space:
 		 */
 		space -= hdrlen;
 
-		error = vn_lock(vp, LK_SHARED);
-		if (error != 0)
-			goto done;
-		error = VOP_GETATTR(vp, &va, td->td_ucred);
-		if (error != 0 || off >= va.va_size) {
-			VOP_UNLOCK(vp, 0);
-			goto done;
+		if (vp != NULL) {
+			error = vn_lock(vp, LK_SHARED);
+			if (error != 0)
+				goto done;
+			error = VOP_GETATTR(vp, &va, td->td_ucred);
+			if (error != 0 || off >= va.va_size) {
+				VOP_UNLOCK(vp, 0);
+				goto done;
+			}
+			obj_size = va.va_size;
 		}
 
 		/*
@@ -2211,7 +2479,6 @@ retry_space:
 		 * dumped into socket buffer.
 		 */
 		while (space > loopbytes) {
-			vm_pindex_t pindex;
 			vm_offset_t pgoff;
 			struct mbuf *m0;
 
@@ -2221,11 +2488,10 @@ retry_space:
 			 * or the passed in nbytes.
 			 */
 			pgoff = (vm_offset_t)(off & PAGE_MASK);
-			if (nbytes)
-				rem = (nbytes - fsbytes - loopbytes);
-			else
-				rem = va.va_size -
-				    offset - fsbytes - loopbytes;
+			rem = obj_size - offset;
+			if (nbytes != 0)
+				rem = omin(rem, nbytes);
+			rem -= fsbytes + loopbytes;
 			xfsize = omin(PAGE_SIZE - pgoff, rem);
 			xfsize = omin(space - loopbytes, xfsize);
 			if (xfsize <= 0) {
@@ -2237,59 +2503,15 @@ retry_space:
 			 * Attempt to look up the page.  Allocate
 			 * if not found or wait and loop if busy.
 			 */
-			pindex = OFF_TO_IDX(off);
-			VM_OBJECT_WLOCK(obj);
-			pg = vm_page_grab(obj, pindex, VM_ALLOC_NOBUSY |
-			    VM_ALLOC_IGN_SBUSY | VM_ALLOC_NORMAL |
-			    VM_ALLOC_WIRED);
-
-			/*
-			 * Check if page is valid for what we need,
-			 * otherwise initiate I/O.
-			 * If we already turned some pages into mbufs,
-			 * send them off before we come here again and
-			 * block.
-			 */
-			if (pg->valid && vm_page_is_valid(pg, pgoff, xfsize))
-				VM_OBJECT_WUNLOCK(obj);
-			else if (m != NULL)
-				error = EAGAIN;	/* send what we already got */
-			else if (flags & SF_NODISKIO)
-				error = EBUSY;
-			else {
-				ssize_t resid;
-				int readahead = sfreadahead * MAXBSIZE;
-
-				VM_OBJECT_WUNLOCK(obj);
-
-				/*
-				 * Get the page from backing store.
-				 * XXXMAC: Because we don't have fp->f_cred
-				 * here, we pass in NOCRED.  This is probably
-				 * wrong, but is consistent with our original
-				 * implementation.
-				 */
-				error = vn_rdwr(UIO_READ, vp, NULL, readahead,
-				    trunc_page(off), UIO_NOCOPY, IO_NODELOCKED |
-				    IO_VMIO | ((readahead / bsize) << IO_SEQSHIFT),
-				    td->td_ucred, NOCRED, &resid, td);
-				SFSTAT_INC(sf_iocnt);
-				if (error != 0)
-					VM_OBJECT_WLOCK(obj);
-			}
+			if (m != NULL)
+				nd = EAGAIN; /* send what we already got */
+			else if ((flags & SF_NODISKIO) != 0)
+				nd = EBUSY;
+			else
+				nd = 0;
+			error = sendfile_readpage(obj, vp, nd, off,
+			    xfsize, bsize, td, &pg);
 			if (error != 0) {
-				vm_page_lock(pg);
-				vm_page_unwire(pg, 0);
-				/*
-				 * See if anyone else might know about
-				 * this page.  If not and it is not valid,
-				 * then free it.
-				 */
-				if (pg->wire_count == 0 && pg->valid == 0 &&
-				    !vm_page_busied(pg))
-					vm_page_free(pg);
-				vm_page_unlock(pg);
-				VM_OBJECT_WUNLOCK(obj);
 				if (error == EAGAIN)
 					error = 0;	/* not a real error */
 				break;
@@ -2352,14 +2574,16 @@ retry_space:
 			loopbytes += xfsize;
 			off += xfsize;
 
-			if (sfs != NULL) {
-				mtx_lock(&sfs->mtx);
-				sfs->count++;
-				mtx_unlock(&sfs->mtx);
-			}
+			/*
+			 * XXX eventually this should be a sfsync
+			 * method call!
+			 */
+			if (sfs != NULL)
+				sf_sync_ref(sfs);
 		}
 
-		VOP_UNLOCK(vp, 0);
+		if (vp != NULL)
+			VOP_UNLOCK(vp, 0);
 
 		/* Add the buffer chain to the socket buffer. */
 		if (m != NULL) {
@@ -2428,7 +2652,7 @@ out:
 		td->td_retval[0] = 0;
 	}
 	if (sent != NULL) {
-		copyout(&sbytes, sent, sizeof(off_t));
+		(*sent) = sbytes;
 	}
 	if (obj != NULL)
 		vm_object_deallocate(obj);
@@ -2436,16 +2660,6 @@ out:
 		fdrop(sock_fp, td);
 	if (m)
 		m_freem(m);
-
-	if (sfs != NULL) {
-		mtx_lock(&sfs->mtx);
-		if (sfs->count != 0)
-			cv_wait(&sfs->cv, &sfs->mtx);
-		KASSERT(sfs->count == 0, ("sendfile sync still busy"));
-		cv_destroy(&sfs->cv);
-		mtx_destroy(&sfs->mtx);
-		free(sfs, M_TEMP);
-	}
 
 	if (error == ERESTART)
 		error = EINTR;
