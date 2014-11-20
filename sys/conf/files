@@ -1444,6 +1444,7 @@ dev/iicbus/iiconf.c		optional iicbus
 dev/iicbus/iicsmb.c		optional iicsmb				\
 	dependency	"iicbus_if.h"
 dev/iicbus/iicoc.c		optional iicoc
+dev/iicbus/lm75.c		optional lm75
 dev/iicbus/pcf8563.c		optional pcf8563
 dev/iicbus/s35390a.c		optional s35390a
 dev/iir/iir.c			optional iir
@@ -1832,6 +1833,10 @@ dev/mpt/mpt_debug.c		optional mpt
 dev/mpt/mpt_pci.c		optional mpt pci
 dev/mpt/mpt_raid.c		optional mpt
 dev/mpt/mpt_user.c		optional mpt
+dev/mrsas/mrsas.c		optional mrsas
+dev/mrsas/mrsas_cam.c		optional mrsas
+dev/mrsas/mrsas_ioctl.c		optional mrsas
+dev/mrsas/mrsas_fp.c		optional mrsas
 dev/msk/if_msk.c		optional msk
 dev/mvs/mvs.c			optional mvs
 dev/mvs/mvs_if.m		optional mvs
@@ -2770,6 +2775,21 @@ contrib/xz-embedded/linux/lib/xz/xz_dec_stream.c \
 	optional xz_embedded | geom_uncompress \
 	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
 geom/uzip/g_uzip.c		optional geom_uzip
+geom/vinum/geom_vinum.c		optional geom_vinum
+geom/vinum/geom_vinum_create.c	optional geom_vinum
+geom/vinum/geom_vinum_drive.c	optional geom_vinum
+geom/vinum/geom_vinum_plex.c	optional geom_vinum
+geom/vinum/geom_vinum_volume.c	optional geom_vinum
+geom/vinum/geom_vinum_subr.c	optional geom_vinum
+geom/vinum/geom_vinum_raid5.c	optional geom_vinum
+geom/vinum/geom_vinum_share.c	optional geom_vinum
+geom/vinum/geom_vinum_list.c	optional geom_vinum
+geom/vinum/geom_vinum_rm.c	optional geom_vinum
+geom/vinum/geom_vinum_init.c	optional geom_vinum
+geom/vinum/geom_vinum_state.c	optional geom_vinum
+geom/vinum/geom_vinum_rename.c	optional geom_vinum
+geom/vinum/geom_vinum_move.c	optional geom_vinum
+geom/vinum/geom_vinum_events.c	optional geom_vinum
 geom/virstor/binstream.c	optional geom_virstor
 geom/virstor/g_virstor.c	optional geom_virstor
 geom/virstor/g_virstor_md.c	optional geom_virstor
