@@ -94,6 +94,7 @@ int	 dirfd(DIR *);
 #endif
 #if __BSD_VISIBLE
 DIR	*__opendir2(const char *, int);
+int	 fdclosedir(DIR *);
 ssize_t	 getdents(int, char *, size_t);
 ssize_t	 getdirentries(int, char *, size_t, off_t *);
 #endif
