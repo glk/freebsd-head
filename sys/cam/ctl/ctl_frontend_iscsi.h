@@ -80,6 +80,7 @@ struct cfiscsi_session {
 	int				cs_portal_group_tag;
 	struct cv			cs_maintenance_cv;
 	bool				cs_terminating;
+	bool				cs_tasks_aborted;
 	size_t				cs_max_data_segment_length;
 	size_t				cs_max_burst_length;
 	bool				cs_immediate_data;
@@ -111,8 +112,6 @@ struct cfiscsi_softc {
 	unsigned int			last_session_id;
 	TAILQ_HEAD(, cfiscsi_target)	targets;
 	TAILQ_HEAD(, cfiscsi_session)	sessions;
-	char				ctl_initids[CTL_MAX_INIT_PER_PORT];
-	int				max_initiators;
 #ifdef ICL_KERNEL_PROXY
 	struct icl_listen		*listener;
 	struct cv			accept_cv;

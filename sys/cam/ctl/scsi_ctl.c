@@ -372,6 +372,8 @@ ctlfeasync(void *callback_arg, uint32_t code, struct cam_path *path, void *arg)
 		 */
 		if (cpi->transport == XPORT_FC)
 			port->port_type = CTL_PORT_FC;
+		else if (cpi->transport == XPORT_SAS)
+			port->port_type = CTL_PORT_SAS;
 		else
 			port->port_type = CTL_PORT_SCSI;
 
@@ -484,14 +486,14 @@ ctlfeasync(void *callback_arg, uint32_t code, struct cam_path *path, void *arg)
 				break;
 			}
 			if (dev_chg->arrived != 0) {
-				retval = ctl_add_initiator(dev_chg->wwpn,
-					softc->port.targ_port, dev_chg->target);
+				retval = ctl_add_initiator(&softc->port,
+				    dev_chg->target, dev_chg->wwpn, NULL);
 			} else {
-				retval = ctl_remove_initiator(
-					softc->port.targ_port, dev_chg->target);
+				retval = ctl_remove_initiator(&softc->port,
+				    dev_chg->target);
 			}
 
-			if (retval != 0) {
+			if (retval < 0) {
 				printf("%s: could not %s port %d iid %u "
 				       "WWPN %#jx!\n", __func__,
 				       (dev_chg->arrived != 0) ? "add" :
@@ -802,8 +804,8 @@ ctlfestart(struct cam_periph *periph, union ccb *start_ccb)
 			if (io == NULL) {
 				scsi_status = SCSI_STATUS_BUSY;
 				csio->sense_len = 0;
-			} else if ((io->io_hdr.status & CTL_STATUS_MASK) ==
-				   CTL_CMD_ABORTED) {
+			} else if ((io->io_hdr.flags & CTL_FLAG_ABORT) &&
+			    (io->io_hdr.flags & CTL_FLAG_ABORT_STATUS) == 0) {
 				io->io_hdr.flags &= ~CTL_FLAG_STATUS_QUEUED;
 
 				/*

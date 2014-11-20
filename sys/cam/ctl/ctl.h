@@ -53,6 +53,7 @@ typedef enum {
 	CTL_PORT_IOCTL		= 0x04,
 	CTL_PORT_INTERNAL	= 0x08,
 	CTL_PORT_ISCSI		= 0x10,
+	CTL_PORT_SAS		= 0x20,
 	CTL_PORT_ALL		= 0xff,
 	CTL_PORT_ISC		= 0x100 // FC port for inter-shelf communication
 } ctl_port_type;
@@ -115,17 +116,18 @@ typedef enum {
 	CTL_UA_POWERON		= 0x0001,
 	CTL_UA_BUS_RESET	= 0x0002,
 	CTL_UA_TARG_RESET	= 0x0004,
-	CTL_UA_LUN_RESET	= 0x0008,
-	CTL_UA_LUN_CHANGE	= 0x0010,
-	CTL_UA_MODE_CHANGE	= 0x0020,
-	CTL_UA_LOG_CHANGE	= 0x0040,
-	CTL_UA_LVD		= 0x0080,
-	CTL_UA_SE		= 0x0100,
-	CTL_UA_RES_PREEMPT	= 0x0200,
-	CTL_UA_RES_RELEASE	= 0x0400,
-	CTL_UA_REG_PREEMPT  	= 0x0800,
-	CTL_UA_ASYM_ACC_CHANGE  = 0x1000,
-	CTL_UA_CAPACITY_CHANGED = 0x2000
+	CTL_UA_I_T_NEXUS_LOSS	= 0x0008,
+	CTL_UA_LUN_RESET	= 0x0010,
+	CTL_UA_LUN_CHANGE	= 0x0020,
+	CTL_UA_MODE_CHANGE	= 0x0030,
+	CTL_UA_LOG_CHANGE	= 0x0080,
+	CTL_UA_LVD		= 0x0100,
+	CTL_UA_SE		= 0x0200,
+	CTL_UA_RES_PREEMPT	= 0x0400,
+	CTL_UA_RES_RELEASE	= 0x0800,
+	CTL_UA_REG_PREEMPT  	= 0x1000,
+	CTL_UA_ASYM_ACC_CHANGE  = 0x2000,
+	CTL_UA_CAPACITY_CHANGED = 0x4000
 } ctl_ua_type;
 
 #ifdef	_KERNEL
@@ -160,6 +162,8 @@ int ctl_ffz(uint32_t *mask, uint32_t size);
 int ctl_set_mask(uint32_t *mask, uint32_t bit);
 int ctl_clear_mask(uint32_t *mask, uint32_t bit);
 int ctl_is_set(uint32_t *mask, uint32_t bit);
+int ctl_caching_sp_handler(struct ctl_scsiio *ctsio,
+			 struct ctl_page_index *page_index, uint8_t *page_ptr);
 int ctl_control_page_handler(struct ctl_scsiio *ctsio,
 			     struct ctl_page_index *page_index,
 			     uint8_t *page_ptr);

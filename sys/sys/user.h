@@ -188,6 +188,7 @@ struct kinfo_proc {
 	char	ki_sparestrings[50];	/* spare string space */
 	int	ki_spareints[KI_NSPARE_INT];	/* spare room for growth */
 	uint64_t ki_tdev;		/* controlling tty dev */
+	int	ki_tracer;		/* Pid of tracing process */
 	int	ki_flag2;		/* P2_* flags */
 	int	ki_fibnum;		/* Default FIB number */
 	u_int	ki_cr_flags;		/* Credential flags */
