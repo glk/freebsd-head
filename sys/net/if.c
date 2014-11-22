@@ -99,10 +99,6 @@
 #include <compat/freebsd32/freebsd32.h>
 #endif
 
-struct ifindex_entry {
-	struct  ifnet *ife_ifnet;
-};
-
 SYSCTL_NODE(_net, PF_LINK, link, CTLFLAG_RW, 0, "Link layers");
 SYSCTL_NODE(_net_link, 0, generic, CTLFLAG_RW, 0, "Generic link-management");
 
@@ -196,7 +192,7 @@ VNET_DEFINE(struct ifgrouphead, ifg_head);
 static VNET_DEFINE(int, if_indexlim) = 8;
 
 /* Table of ifnet by index. */
-VNET_DEFINE(struct ifindex_entry *, ifindex_table);
+VNET_DEFINE(struct ifnet **, ifindex_table);
 
 #define	V_if_indexlim		VNET(if_indexlim)
 #define	V_ifindex_table		VNET(ifindex_table)
@@ -233,9 +229,9 @@ ifnet_byindex_locked(u_short idx)
 
 	if (idx > V_if_index)
 		return (NULL);
-	if (V_ifindex_table[idx].ife_ifnet == IFNET_HOLD)
+	if (V_ifindex_table[idx] == IFNET_HOLD)
 		return (NULL);
-	return (V_ifindex_table[idx].ife_ifnet);
+	return (V_ifindex_table[idx]);
 }
 
 struct ifnet *
@@ -282,7 +278,7 @@ retry:
 	 * next slot.
 	 */
 	for (idx = 1; idx <= V_if_index; idx++) {
-		if (V_ifindex_table[idx].ife_ifnet == NULL)
+		if (V_ifindex_table[idx] == NULL)
 			break;
 	}
 
@@ -303,9 +299,9 @@ ifindex_free_locked(u_short idx)
 
 	IFNET_WLOCK_ASSERT();
 
-	V_ifindex_table[idx].ife_ifnet = NULL;
+	V_ifindex_table[idx] = NULL;
 	while (V_if_index > 0 &&
-	    V_ifindex_table[V_if_index].ife_ifnet == NULL)
+	    V_ifindex_table[V_if_index] == NULL)
 		V_if_index--;
 }
 
@@ -324,7 +320,7 @@ ifnet_setbyindex_locked(u_short idx, struct ifnet *ifp)
 
 	IFNET_WLOCK_ASSERT();
 
-	V_ifindex_table[idx].ife_ifnet = ifp;
+	V_ifindex_table[idx] = ifp;
 }
 
 static void
@@ -402,7 +398,7 @@ if_grow(void)
 {
 	int oldlim;
 	u_int n;
-	struct ifindex_entry *e;
+	struct ifnet **e;
 
 	IFNET_WLOCK_ASSERT();
 	oldlim = V_if_indexlim;
@@ -467,6 +463,9 @@ if_alloc(u_char type)
 	ifq_init(&ifp->if_snd, ifp);
 
 	refcount_init(&ifp->if_refcount, 1);	/* Index reference. */
+	for (int i = 0; i < IFCOUNTERS; i++)
+		ifp->if_counters[i] = counter_u64_alloc(M_WAITOK);
+	ifp->if_get_counter = if_get_counter_default;
 	ifnet_setbyindex(ifp->if_index, ifp);
 	return (ifp);
 }
@@ -495,6 +494,10 @@ if_free_internal(struct ifnet *ifp)
 	IF_AFDATA_DESTROY(ifp);
 	IF_ADDR_LOCK_DESTROY(ifp);
 	ifq_delete(&ifp->if_snd);
+
+	for (int i = 0; i < IFCOUNTERS; i++)
+		counter_u64_free(ifp->if_counters[i]);
+
 	free(ifp, M_IFNET);
 }
 
@@ -665,9 +668,6 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 		ifp->if_transmit = if_transmit;
 		ifp->if_qflush = if_qflush;
 	}
-
-	if (ifp->if_get_counter == NULL)
-		ifp->if_get_counter = if_get_counter_default;
 
 	if (!vmove) {
 #ifdef MAC
@@ -1460,39 +1460,15 @@ if_rtdel(struct radix_node *rn, void *arg)
 }
 
 /*
- * Return counter values from old racy non-pcpu counters.
+ * Return counter values from counter(9)s stored in ifnet.
  */
 uint64_t
 if_get_counter_default(struct ifnet *ifp, ift_counter cnt)
 {
 
-	switch (cnt) {
-		case IFCOUNTER_IPACKETS:
-			return (ifp->if_ipackets);
-		case IFCOUNTER_IERRORS:
-			return (ifp->if_ierrors);
-		case IFCOUNTER_OPACKETS:
-			return (ifp->if_opackets);
-		case IFCOUNTER_OERRORS:
-			return (ifp->if_oerrors);
-		case IFCOUNTER_COLLISIONS:
-			return (ifp->if_collisions);
-		case IFCOUNTER_IBYTES:
-			return (ifp->if_ibytes);
-		case IFCOUNTER_OBYTES:
-			return (ifp->if_obytes);
-		case IFCOUNTER_IMCASTS:
-			return (ifp->if_imcasts);
-		case IFCOUNTER_OMCASTS:
-			return (ifp->if_omcasts);
-		case IFCOUNTER_IQDROPS:
-			return (ifp->if_iqdrops);
-		case IFCOUNTER_OQDROPS:
-			return (ifp->if_oqdrops);
-		case IFCOUNTER_NOPROTO:
-			return (ifp->if_noproto);
-	}
-	panic("%s: unknown counter %d", __func__, cnt);
+	KASSERT(cnt < IFCOUNTERS, ("%s: invalid cnt %d", __func__, cnt));
+
+	return (counter_u64_fetch(ifp->if_counters[cnt]));
 }
 
 /*
@@ -1503,46 +1479,9 @@ void
 if_inc_counter(struct ifnet *ifp, ift_counter cnt, int64_t inc)
 {
 
-	switch (cnt) {
-		case IFCOUNTER_IPACKETS:
-			ifp->if_ipackets += inc;
-			break;
-		case IFCOUNTER_IERRORS:
-			ifp->if_ierrors += inc;
-			break;
-		case IFCOUNTER_OPACKETS:
-			ifp->if_opackets += inc;
-			break;
-		case IFCOUNTER_OERRORS:
-			ifp->if_oerrors += inc;
-			break;
-		case IFCOUNTER_COLLISIONS:
-			ifp->if_collisions += inc;
-			break;
-		case IFCOUNTER_IBYTES:
-			ifp->if_ibytes += inc;
-			break;
-		case IFCOUNTER_OBYTES:
-			ifp->if_obytes += inc;
-			break;
-		case IFCOUNTER_IMCASTS:
-			ifp->if_imcasts += inc;
-			break;
-		case IFCOUNTER_OMCASTS:
-			ifp->if_omcasts += inc;
-			break;
-		case IFCOUNTER_IQDROPS:
-			ifp->if_iqdrops += inc;
-			break;
-		case IFCOUNTER_OQDROPS:
-			ifp->if_oqdrops += inc;
-			break;
-		case IFCOUNTER_NOPROTO:
-			ifp->if_noproto += inc;
-			break;
-		default:
-			panic("%s: unknown counter %d", __func__, cnt);
-	}
+	KASSERT(cnt < IFCOUNTERS, ("%s: invalid cnt %d", __func__, cnt));
+
+	counter_u64_add(ifp->if_counters[cnt], inc);
 }
 
 /*
@@ -2066,8 +2005,6 @@ link_rtrequest(int cmd, struct rtentry *rt, struct rt_addrinfo *info)
 	struct sockaddr *dst;
 	struct ifnet *ifp;
 
-	RT_LOCK_ASSERT(rt);
-
 	if (cmd != RTM_ADD || ((ifa = rt->rt_ifa) == 0) ||
 	    ((ifp = ifa->ifa_ifp) == 0) || ((dst = rt_key(rt)) == 0))
 		return;
@@ -2199,7 +2136,7 @@ do_link_state_change(void *arg, int pending)
 		(*vlan_link_state_p)(ifp);
 
 	if ((ifp->if_type == IFT_ETHER || ifp->if_type == IFT_L2VLAN) &&
-	    IFP2AC(ifp)->ac_netgraph != NULL)
+	    ifp->if_l2com != NULL)
 		(*ng_ether_link_state_p)(ifp, link_state);
 	if (ifp->if_carp)
 		(*carp_linkstate_p)(ifp);
@@ -3596,14 +3533,14 @@ if_handoff(struct ifqueue *ifq, struct mbuf *m, struct ifnet *ifp, int adjust)
 	IF_LOCK(ifq);
 	if (_IF_QFULL(ifq)) {
 		IF_UNLOCK(ifq);
-		ifp->if_oqdrops++;
+		if_inc_counter(ifp, IFCOUNTER_OQDROPS, 1);
 		m_freem(m);
 		return (0);
 	}
 	if (ifp != NULL) {
-		ifp->if_obytes += m->m_pkthdr.len + adjust;
+		if_inc_counter(ifp, IFCOUNTER_OBYTES, m->m_pkthdr.len + adjust);
 		if (m->m_flags & (M_BCAST|M_MCAST))
-			ifp->if_omcasts++;
+			if_inc_counter(ifp, IFCOUNTER_OMCASTS, 1);
 		active = ifp->if_drv_flags & IFF_DRV_OACTIVE;
 	}
 	_IF_ENQUEUE(ifq, m);
@@ -3813,6 +3750,19 @@ int
 if_getmtu(if_t ifp)
 {
 	return ((struct ifnet *)ifp)->if_mtu;
+}
+
+int
+if_getmtu_family(if_t ifp, int family)
+{
+	struct domain *dp;
+
+	for (dp = domains; dp; dp = dp->dom_next) {
+		if (dp->dom_family == family && dp->dom_ifmtu != NULL)
+			return (dp->dom_ifmtu((struct ifnet *)ifp));
+	}
+
+	return (((struct ifnet *)ifp)->if_mtu);
 }
 
 int

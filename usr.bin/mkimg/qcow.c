@@ -40,11 +40,13 @@ __FBSDID("$FreeBSD$");
 #include "format.h"
 #include "mkimg.h"
 
-#undef	QCOW_SUPPORT_QCOW2
-
 /* Default cluster sizes. */
 #define	QCOW1_CLSTR_LOG2SZ	12	/* 4KB */
 #define	QCOW2_CLSTR_LOG2SZ	16	/* 64KB */
+
+/* Flag bits in cluster offsets */
+#define	QCOW_CLSTR_COMPRESSED	(1ULL << 62)
+#define	QCOW_CLSTR_COPIED	(1ULL << 63)
 
 struct qcow_header {
 	uint32_t	magic;
@@ -90,7 +92,7 @@ round_clstr(uint64_t ofs)
 static int
 qcow_resize(lba_t imgsz, u_int version)
 {
-	uint64_t clstrsz, imagesz;
+	uint64_t imagesz;
 
 	switch (version) {
 	case QCOW_VERSION_1:
@@ -103,12 +105,11 @@ qcow_resize(lba_t imgsz, u_int version)
 		return (EDOOFUS);
 	}
 
-	clstrsz = 1UL << clstr_log2sz;
 	imagesz = round_clstr(imgsz * secsz);
 
 	if (verbose)
-		fprintf(stderr, "QCOW: image size = %ju, cluster size = %ju\n",
-		    (uintmax_t)imagesz, (uintmax_t)clstrsz);
+		fprintf(stderr, "QCOW: image size = %ju, cluster size = %u\n",
+		    (uintmax_t)imagesz, (u_int)(1U << clstr_log2sz));
 
 	return (image_set_size(imagesz / secsz));
 }
@@ -120,39 +121,60 @@ qcow1_resize(lba_t imgsz)
 	return (qcow_resize(imgsz, QCOW_VERSION_1));
 }
 
-#ifdef QCOW_SUPPORT_QCOW2
 static int
 qcow2_resize(lba_t imgsz)
 {
 
 	return (qcow_resize(imgsz, QCOW_VERSION_2));
 }
-#endif
 
 static int
 qcow_write(int fd, u_int version)
 {
 	struct qcow_header *hdr;
-	uint64_t *l1tbl, *l2tbl;
-	uint16_t *rctbl;
-	uint64_t n, clstrsz, imagesz, nclstrs;
-	uint64_t l1ofs, l2ofs, ofs, rcofs;
-	lba_t blk, blkofs, blkcnt, imgsz;
-	u_int l1idx, l2idx, l2clstrs;
+	uint64_t *l1tbl, *l2tbl, *rctbl;
+	uint16_t *rcblk;
+	uint64_t clstr_imgsz, clstr_l2tbls, clstr_l1tblsz;
+	uint64_t clstr_rcblks, clstr_rctblsz;
+	uint64_t n, imagesz, nclstrs, ofs, ofsflags;
+	lba_t blk, blkofs, blk_imgsz;
+	u_int l1clno, l2clno, rcclno;
+	u_int blk_clstrsz;
+	u_int clstrsz, l1idx, l2idx;
 	int error;
 
 	if (clstr_log2sz == 0)
 		return (EDOOFUS);
 
-	clstrsz = 1UL << clstr_log2sz;
-	blkcnt = clstrsz / secsz;
-	imgsz = image_get_size();
-	imagesz = imgsz * secsz;
-	nclstrs = imagesz >> clstr_log2sz;
-	l2clstrs = (nclstrs * 8 + clstrsz - 1) > clstr_log2sz;
+	clstrsz = 1U << clstr_log2sz;
+	blk_clstrsz = clstrsz / secsz;
+	blk_imgsz = image_get_size();
+	imagesz = blk_imgsz * secsz;
+	clstr_imgsz = imagesz >> clstr_log2sz;
+	clstr_l2tbls = round_clstr(clstr_imgsz * 8) >> clstr_log2sz;
+	clstr_l1tblsz = round_clstr(clstr_l2tbls * 8) >> clstr_log2sz;
+	nclstrs = clstr_imgsz + clstr_l2tbls + clstr_l1tblsz + 1;
+	clstr_rcblks = clstr_rctblsz = 0;
+	do {
+		n = clstr_rcblks + clstr_rctblsz;
+		clstr_rcblks = round_clstr((nclstrs + n) * 2) >> clstr_log2sz;
+		clstr_rctblsz = round_clstr(clstr_rcblks * 8) >> clstr_log2sz;
+	} while (n < (clstr_rcblks + clstr_rctblsz));
 
-	l1ofs = clstrsz;
-	rcofs = round_clstr(l1ofs + l2clstrs * 8);
+	/*
+	 * We got all the sizes in clusters. Start the layout.
+	 * 0 - header
+	 * 1 - L1 table
+	 * 2 - RC table (v2 only)
+	 * 3 - L2 tables
+	 * 4 - RC block (v2 only)
+	 * 5 - data
+	 */
+
+	l1clno = 1;
+	rcclno = 0;
+	rctbl = l2tbl = l1tbl = NULL;
+	rcblk = NULL;
 
 	hdr = calloc(1, clstrsz);
 	if (hdr == NULL)
@@ -163,63 +185,82 @@ qcow_write(int fd, u_int version)
 	be64enc(&hdr->disk_size, imagesz);
 	switch (version) {
 	case QCOW_VERSION_1:
-		l2ofs = rcofs;	/* No reference counting. */
+		ofsflags = 0;
+		l2clno = l1clno + clstr_l1tblsz;
 		hdr->u.v1.clstr_log2sz = clstr_log2sz;
 		hdr->u.v1.l2_log2sz = clstr_log2sz - 3;
-		be64enc(&hdr->u.v1.l1_offset, l1ofs);
+		be64enc(&hdr->u.v1.l1_offset, clstrsz * l1clno);
 		break;
 	case QCOW_VERSION_2:
-		l2ofs = round_clstr(rcofs + (nclstrs + l2clstrs) * 2);
+		ofsflags = QCOW_CLSTR_COPIED;
+		rcclno = l1clno + clstr_l1tblsz;
+		l2clno = rcclno + clstr_rctblsz;
 		be32enc(&hdr->clstr_log2sz, clstr_log2sz);
-		be32enc(&hdr->u.v2.l1_entries, l2clstrs);
-		be64enc(&hdr->u.v2.l1_offset, l1ofs);
-		be64enc(&hdr->u.v2.refcnt_offset, rcofs);
-		be32enc(&hdr->u.v2.refcnt_entries, l2clstrs);
+		be32enc(&hdr->u.v2.l1_entries, clstr_l2tbls);
+		be64enc(&hdr->u.v2.l1_offset, clstrsz * l1clno);
+		be64enc(&hdr->u.v2.refcnt_offset, clstrsz * rcclno);
+		be32enc(&hdr->u.v2.refcnt_entries, clstr_rcblks);
 		break;
 	default:
 		return (EDOOFUS);
 	}
 
-	l2tbl = l1tbl = NULL;
-	rctbl = NULL;
+	if (sparse_write(fd, hdr, clstrsz) < 0) {
+                error = errno;
+		goto out;
+	}
 
-	l1tbl = calloc(1, (size_t)(rcofs - l1ofs));
+	free(hdr);
+	hdr = NULL;
+
+	ofs = clstrsz * l2clno;
+	nclstrs = 1 + clstr_l1tblsz + clstr_rctblsz;
+
+	l1tbl = calloc(1, clstrsz * clstr_l1tblsz);
 	if (l1tbl == NULL) {
 		error = ENOMEM;
 		goto out;
 	}
-	if (l2ofs != rcofs) {
-		rctbl = calloc(1, (size_t)(l2ofs - rcofs));
+
+	for (n = 0; n < clstr_imgsz; n++) {
+		blk = n * blk_clstrsz;
+		if (image_data(blk, blk_clstrsz)) {
+			nclstrs++;
+			l1idx = n >> (clstr_log2sz - 3);
+			if (l1tbl[l1idx] == 0) {
+				be64enc(l1tbl + l1idx, ofs + ofsflags);
+				ofs += clstrsz;
+				nclstrs++;
+			}
+		}
+	}
+
+	if (sparse_write(fd, l1tbl, clstrsz * clstr_l1tblsz) < 0) {
+		error = errno;
+		goto out;
+	}
+
+	clstr_rcblks = 0;
+	do {
+		n = clstr_rcblks;
+		clstr_rcblks = round_clstr((nclstrs + n) * 2) >> clstr_log2sz;
+	} while (n < clstr_rcblks);
+
+	if (rcclno > 0) {
+		rctbl = calloc(1, clstrsz * clstr_rctblsz);
 		if (rctbl == NULL) {
 			error = ENOMEM;
 			goto out;
 		}
-	}
-
-	ofs = l2ofs;
-	for (n = 0; n < nclstrs; n++) {
-		l1idx = n >> (clstr_log2sz - 3);
-		if (l1tbl[l1idx] != 0UL)
-			continue;
-		blk = n * blkcnt;
-		if (image_data(blk, blkcnt)) {
-			be64enc(l1tbl + l1idx, ofs);
+		for (n = 0; n < clstr_rcblks; n++) {
+			be64enc(rctbl + n, ofs);
 			ofs += clstrsz;
+			nclstrs++;
 		}
-	}
-
-	error = 0;
-	if (!error && sparse_write(fd, hdr, clstrsz) < 0)
-		error = errno;
-	if (!error && sparse_write(fd, l1tbl, (size_t)(rcofs - l1ofs)) < 0)
-		error = errno;
-	/* XXX refcnt table. */
-	if (error)
-		goto out;
-
-	free(hdr);
-	hdr = NULL;
-	if (rctbl != NULL) {
+		if (sparse_write(fd, rctbl, clstrsz * clstr_rctblsz) < 0) {
+			error = errno;
+			goto out;
+		}
 		free(rctbl);
 		rctbl = NULL;
 	}
@@ -230,17 +271,17 @@ qcow_write(int fd, u_int version)
 		goto out;
 	}
 
-	for (l1idx = 0; l1idx < l2clstrs; l1idx++) {
+	for (l1idx = 0; l1idx < clstr_l2tbls; l1idx++) {
 		if (l1tbl[l1idx] == 0)
 			continue;
 		memset(l2tbl, 0, clstrsz);
-		blkofs = (lba_t)l1idx * (clstrsz * (clstrsz >> 3));
+		blkofs = (lba_t)l1idx * blk_clstrsz * (clstrsz >> 3);
 		for (l2idx = 0; l2idx < (clstrsz >> 3); l2idx++) {
-			blk = blkofs + (lba_t)l2idx * blkcnt;
-			if (blk >= imgsz)
+			blk = blkofs + (lba_t)l2idx * blk_clstrsz;
+			if (blk >= blk_imgsz)
 				break;
-			if (image_data(blk, blkcnt)) {
-				be64enc(l2tbl + l2idx, ofs);
+			if (image_data(blk, blk_clstrsz)) {
+				be64enc(l2tbl + l2idx, ofs + ofsflags);
 				ofs += clstrsz;
 			}
 		}
@@ -255,11 +296,27 @@ qcow_write(int fd, u_int version)
 	free(l1tbl);
 	l1tbl = NULL;
 
+	if (rcclno > 0) {
+		rcblk = calloc(1, clstrsz * clstr_rcblks);
+		if (rcblk == NULL) {
+			error = ENOMEM;
+			goto out;
+		}
+		for (n = 0; n < nclstrs; n++)
+			be16enc(rcblk + n, 1);
+		if (sparse_write(fd, rcblk, clstrsz * clstr_rcblks) < 0) {
+			error = errno;
+			goto out;
+		}
+		free(rcblk);
+		rcblk = NULL;
+	}
+
 	error = 0;
-	for (n = 0; n < nclstrs; n++) {
-		blk = n * blkcnt;
-		if (image_data(blk, blkcnt)) {
-			error = image_copyout_region(fd, blk, blkcnt);
+	for (n = 0; n < clstr_imgsz; n++) {
+		blk = n * blk_clstrsz;
+		if (image_data(blk, blk_clstrsz)) {
+			error = image_copyout_region(fd, blk, blk_clstrsz);
 			if (error)
 				break;
 		}
@@ -268,6 +325,8 @@ qcow_write(int fd, u_int version)
 		error = image_copyout_done(fd);
 
  out:
+	if (rcblk != NULL)
+		free(rcblk);
 	if (l2tbl != NULL)
 		free(l2tbl);
 	if (rctbl != NULL)
@@ -286,14 +345,12 @@ qcow1_write(int fd)
 	return (qcow_write(fd, QCOW_VERSION_1));
 }
 
-#ifdef QCOW_SUPPORT_QCOW2
 static int
 qcow2_write(int fd)
 {
 
 	return (qcow_write(fd, QCOW_VERSION_2));
 }
-#endif
 
 static struct mkimg_format qcow1_format = {
 	.name = "qcow",
@@ -303,7 +360,6 @@ static struct mkimg_format qcow1_format = {
 };
 FORMAT_DEFINE(qcow1_format);
 
-#ifdef QCOW_SUPPORT_QCOW2
 static struct mkimg_format qcow2_format = {
 	.name = "qcow2",
 	.description = "QEMU Copy-On-Write, version 2",
@@ -311,4 +367,3 @@ static struct mkimg_format qcow2_format = {
 	.write = qcow2_write,
 };
 FORMAT_DEFINE(qcow2_format);
-#endif

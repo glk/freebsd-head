@@ -171,8 +171,8 @@ struct kinfo_proc {
 	signed char ki_nice;		/* Process "nice" value */
 	char	ki_lock;		/* Process lock (prevent swap) count */
 	char	ki_rqindex;		/* Run queue index */
-	u_char	ki_oncpu;		/* Which cpu we are on */
-	u_char	ki_lastcpu;		/* Last cpu we were on */
+	u_char	ki_oncpu_old;		/* Which cpu we are on (legacy) */
+	u_char	ki_lastcpu_old;		/* Last cpu we were on (legacy) */
 	char	ki_tdname[TDNAMLEN+1];	/* thread name */
 	char	ki_wmesg[WMESGLEN+1];	/* wchan message */
 	char	ki_login[LOGNAMELEN+1];	/* setlogin name */
@@ -188,6 +188,8 @@ struct kinfo_proc {
 	char	ki_sparestrings[50];	/* spare string space */
 	int	ki_spareints[KI_NSPARE_INT];	/* spare room for growth */
 	uint64_t ki_tdev;		/* controlling tty dev */
+	int	ki_oncpu;		/* Which cpu we are on */
+	int	ki_lastcpu;		/* Last cpu we were on */
 	int	ki_tracer;		/* Pid of tracing process */
 	int	ki_flag2;		/* P2_* flags */
 	int	ki_fibnum;		/* Default FIB number */
@@ -542,6 +544,7 @@ struct sbuf;
  */
 
 int	kern_proc_filedesc_out(struct proc *p, struct sbuf *sb, ssize_t maxlen);
+int	kern_proc_cwd_out(struct proc *p, struct sbuf *sb, ssize_t maxlen);
 int	kern_proc_out(struct proc *p, struct sbuf *sb, int flags);
 int	kern_proc_vmmap_out(struct proc *p, struct sbuf *sb);
 
