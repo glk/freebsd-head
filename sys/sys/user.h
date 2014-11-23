@@ -84,7 +84,7 @@
  * it in two places: function fill_kinfo_proc in sys/kern/kern_proc.c and
  * function kvm_proclist in lib/libkvm/kvm_proc.c .
  */
-#define	KI_NSPARE_INT	4
+#define	KI_NSPARE_INT	2
 #define	KI_NSPARE_LONG	12
 #define	KI_NSPARE_PTR	6
 
