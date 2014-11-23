@@ -2333,17 +2333,19 @@ vn_fill_kinfo_vnode(struct vnode *vp, struct kinfo_file *kif)
 	if (error != 0)
 		return (error);
 	if (va.va_fsid != VNOVAL)
-		kif->kf_un2.kf_file.kf_file_fsid = va.va_fsid;
+		kif->kf_un.kf_file.kf_file_fsid = va.va_fsid;
 	else
-		kif->kf_un2.kf_file.kf_file_fsid =
+		kif->kf_un.kf_file.kf_file_fsid =
 		    vp->v_mount->mnt_stat.f_fsid.val[0];
-	kif->kf_un.kf_file.kf_file_fsid_freebsd9 =
-	    kif->kf_un2.kf_file.kf_file_fsid; /* truncate */
+	kif->kf_un.kf_file.kf_file_fsid_freebsd10 =
+	    kif->kf_un.kf_file.kf_file_fsid; /* truncate */
 	kif->kf_un.kf_file.kf_file_fileid = va.va_fileid;
 	kif->kf_un.kf_file.kf_file_mode = MAKEIMODE(va.va_type, va.va_mode);
+	kif->kf_un.kf_file.kf_file_mode_freebsd10 =
+	    kif->kf_un.kf_file.kf_file_mode; /* truncate */
 	kif->kf_un.kf_file.kf_file_size = va.va_size;
-	kif->kf_un2.kf_file.kf_file_rdev = va.va_rdev;
-	kif->kf_un.kf_file.kf_file_rdev_freebsd9 =
-	    kif->kf_un2.kf_file.kf_file_rdev; /* truncate */
+	kif->kf_un.kf_file.kf_file_rdev = va.va_rdev;
+	kif->kf_un.kf_file.kf_file_rdev_freebsd10 =
+	    kif->kf_un.kf_file.kf_file_rdev; /* truncate */
 	return (0);
 }

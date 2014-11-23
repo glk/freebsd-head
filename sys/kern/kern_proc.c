@@ -2373,13 +2373,15 @@ kern_proc_vmmap_out(struct proc *p, struct sbuf *sb)
 				if (VOP_GETATTR(vp, &va, cred) == 0) {
 					kve->kve_vn_fileid = va.va_fileid;
 					kve->kve_vn_fsid = va.va_fsid;
-					kve->kve_vn_fsid_freebsd9 =
+					kve->kve_vn_fsid_freebsd10 =
 					    kve->kve_vn_fsid; /* truncate */
 					kve->kve_vn_mode =
 					    MAKEIMODE(va.va_type, va.va_mode);
+					kve->kve_vn_mode_freebsd10 =
+					    kve->kve_vn_mode; /* truncate */
 					kve->kve_vn_size = va.va_size;
 					kve->kve_vn_rdev = va.va_rdev;
-					kve->kve_vn_rdev_freebsd9 =
+					kve->kve_vn_rdev_freebsd10 =
 					    kve->kve_vn_rdev; /* truncate */
 					kve->kve_status = KF_ATTR_VALID;
 				}

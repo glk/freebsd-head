@@ -366,26 +366,33 @@ struct kinfo_file {
 		} kf_sock;
 		struct {
 			/* Space for future use */
-			uint64_t	kf_spareint64[32];
+			uint64_t	kf_spareint64[30];
+			/* Vnode filesystem id. */
+			uint64_t	kf_file_fsid;
+			/* File device. */
+			uint64_t	kf_file_rdev;
 			/* Global file id. */
 			uint64_t	kf_file_fileid;
 			/* File size. */
 			uint64_t	kf_file_size;
-			/* Vnode filesystem id. */
-			uint32_t	kf_file_fsid_freebsd9;
-			/* File device. */
-			uint32_t	kf_file_rdev_freebsd9;
-			/* File mode. */
-			uint16_t	kf_file_mode;
+			/* Vnode filesystem id, FreeBSD 10 compat. */
+			uint32_t	kf_file_fsid_freebsd10;
+			/* File device, FreeBSD 10 compat. */
+			uint32_t	kf_file_rdev_freebsd10;
+			/* File mode, FreeBSD 10 compat. */
+			uint16_t	kf_file_mode_freebsd10;
 			/* Round to 64 bit alignment. */
 			uint16_t	kf_file_pad0;
-			uint32_t	kf_file_pad1;
+			/* File mode. */
+			uint32_t	kf_file_mode;
 		} kf_file;
 		struct {
 			/* Space for future use */
 			uint64_t	kf_spareint64[32];
 			uint32_t	kf_sem_value;
-			uint16_t	kf_sem_mode;
+			uint16_t	kf_sem_mode_freebsd10;
+			uint16_t	kf_sem_pad0;
+			uint32_t	kf_sem_mode;
 		} kf_sem;
 		struct {
 			/* Space for future use */
@@ -494,7 +501,7 @@ struct kinfo_vmentry {
 	uint64_t kve_end;			/* Finishing address. */
 	uint64_t kve_offset;			/* Mapping offset in object */
 	uint64_t kve_vn_fileid;			/* inode number if vnode */
-	uint32_t kve_vn_fsid_freebsd9;		/* dev_t of vnode location */
+	uint32_t kve_vn_fsid_freebsd10;		/* dev_t of vnode location */
 	int	 kve_flags;			/* Flags on map entry. */
 	int	 kve_resident;			/* Number of resident pages. */
 	int	 kve_private_resident;		/* Number of private pages. */
@@ -503,12 +510,14 @@ struct kinfo_vmentry {
 	int	 kve_shadow_count;		/* VM obj shadow count. */
 	int	 kve_vn_type;			/* Vnode type. */
 	uint64_t kve_vn_size;			/* File size. */
-	uint32_t kve_vn_rdev_freebsd9;		/* Device id if device. */
-	uint16_t kve_vn_mode;			/* File mode. */
+	uint32_t kve_vn_rdev_freebsd10;		/* Device id if device. */
+	uint16_t kve_vn_mode_freebsd10;		/* File mode. */
 	uint16_t kve_status;			/* Status flags. */
 	uint64_t kve_vn_fsid;			/* dev_t of vnode location */
 	uint64_t kve_vn_rdev;			/* Device id if device. */
-	int	 _kve_ispare[8];		/* Space for more stuff. */
+	uint32_t kve_vn_mode;			/* File mode. */
+	uint32_t _kve_ispare0;			/* Space for more stuff. */
+	int	 _kve_ispare[6];		/* Space for more stuff. */
 	/* Truncated before copyout in sysctl */
 	char	 kve_path[PATH_MAX];		/* Path to VM obj, if any. */
 };
