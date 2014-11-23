@@ -871,7 +871,7 @@ freebsd10_cvtstatfs(nsp, osp)
 	struct freebsd10_statfs *osp;
 {
 	bzero(osp, sizeof(*osp));
-	osp->f_version = freebsd10_STATFS_VERSION;
+	osp->f_version = FREEBSD10_STATFS_VERSION;
 	osp->f_type = nsp->f_type;
 	osp->f_flags = nsp->f_flags;
 	osp->f_bsize = nsp->f_bsize;
@@ -2456,7 +2456,7 @@ freebsd10_fstatat(struct thread *td, struct freebsd10_fstatat_args* uap)
 	int error;
 
 	error = kern_statat(td, uap->flag, uap->fd, uap->path,
-	    UIO_USERSPACE, &sb);
+	    UIO_USERSPACE, &sb, NULL);
 	if (error != 0)
 		return (error);
 	freebsd10_cvtstat(&sb, &osb);
