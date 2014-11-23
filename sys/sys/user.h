@@ -135,7 +135,7 @@ struct kinfo_proc {
 	pid_t	ki_tsid;		/* Terminal session ID */
 	short	ki_jobc;		/* job control counter */
 	short	ki_spare_short1;	/* unused (just here for alignment) */
-	uint32_t ki_tdev_freebsd9;	/* controlling tty dev */
+	uint32_t ki_tdev_freebsd10;	/* controlling tty dev */
 	sigset_t ki_siglist;		/* Signals arrived but not delivered */
 	sigset_t ki_sigmask;		/* Current signal mask */
 	sigset_t ki_sigignore;		/* Signals being ignored */
@@ -406,7 +406,7 @@ struct kinfo_file {
 		struct {
 			/* Space for future use */
 			uint64_t	kf_spareint64[32];
-			uint32_t	kf_pts_dev_freebsd9;
+			uint32_t	kf_pts_dev_freebsd10;
 			uint32_t	kf_pts_pad0;
 			uint64_t	kf_pts_dev;
 			/* Round to 64 bit alignment. */

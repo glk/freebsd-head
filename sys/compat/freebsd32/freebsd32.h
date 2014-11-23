@@ -318,7 +318,7 @@ struct kinfo_proc32 {
 	pid_t	ki_tsid;
 	short	ki_jobc;
 	short	ki_spare_short1;
-	uint32_t ki_tdev_freebsd9;
+	uint32_t ki_tdev_freebsd10;
 	sigset_t ki_siglist;
 	sigset_t ki_sigmask;
 	sigset_t ki_sigignore;

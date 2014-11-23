@@ -907,13 +907,13 @@ fill_kinfo_proc_only(struct proc *p, struct kinfo_proc *kp)
 	}
 	if ((p->p_flag & P_CONTROLT) && tp != NULL) {
 		kp->ki_tdev = tty_udev(tp);
-		kp->ki_tdev_freebsd9 = kp->ki_tdev; /* truncate */
+		kp->ki_tdev_freebsd10 = kp->ki_tdev; /* truncate */
 		kp->ki_tpgid = tp->t_pgrp ? tp->t_pgrp->pg_id : NO_PID;
 		if (tp->t_session)
 			kp->ki_tsid = tp->t_session->s_sid;
 	} else {
 		kp->ki_tdev = NODEV;
-		kp->ki_tdev_freebsd9 = kp->ki_tdev; /* truncate */
+		kp->ki_tdev_freebsd10 = kp->ki_tdev; /* truncate */
 	}
 	if (p->p_comm[0] != '\0')
 		strlcpy(kp->ki_comm, p->p_comm, sizeof(kp->ki_comm));
@@ -1149,7 +1149,7 @@ freebsd32_kinfo_proc_out(const struct kinfo_proc *ki, struct kinfo_proc32 *ki32)
 	CP(*ki, *ki32, ki_tsid);
 	CP(*ki, *ki32, ki_jobc);
 	CP(*ki, *ki32, ki_tdev);
-	CP(*ki, *ki32, ki_tdev_freebsd9);
+	CP(*ki, *ki32, ki_tdev_freebsd10);
 	CP(*ki, *ki32, ki_siglist);
 	CP(*ki, *ki32, ki_sigmask);
 	CP(*ki, *ki32, ki_sigignore);
