@@ -984,21 +984,24 @@
 543	AUE_NULL	NOSTD	{ int aio_mlock(struct aiocb *aiocbp); }
 544	AUE_NULL	STD	{ int procctl(idtype_t idtype, id_t id, \
 				    int com, void *data); }
-545	AUE_FSTAT	STD	{ int fstat(int fd, struct stat *sb); }
-546	AUE_FSTATAT	STD	{ int fstatat(int fd, char *path, \
+545	AUE_POLL	STD	{ int ppoll(struct pollfd *fds, u_int nfds, \
+				    const struct timespec *ts, \
+				    const sigset_t *set); }
+546	AUE_FSTAT	STD	{ int fstat(int fd, struct stat *sb); }
+547	AUE_FSTATAT	STD	{ int fstatat(int fd, char *path, \
 				    struct stat *buf, int flag); }
-547	AUE_FHSTAT	STD	{ int fhstat(const struct fhandle *u_fhp, \
+548	AUE_FHSTAT	STD	{ int fhstat(const struct fhandle *u_fhp, \
 				    struct stat *sb); }
-548	AUE_GETDIRENTRIES	STD	{ ssize_t getdirentries(int fd, char *buf, \
+540	AUE_GETDIRENTRIES	STD	{ ssize_t getdirentries(int fd, char *buf, \
 				    size_t count, off_t *basep); }
-549	AUE_MKNODAT	STD	{ int mknodat(int fd, char *path, mode_t mode, \
+550	AUE_MKNODAT	STD	{ int mknodat(int fd, char *path, mode_t mode, \
 				    dev_t dev); }
-550	AUE_GETFSSTAT	STD	{ int getfsstat(struct statfs *buf, \
+551	AUE_GETFSSTAT	STD	{ int getfsstat(struct statfs *buf, \
 				    long bufsize, int flags); }
-551	AUE_STATFS	STD	{ int statfs(char *path, \
+552	AUE_STATFS	STD	{ int statfs(char *path, \
 				    struct statfs *buf); }
-552	AUE_FSTATFS	STD	{ int fstatfs(int fd, struct statfs *buf); }
-553	AUE_FHSTATFS	STD	{ int fhstatfs(const struct fhandle *u_fhp, \
+553	AUE_FSTATFS	STD	{ int fstatfs(int fd, struct statfs *buf); }
+554	AUE_FHSTATFS	STD	{ int fhstatfs(const struct fhandle *u_fhp, \
 				    struct statfs *buf); }
 ; Please copy any additions and changes to the following compatability tables:
 ; sys/compat/freebsd32/syscalls.master

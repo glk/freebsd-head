@@ -1071,20 +1071,23 @@
 				    uint32_t id1, uint32_t id2, int com, \
 				    void *data); }
 #endif
-545	AUE_FSTAT	STD	{ int freebsd32_fstat(int fd, \
+545	AUE_POLL	STD	{ int freebsd32_ppoll(struct pollfd *fds, \
+				    u_int nfds, const struct timespec32 *ts, \
+				    const sigset_t *set); }
+546	AUE_FSTAT	STD	{ int freebsd32_fstat(int fd, \
 				    struct stat32 *ub); }
-546	AUE_FSTATAT	STD	{ int freebsd32_fstatat(int fd, char *path, \
+547	AUE_FSTATAT	STD	{ int freebsd32_fstatat(int fd, char *path, \
 				    struct stat32 *buf, int flag); }
-547	AUE_FHSTAT	STD	{ int freebsd32_fhstat(const struct fhandle *u_fhp, \
+548	AUE_FHSTAT	STD	{ int freebsd32_fhstat(const struct fhandle *u_fhp, \
 				    struct stat32 *sb); }
-548	AUE_GETDIRENTRIES	NOPROTO	{ ssize_t getdirentries(int fd, \
+549	AUE_GETDIRENTRIES	NOPROTO	{ ssize_t getdirentries(int fd, \
 				    char *buf, size_t count, off_t *basep); }
-549	AUE_MKNODAT	NOPROTO	{ int mknodat(int fd, char *path, mode_t mode, \
+550	AUE_MKNODAT	NOPROTO	{ int mknodat(int fd, char *path, mode_t mode, \
 				    dev_t dev); }
-550	AUE_GETFSSTAT	NOPROTO	{ int getfsstat(struct statfs *buf, \
+551	AUE_GETFSSTAT	NOPROTO	{ int getfsstat(struct statfs *buf, \
 				    long bufsize, int flags); }
-551	AUE_STATFS	NOPROTO	{ int statfs(char *path, \
+552	AUE_STATFS	NOPROTO	{ int statfs(char *path, \
 				    struct statfs *buf); }
-552	AUE_FSTATFS	NOPROTO	{ int fstatfs(int fd, struct statfs *buf); }
-553	AUE_FHSTATFS	NOPROTO	{ int fhstatfs(const struct fhandle *u_fhp, \
+553	AUE_FSTATFS	NOPROTO	{ int fstatfs(int fd, struct statfs *buf); }
+554	AUE_FHSTATFS	NOPROTO	{ int fhstatfs(const struct fhandle *u_fhp, \
 				    struct statfs *buf); }
