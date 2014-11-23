@@ -345,8 +345,12 @@ struct kinfo_file {
 	int		kf_sock_domain;		/* Socket domain. */
 	int		kf_sock_type;		/* Socket type. */
 	int		kf_sock_protocol;	/* Socket protocol. */
+#if 1
+	uint64_t	kf_padint64[32];
+#else
 	struct sockaddr_storage kf_sa_local;	/* Socket address. */
 	struct sockaddr_storage	kf_sa_peer;	/* Peer address. */
+#endif
 	union {
 		struct {
 			/* Address of so_pcb. */
