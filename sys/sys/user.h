@@ -346,13 +346,15 @@ struct kinfo_file {
 	int		kf_sock_type;		/* Socket type. */
 	int		kf_sock_protocol;	/* Socket protocol. */
 #if 1
-	uint64_t	kf_padint64[32];
+	// uint64_t	kf_padint64[32];
 #else
 	struct sockaddr_storage kf_sa_local;	/* Socket address. */
 	struct sockaddr_storage	kf_sa_peer;	/* Peer address. */
 #endif
 	union {
 		struct {
+			/* Space for future use */
+			uint64_t	kf_spareint64[32];
 			/* Address of so_pcb. */
 			uint64_t	kf_sock_pcb;
 			/* Address of inp_ppcb. */
@@ -367,6 +369,8 @@ struct kinfo_file {
 			uint32_t	kf_sock_pad0;
 		} kf_sock;
 		struct {
+			/* Space for future use */
+			uint64_t	kf_spareint64[32];
 			/* Global file id. */
 			uint64_t	kf_file_fileid;
 			/* File size. */
@@ -382,10 +386,14 @@ struct kinfo_file {
 			uint32_t	kf_file_pad1;
 		} kf_file;
 		struct {
+			/* Space for future use */
+			uint64_t	kf_spareint64[32];
 			uint32_t	kf_sem_value;
 			uint16_t	kf_sem_mode;
 		} kf_sem;
 		struct {
+			/* Space for future use */
+			uint64_t	kf_spareint64[32];
 			uint64_t	kf_pipe_addr;
 			uint64_t	kf_pipe_peer;
 			uint32_t	kf_pipe_buffer_cnt;
@@ -393,6 +401,8 @@ struct kinfo_file {
 			uint32_t	kf_pipe_pad0[3];
 		} kf_pipe;
 		struct {
+			/* Space for future use */
+			uint64_t	kf_spareint64[32];
 			uint32_t	kf_pts_dev_freebsd9;
 			uint32_t	kf_pts_pad0;
 			uint64_t	kf_pts_dev;
@@ -400,6 +410,8 @@ struct kinfo_file {
 			uint32_t	kf_pts_pad1[4];
 		} kf_pts;
 		struct {
+			/* Space for future use */
+			uint64_t	kf_spareint64[32];
 			pid_t		kf_pid;
 		} kf_proc;
 	} kf_un;
@@ -408,6 +420,7 @@ struct kinfo_file {
 	int		_kf_ispare0;		/* Space for more stuff. */
 	cap_rights_t	kf_cap_rights;		/* Capability rights. */
 	uint64_t	_kf_cap_spare;		/* Space for future cap_rights_t. */
+#if 0
 	union {
 		struct {
 			/* Vnode filesystem id. */
@@ -416,6 +429,7 @@ struct kinfo_file {
 			uint64_t	kf_file_rdev;
 		} kf_file;
 	} kf_un2;
+#endif
 	/* Truncated before copyout in sysctl */
 	char		kf_path[PATH_MAX];	/* Path to file, if any. */
 };
