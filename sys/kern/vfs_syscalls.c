@@ -720,36 +720,34 @@ freebsd4_cvtstatfs(nsp, osp)
 }
 #endif /* COMPAT_FREEBSD4 */
 
-#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
-    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
-    defined(COMPAT_FREEBSD9)
+#if defined(COMPAT_FREEBSD10)
 /*
  * Get old format filesystem statistics.
  */
-static void freebsd9_cvtstatfs(struct statfs *, struct freebsd9_statfs *);
+static void freebsd10_cvtstatfs(struct statfs *, struct freebsd10_statfs *);
 
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_statfs_args {
+struct freebsd10_statfs_args {
 	char *path;
-	struct freebsd9_statfs *buf;
+	struct freebsd10_statfs *buf;
 };
 #endif
 int
-freebsd9_statfs(td, uap)
+freebsd10_statfs(td, uap)
 	struct thread *td;
-	struct freebsd9_statfs_args /* {
+	struct freebsd10_statfs_args /* {
 		char *path;
-		struct freebsd9_statfs *buf;
+		struct freebsd10_statfs *buf;
 	} */ *uap;
 {
-	struct freebsd9_statfs osb;
+	struct freebsd10_statfs osb;
 	struct statfs *sfp;
 	int error;
 
 	sfp = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
 	error = kern_statfs(td, uap->path, UIO_USERSPACE, sfp);
 	if (error == 0) {
-		freebsd9_cvtstatfs(sfp, &osb);
+		freebsd10_cvtstatfs(sfp, &osb);
 		error = copyout(&osb, uap->buf, sizeof(osb));
 	}
 	free(sfp, M_TEMP);
@@ -760,27 +758,27 @@ freebsd9_statfs(td, uap)
  * Get filesystem statistics.
  */
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_fstatfs_args {
+struct freebsd10_fstatfs_args {
 	int fd;
-	struct freebsd9_statfs *buf;
+	struct freebsd10_statfs *buf;
 };
 #endif
 int
-freebsd9_fstatfs(td, uap)
+freebsd10_fstatfs(td, uap)
 	struct thread *td;
-	struct freebsd9_fstatfs_args /* {
+	struct freebsd10_fstatfs_args /* {
 		int fd;
-		struct freebsd9_statfs *buf;
+		struct freebsd10_statfs *buf;
 	} */ *uap;
 {
-	struct freebsd9_statfs osb;
+	struct freebsd10_statfs osb;
 	struct statfs *sfp;
 	int error;
 
 	sfp = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
 	error = kern_fstatfs(td, uap->fd, sfp);
 	if (error == 0) {
-		freebsd9_cvtstatfs(sfp, &osb);
+		freebsd10_cvtstatfs(sfp, &osb);
 		error = copyout(&osb, uap->buf, sizeof(osb));
 	}
 	free(sfp, M_TEMP);
@@ -791,22 +789,22 @@ freebsd9_fstatfs(td, uap)
  * Get statistics on all filesystems.
  */
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_getfsstat_args {
-	struct freebsd9_statfs *buf;
+struct freebsd10_getfsstat_args {
+	struct freebsd10_statfs *buf;
 	long bufsize;
 	int flags;
 };
 #endif
 int
-freebsd9_getfsstat(td, uap)
+freebsd10_getfsstat(td, uap)
 	struct thread *td;
-	register struct freebsd9_getfsstat_args /* {
-		struct freebsd9_statfs *buf;
+	register struct freebsd10_getfsstat_args /* {
+		struct freebsd10_statfs *buf;
 		long bufsize;
 		int flags;
 	} */ *uap;
 {
-	struct freebsd9_statfs osb;
+	struct freebsd10_statfs osb;
 	struct statfs *buf, *sp;
 	size_t count, size;
 	int error;
@@ -818,7 +816,7 @@ freebsd9_getfsstat(td, uap)
 		count = td->td_retval[0];
 		sp = buf;
 		while (count > 0 && error == 0) {
-			freebsd9_cvtstatfs(sp, &osb);
+			freebsd10_cvtstatfs(sp, &osb);
 			error = copyout(&osb, uap->buf, sizeof(osb));
 			sp++;
 			uap->buf++;
@@ -833,20 +831,20 @@ freebsd9_getfsstat(td, uap)
  * Implement fstatfs() for (NFS) file handles.
  */
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_fhstatfs_args {
+struct freebsd10_fhstatfs_args {
 	struct fhandle *u_fhp;
-	struct freebsd9_statfs *buf;
+	struct freebsd10_statfs *buf;
 };
 #endif
 int
-freebsd9_fhstatfs(td, uap)
+freebsd10_fhstatfs(td, uap)
 	struct thread *td;
-	struct freebsd9_fhstatfs_args /* {
+	struct freebsd10_fhstatfs_args /* {
 		struct fhandle *u_fhp;
-		struct freebsd9_statfs *buf;
+		struct freebsd10_statfs *buf;
 	} */ *uap;
 {
-	struct freebsd9_statfs osb;
+	struct freebsd10_statfs osb;
 	struct statfs *sfp;
 	fhandle_t fh;
 	int error;
@@ -857,7 +855,7 @@ freebsd9_fhstatfs(td, uap)
 	sfp = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
 	error = kern_fhstatfs(td, fh, sfp);
 	if (error == 0) {
-		freebsd9_cvtstatfs(sfp, &osb);
+		freebsd10_cvtstatfs(sfp, &osb);
 		error = copyout(&osb, uap->buf, sizeof(osb));
 	}
 	free(sfp, M_TEMP);
@@ -868,12 +866,12 @@ freebsd9_fhstatfs(td, uap)
  * Convert a new format statfs structure to an old format statfs structure.
  */
 static void
-freebsd9_cvtstatfs(nsp, osp)
+freebsd10_cvtstatfs(nsp, osp)
 	struct statfs *nsp;
-	struct freebsd9_statfs *osp;
+	struct freebsd10_statfs *osp;
 {
 	bzero(osp, sizeof(*osp));
-	osp->f_version = FREEBSD9_STATFS_VERSION;
+	osp->f_version = freebsd10_STATFS_VERSION;
 	osp->f_type = nsp->f_type;
 	osp->f_flags = nsp->f_flags;
 	osp->f_bsize = nsp->f_bsize;
@@ -897,7 +895,7 @@ freebsd9_cvtstatfs(nsp, osp)
 	strlcpy(osp->f_mntfromname, nsp->f_mntfromname,
 	    MIN(MNAMELEN, sizeof(osp->f_mntfromname)));
 }
-#endif /* COMPAT_FREEBSD9 */
+#endif /* COMPAT_FREEBSD10 */
 
 /*
  * Change current working directory to a given file descriptor.
@@ -1398,12 +1396,10 @@ sys_mknodat(struct thread *td, struct mknodat_args *uap)
 	    uap->dev));
 }
 
-#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
-    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
-    defined(COMPAT_FREEBSD9)
+#if defined(COMPAT_FREEBSD10)
 int
-freebsd9_mknod(struct thread *td,
-    struct freebsd9_mknod_args *uap)
+freebsd10_mknod(struct thread *td,
+    struct freebsd10_mknod_args *uap)
 {
 
 	return (kern_mknodat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
@@ -1411,14 +1407,14 @@ freebsd9_mknod(struct thread *td,
 }
 
 int
-freebsd9_mknodat(struct thread *td,
-    struct freebsd9_mknodat_args *uap)
+freebsd10_mknodat(struct thread *td,
+    struct freebsd10_mknodat_args *uap)
 {
 
 	return (kern_mknodat(td, uap->fd, uap->path, UIO_USERSPACE, uap->mode,
 	    uap->dev));
 }
-#endif /* COMPAT_FREEBSD9 */
+#endif /* COMPAT_FREEBSD10 */
 
 int
 kern_mknodat(struct thread *td, int fd, char *path, enum uio_seg pathseg,
@@ -2352,11 +2348,9 @@ cvtstat(st, ost)
 }
 #endif /* COMPAT_43 */
 
-#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
-    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
-    defined(COMPAT_FREEBSD9)
+#if defined(COMPAT_FREEBSD10)
 void
-freebsd9_cvtstat(struct stat *st, struct freebsd9_stat *ost)
+freebsd10_cvtstat(struct stat *st, struct freebsd10_stat *ost)
 {
 	ost->st_dev = st->st_dev;
 	ost->st_ino = st->st_ino;		/* truncate */
@@ -2378,61 +2372,61 @@ freebsd9_cvtstat(struct stat *st, struct freebsd9_stat *ost)
 }
 
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_stat_args {
+struct freebsd10_stat_args {
 	char	*path;
-	struct freebsd9_stat *ub;
+	struct freebsd10_stat *ub;
 };
 #endif
 int
-freebsd9_stat(struct thread *td, struct freebsd9_stat_args* uap)
+freebsd10_stat(struct thread *td, struct freebsd10_stat_args* uap)
 {
 	struct stat sb;
-	struct freebsd9_stat osb;
+	struct freebsd10_stat osb;
 	int error;
 
 	error = kern_statat(td, 0, AT_FDCWD, uap->path, UIO_USERSPACE,
 	    &sb, NULL);
 	if (error != 0)
 		return (error);
-	freebsd9_cvtstat(&sb, &osb);
+	freebsd10_cvtstat(&sb, &osb);
 	error = copyout(&osb, uap->ub, sizeof(osb));
 	return (error);
 }
 
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_lstat_args {
+struct freebsd10_lstat_args {
 	char	*path;
-	struct freebsd9_stat *ub;
+	struct freebsd10_stat *ub;
 };
 #endif
 int
-freebsd9_lstat(struct thread *td, register struct freebsd9_lstat_args* uap)
+freebsd10_lstat(struct thread *td, register struct freebsd10_lstat_args* uap)
 {
 	struct stat sb;
-	struct freebsd9_stat osb;
+	struct freebsd10_stat osb;
 	int error;
 
 	error = kern_statat(td, AT_SYMLINK_NOFOLLOW, AT_FDCWD, uap->path,
 	    UIO_USERSPACE, &sb, NULL);
 	if (error != 0)
 		return (error);
-	freebsd9_cvtstat(&sb, &osb);
+	freebsd10_cvtstat(&sb, &osb);
 	error = copyout(&osb, uap->ub, sizeof(osb));
 	return (error);
 }
 
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_fhstat_args {
+struct freebsd10_fhstat_args {
 	struct fhandle *u_fhp;
-	struct freebsd9_stat *sb;
+	struct freebsd10_stat *sb;
 };
 #endif
 int
-freebsd9_fhstat(struct thread *td, struct freebsd9_fhstat_args* uap)
+freebsd10_fhstat(struct thread *td, struct freebsd10_fhstat_args* uap)
 {
 	struct fhandle fh;
 	struct stat sb;
-	struct freebsd9_stat osb;
+	struct freebsd10_stat osb;
 	int error;
 
 	error = copyin(uap->u_fhp, &fh, sizeof(fhandle_t));
@@ -2441,35 +2435,35 @@ freebsd9_fhstat(struct thread *td, struct freebsd9_fhstat_args* uap)
 	error = kern_fhstat(td, fh, &sb);
 	if (error != 0)
 		return (error);
-	freebsd9_cvtstat(&sb, &osb);
+	freebsd10_cvtstat(&sb, &osb);
 	error = copyout(&osb, uap->sb, sizeof(osb));
 	return (error);
 }
 
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_fstatat_args {
+struct freebsd10_fstatat_args {
 	int	fd;
 	char	*path;
-	struct freebsd9_stat *buf;
+	struct freebsd10_stat *buf;
 	int	flag;
 };
 #endif
 int
-freebsd9_fstatat(struct thread *td, struct freebsd9_fstatat_args* uap)
+freebsd10_fstatat(struct thread *td, struct freebsd10_fstatat_args* uap)
 {
 	struct stat sb;
-	struct freebsd9_stat osb;
+	struct freebsd10_stat osb;
 	int error;
 
 	error = kern_statat(td, uap->flag, uap->fd, uap->path,
 	    UIO_USERSPACE, &sb);
 	if (error != 0)
 		return (error);
-	freebsd9_cvtstat(&sb, &osb);
+	freebsd10_cvtstat(&sb, &osb);
 	error = copyout(&osb, uap->buf, sizeof(osb));
 	return (error);
 }
-#endif	/* COMPAT_FREEBSD9 */
+#endif	/* COMPAT_FREEBSD10 */
 
 /*
  * Get file status
@@ -2534,14 +2528,12 @@ kern_statat(struct thread *td, int flag, int fd, char *path,
 	return (0);
 }
 
-#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
-    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
-    defined(COMPAT_FREEBSD9)
+#if defined(COMPAT_FREEBSD10)
 /*
  * Implementation of the NetBSD [l]stat() functions.
  */
 void
-freebsd9_cvtnstat(sb, nsb)
+freebsd10_cvtnstat(sb, nsb)
 	struct stat *sb;
 	struct nstat *nsb;
 {
@@ -2566,15 +2558,15 @@ freebsd9_cvtnstat(sb, nsb)
 }
 
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_nstat_args {
+struct freebsd10_nstat_args {
 	char	*path;
 	struct nstat *ub;
 };
 #endif
 int
-freebsd9_nstat(td, uap)
+freebsd10_nstat(td, uap)
 	struct thread *td;
-	register struct freebsd9_nstat_args /* {
+	register struct freebsd10_nstat_args /* {
 		char *path;
 		struct nstat *ub;
 	} */ *uap;
@@ -2587,7 +2579,7 @@ freebsd9_nstat(td, uap)
 	    &sb, NULL);
 	if (error != 0)
 		return (error);
-	freebsd9_cvtnstat(&sb, &nsb);
+	freebsd10_cvtnstat(&sb, &nsb);
 	return (copyout(&nsb, uap->ub, sizeof (nsb)));
 }
 
@@ -2595,15 +2587,15 @@ freebsd9_nstat(td, uap)
  * NetBSD lstat.  Get file status; this version does not follow links.
  */
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_nlstat_args {
+struct freebsd10_nlstat_args {
 	char	*path;
 	struct stat *ub;
 };
 #endif
 int
-freebsd9_nlstat(td, uap)
+freebsd10_nlstat(td, uap)
 	struct thread *td;
-	register struct freebsd9_nlstat_args /* {
+	register struct freebsd10_nlstat_args /* {
 		char *path;
 		struct nstat *ub;
 	} */ *uap;
@@ -2616,10 +2608,10 @@ freebsd9_nlstat(td, uap)
 	    UIO_USERSPACE, &sb, NULL);
 	if (error != 0)
 		return (error);
-	freebsd9_cvtnstat(&sb, &nsb);
+	freebsd10_cvtnstat(&sb, &nsb);
 	return (copyout(&nsb, uap->ub, sizeof (nsb)));
 }
-#endif /* COMPAT_FREEBSD9 */
+#endif /* COMPAT_FREEBSD10 */
 
 /*
  * Get configurable pathname variables.
@@ -3971,14 +3963,12 @@ out:
 	return (error);
 }
 
-#if defined(COMPAT_43) || defined(COMPAT_FREEBSD4) || \
-    defined(COMPAT_FREEBSD5) || defined(COMPAT_FREEBSD6) || \
-    defined(COMPAT_FREEBSD7) || defined(COMPAT_FREEBSD9)
+#if defined(COMPAT_FREEBSD10)
 int
-freebsd9_kern_getdirentries(struct thread *td, int fd, char *ubuf, u_int count,
-    long *basep, void (*func)(struct freebsd9_dirent *))
+freebsd10_kern_getdirentries(struct thread *td, int fd, char *ubuf, u_int count,
+    long *basep, void (*func)(struct freebsd10_dirent *))
 {
-	struct freebsd9_dirent dstdp;
+	struct freebsd10_dirent dstdp;
 	struct dirent *dp, *edp;
 	char *dirbuf;
 	off_t base;
@@ -4012,7 +4002,7 @@ freebsd9_kern_getdirentries(struct thread *td, int fd, char *ubuf, u_int count,
 		    ((dp->d_namlen + 1 + 3) &~ 3);
 		bcopy(dp->d_name, dstdp.d_name, dstdp.d_namlen);
 		bzero(dstdp.d_name + dstdp.d_namlen,
-		    dstdp.d_reclen - offsetof(struct freebsd9_dirent, d_name) -
+		    dstdp.d_reclen - offsetof(struct freebsd10_dirent, d_name) -
 		    dstdp.d_namlen);
 		MPASS(dstdp.d_reclen <= dp->d_reclen);
 		MPASS(ucount + dstdp.d_reclen <= count);
@@ -4035,7 +4025,7 @@ done:
 
 #ifdef COMPAT_43
 static void
-ogetdirentries_cvt(struct freebsd9_dirent *dp)
+ogetdirentries_cvt(struct freebsd10_dirent *dp)
 {
 #if (BYTE_ORDER == LITTLE_ENDIAN)
 	/*
@@ -4087,7 +4077,7 @@ kern_ogetdirentries(struct thread *td, struct ogetdirentries_args *uap,
 	if (uap->count > 64 * 1024)
 		return (EINVAL);
 
-	error = freebsd9_kern_getdirentries(td, uap->fd, uap->buf, uap->count,
+	error = freebsd10_kern_getdirentries(td, uap->fd, uap->buf, uap->count,
 	    &base, ogetdirentries_cvt);
 
 	if (error == 0 && uap->basep != NULL)
@@ -4097,11 +4087,9 @@ kern_ogetdirentries(struct thread *td, struct ogetdirentries_args *uap,
 }
 #endif /* COMPAT_43 */
 
-#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
-    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
-    defined(COMPAT_FREEBSD9)
+#if defined(COMPAT_FREEBSD10)
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_getdirentries_args {
+struct freebsd10_getdirentries_args {
 	int	fd;
 	char	*buf;
 	u_int	count;
@@ -4109,13 +4097,13 @@ struct freebsd9_getdirentries_args {
 };
 #endif
 int
-freebsd9_getdirentries(struct thread *td,
-    struct freebsd9_getdirentries_args *uap)
+freebsd10_getdirentries(struct thread *td,
+    struct freebsd10_getdirentries_args *uap)
 {
 	long base;
 	int error;
 
-	error = freebsd9_kern_getdirentries(td, uap->fd, uap->buf, uap->count,
+	error = freebsd10_kern_getdirentries(td, uap->fd, uap->buf, uap->count,
 	    &base, NULL);
 
 	if (error == 0 && uap->basep != NULL)
@@ -4124,24 +4112,24 @@ freebsd9_getdirentries(struct thread *td,
 }
 
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_getdents_args {
+struct freebsd10_getdents_args {
 	int fd;
 	char *buf;
 	size_t count;
 };
 #endif
 int
-freebsd9_getdents(struct thread *td, struct freebsd9_getdents_args *uap)
+freebsd10_getdents(struct thread *td, struct freebsd10_getdents_args *uap)
 {
-	struct freebsd9_getdirentries_args ap;
+	struct freebsd10_getdirentries_args ap;
 
 	ap.fd = uap->fd;
 	ap.buf = uap->buf;
 	ap.count = uap->count;
 	ap.basep = NULL;
-	return (freebsd9_getdirentries(td, &ap));
+	return (freebsd10_getdirentries(td, &ap));
 }
-#endif /* COMPAT_FREEBSD9 */
+#endif /* COMPAT_FREEBSD10 */
 
 /*
  * Read a block of directory entries in a filesystem independent format.

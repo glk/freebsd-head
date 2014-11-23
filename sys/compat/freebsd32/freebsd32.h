@@ -182,7 +182,7 @@ struct stat32 {
 	unsigned int :(8 / 2) * (16 - (int)sizeof(struct timespec32));
 	unsigned int :(8 / 2) * (16 - (int)sizeof(struct timespec32));
 };
-struct freebsd9_stat32 {
+struct freebsd10_stat32 {
 	u_int32_t st_dev;
 	u_int32_t st_ino;
 	mode_t	st_mode;

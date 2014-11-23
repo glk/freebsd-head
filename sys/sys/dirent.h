@@ -74,7 +74,7 @@ struct dirent {
 };
 
 #if __BSD_VISIBLE
-struct freebsd9_dirent {
+struct freebsd10_dirent {
 	__uint32_t d_fileno;		/* file number of entry */
 	__uint16_t d_reclen;		/* length of this record */
 	__uint8_t  d_type; 		/* file type, see below */

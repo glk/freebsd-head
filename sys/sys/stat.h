@@ -120,7 +120,7 @@ struct ostat {
 #endif
 
 #if __BSD_VISIBLE
-struct freebsd9_stat {
+struct freebsd10_stat {
 	__uint32_t st_dev;		/* inode's device */
 	__uint32_t st_ino;		/* inode's number */
 	mode_t	  st_mode;		/* inode protection mode */

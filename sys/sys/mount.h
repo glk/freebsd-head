@@ -92,8 +92,8 @@ struct statfs {
 	char	  f_mntonname[MNAMELEN];    /* directory on which mounted */
 };
 
-#define	FREEBSD9_STATFS_VERSION	0x20030518	/* current version number */
-struct freebsd9_statfs {
+#define	FREEBSD10_STATFS_VERSION	0x20030518 /* current version number */
+struct freebsd10_statfs {
 	uint32_t f_version;		/* structure version number */
 	uint32_t f_type;		/* type of filesystem */
 	uint64_t f_flags;		/* copy of mount exported flags */

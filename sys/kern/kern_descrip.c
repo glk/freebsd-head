@@ -1289,30 +1289,28 @@ ofstat(struct thread *td, struct ofstat_args *uap)
 }
 #endif /* COMPAT_43 */
 
-#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
-    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
-    defined(COMPAT_FREEBSD9)
+#if defined(COMPAT_FREEBSD10)
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_fstat_args {
+struct freebsd10_fstat_args {
 	int	fd;
-	struct	freebsd9_stat *sb;
+	struct	freebsd10_stat *sb;
 };
 #endif
 int
-freebsd9_fstat(struct thread *td, struct freebsd9_fstat_args *uap)
+freebsd10_fstat(struct thread *td, struct freebsd10_fstat_args *uap)
 {
 	struct stat sb;
-	struct freebsd9_stat osb;
+	struct freebsd10_stat osb;
 	int error;
 
 	error = kern_fstat(td, uap->fd, &sb);
 	if (error != 0)
 		return (error);
-	freebsd9_cvtstat(&sb, &osb);
+	freebsd10_cvtstat(&sb, &osb);
 	error = copyout(&osb, uap->sb, sizeof(osb));
 	return (error);
 }
-#endif	/* COMPAT_FREEBSD9 */
+#endif	/* COMPAT_FREEBSD10 */
 
 /*
  * Return status information about a file descriptor.
@@ -1360,21 +1358,19 @@ kern_fstat(struct thread *td, int fd, struct stat *sbp)
 	return (error);
 }
 
-#if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
-    defined(COMPAT_FREEBSD6) || defined(COMPAT_FREEBSD7) || \
-    defined(COMPAT_FREEBSD9)
+#if defined(COMPAT_FREEBSD10)
 /*
  * Return status information about a file descriptor.
  */
 #ifndef _SYS_SYSPROTO_H_
-struct freebsd9_nfstat_args {
+struct freebsd10_nfstat_args {
 	int	fd;
 	struct	nstat *sb;
 };
 #endif
 /* ARGSUSED */
 int
-freebsd9_nfstat(struct thread *td, struct freebsd9_nfstat_args *uap)
+freebsd10_nfstat(struct thread *td, struct freebsd10_nfstat_args *uap)
 {
 	struct nstat nub;
 	struct stat ub;
@@ -1382,12 +1378,12 @@ freebsd9_nfstat(struct thread *td, struct freebsd9_nfstat_args *uap)
 
 	error = kern_fstat(td, uap->fd, &ub);
 	if (error == 0) {
-		freebsd9_cvtnstat(&ub, &nub);
+		freebsd10_cvtnstat(&ub, &nub);
 		error = copyout(&nub, uap->sb, sizeof(nub));
 	}
 	return (error);
 }
-#endif /* COMPAT_FREEBSD9 */
+#endif /* COMPAT_FREEBSD10 */
 
 /*
  * Return pathconf information about a file descriptor.
