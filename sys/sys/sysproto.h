@@ -2448,15 +2448,15 @@ struct freebsd10_mknod_args {
 };
 struct freebsd10_stat_args {
 	char path_l_[PADL_(char *)]; char * path; char path_r_[PADR_(char *)];
-	char ub_l_[PADL_(struct freebsd9_stat *)]; struct freebsd9_stat * ub; char ub_r_[PADR_(struct freebsd9_stat *)];
+	char ub_l_[PADL_(struct freebsd10_stat *)]; struct freebsd10_stat * ub; char ub_r_[PADR_(struct freebsd10_stat *)];
 };
 struct freebsd10_fstat_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
-	char sb_l_[PADL_(struct freebsd9_stat *)]; struct freebsd9_stat * sb; char sb_r_[PADR_(struct freebsd9_stat *)];
+	char sb_l_[PADL_(struct freebsd10_stat *)]; struct freebsd10_stat * sb; char sb_r_[PADR_(struct freebsd10_stat *)];
 };
 struct freebsd10_lstat_args {
 	char path_l_[PADL_(char *)]; char * path; char path_r_[PADR_(char *)];
-	char ub_l_[PADL_(struct freebsd9_stat *)]; struct freebsd9_stat * ub; char ub_r_[PADR_(struct freebsd9_stat *)];
+	char ub_l_[PADL_(struct freebsd10_stat *)]; struct freebsd10_stat * ub; char ub_r_[PADR_(struct freebsd10_stat *)];
 };
 struct freebsd10_getdirentries_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
@@ -2483,29 +2483,29 @@ struct freebsd10_nlstat_args {
 };
 struct freebsd10_fhstat_args {
 	char u_fhp_l_[PADL_(const struct fhandle *)]; const struct fhandle * u_fhp; char u_fhp_r_[PADR_(const struct fhandle *)];
-	char sb_l_[PADL_(struct freebsd9_stat *)]; struct freebsd9_stat * sb; char sb_r_[PADR_(struct freebsd9_stat *)];
+	char sb_l_[PADL_(struct freebsd10_stat *)]; struct freebsd10_stat * sb; char sb_r_[PADR_(struct freebsd10_stat *)];
 };
 struct freebsd10_getfsstat_args {
-	char buf_l_[PADL_(struct freebsd9_statfs *)]; struct freebsd9_statfs * buf; char buf_r_[PADR_(struct freebsd9_statfs *)];
+	char buf_l_[PADL_(struct freebsd10_statfs *)]; struct freebsd10_statfs * buf; char buf_r_[PADR_(struct freebsd10_statfs *)];
 	char bufsize_l_[PADL_(long)]; long bufsize; char bufsize_r_[PADR_(long)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 };
 struct freebsd10_statfs_args {
 	char path_l_[PADL_(char *)]; char * path; char path_r_[PADR_(char *)];
-	char buf_l_[PADL_(struct freebsd9_statfs *)]; struct freebsd9_statfs * buf; char buf_r_[PADR_(struct freebsd9_statfs *)];
+	char buf_l_[PADL_(struct freebsd10_statfs *)]; struct freebsd10_statfs * buf; char buf_r_[PADR_(struct freebsd10_statfs *)];
 };
 struct freebsd10_fstatfs_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
-	char buf_l_[PADL_(struct freebsd9_statfs *)]; struct freebsd9_statfs * buf; char buf_r_[PADR_(struct freebsd9_statfs *)];
+	char buf_l_[PADL_(struct freebsd10_statfs *)]; struct freebsd10_statfs * buf; char buf_r_[PADR_(struct freebsd10_statfs *)];
 };
 struct freebsd10_fhstatfs_args {
 	char u_fhp_l_[PADL_(const struct fhandle *)]; const struct fhandle * u_fhp; char u_fhp_r_[PADR_(const struct fhandle *)];
-	char buf_l_[PADL_(struct freebsd9_statfs *)]; struct freebsd9_statfs * buf; char buf_r_[PADR_(struct freebsd9_statfs *)];
+	char buf_l_[PADL_(struct freebsd10_statfs *)]; struct freebsd10_statfs * buf; char buf_r_[PADR_(struct freebsd10_statfs *)];
 };
 struct freebsd10_fstatat_args {
 	char fd_l_[PADL_(int)]; int fd; char fd_r_[PADR_(int)];
 	char path_l_[PADL_(char *)]; char * path; char path_r_[PADR_(char *)];
-	char buf_l_[PADL_(struct freebsd9_stat *)]; struct freebsd9_stat * buf; char buf_r_[PADR_(struct freebsd9_stat *)];
+	char buf_l_[PADL_(struct freebsd10_stat *)]; struct freebsd10_stat * buf; char buf_r_[PADR_(struct freebsd10_stat *)];
 	char flag_l_[PADL_(int)]; int flag; char flag_r_[PADR_(int)];
 };
 struct freebsd10_mknodat_args {
