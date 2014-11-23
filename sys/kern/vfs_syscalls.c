@@ -96,8 +96,6 @@ SDT_PROBE_DEFINE2(vfs, , stat, reg, "char *", "int");
 
 static int chroot_refuse_vdir_fds(struct filedesc *fdp);
 static int getutimes(const struct timeval *, enum uio_seg, struct timespec *);
-static int kern_chflags(struct thread *td, const char *path,
-    enum uio_seg pathseg, u_long flags);
 static int kern_chflagsat(struct thread *td, int fd, const char *path,
     enum uio_seg pathseg, u_long flags, int atflag);
 static int setfflags(struct thread *td, struct vnode *, u_long);
@@ -1206,7 +1204,8 @@ sys_open(td, uap)
 	} */ *uap;
 {
 
-	return (kern_open(td, uap->path, UIO_USERSPACE, uap->flags, uap->mode));
+	return (kern_openat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    uap->flags, uap->mode));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -1223,14 +1222,6 @@ sys_openat(struct thread *td, struct openat_args *uap)
 
 	return (kern_openat(td, uap->fd, uap->path, UIO_USERSPACE, uap->flag,
 	    uap->mode));
-}
-
-int
-kern_open(struct thread *td, char *path, enum uio_seg pathseg, int flags,
-    int mode)
-{
-
-	return (kern_openat(td, AT_FDCWD, path, pathseg, flags, mode));
 }
 
 int
@@ -1391,7 +1382,7 @@ ocreat(td, uap)
 	} */ *uap;
 {
 
-	return (kern_open(td, uap->path, UIO_USERSPACE,
+	return (kern_openat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
 	    O_WRONLY | O_CREAT | O_TRUNC, uap->mode));
 }
 #endif /* COMPAT_43 */
@@ -1415,7 +1406,8 @@ freebsd9_mknod(struct thread *td,
     struct freebsd9_mknod_args *uap)
 {
 
-	return (kern_mknod(td, uap->path, UIO_USERSPACE, uap->mode, uap->dev));
+	return (kern_mknodat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    uap->mode, uap->dev));
 }
 
 int
@@ -1427,14 +1419,6 @@ freebsd9_mknodat(struct thread *td,
 	    uap->dev));
 }
 #endif /* COMPAT_FREEBSD9 */
-
-int
-kern_mknod(struct thread *td, char *path, enum uio_seg pathseg, int mode,
-    dev_t dev)
-{
-
-	return (kern_mknodat(td, AT_FDCWD, path, pathseg, mode, dev));
-}
 
 int
 kern_mknodat(struct thread *td, int fd, char *path, enum uio_seg pathseg,
@@ -1555,7 +1539,8 @@ sys_mkfifo(td, uap)
 	} */ *uap;
 {
 
-	return (kern_mkfifo(td, uap->path, UIO_USERSPACE, uap->mode));
+	return (kern_mkfifoat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    uap->mode));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -1571,13 +1556,6 @@ sys_mkfifoat(struct thread *td, struct mkfifoat_args *uap)
 
 	return (kern_mkfifoat(td, uap->fd, uap->path, UIO_USERSPACE,
 	    uap->mode));
-}
-
-int
-kern_mkfifo(struct thread *td, char *path, enum uio_seg pathseg, int mode)
-{
-
-	return (kern_mkfifoat(td, AT_FDCWD, path, pathseg, mode));
 }
 
 int
@@ -1652,7 +1630,8 @@ sys_link(td, uap)
 	} */ *uap;
 {
 
-	return (kern_link(td, uap->path, uap->link, UIO_USERSPACE));
+	return (kern_linkat(td, AT_FDCWD, AT_FDCWD, uap->path, uap->link,
+	    UIO_USERSPACE, FOLLOW));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -1714,13 +1693,6 @@ can_hardlink(struct vnode *vp, struct ucred *cred)
 	}
 
 	return (0);
-}
-
-int
-kern_link(struct thread *td, char *path, char *link, enum uio_seg segflg)
-{
-
-	return (kern_linkat(td, AT_FDCWD, AT_FDCWD, path,link, segflg, FOLLOW));
 }
 
 int
@@ -1825,7 +1797,8 @@ sys_symlink(td, uap)
 	} */ *uap;
 {
 
-	return (kern_symlink(td, uap->path, uap->link, UIO_USERSPACE));
+	return (kern_symlinkat(td, uap->path, AT_FDCWD, uap->link,
+	    UIO_USERSPACE));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -1841,13 +1814,6 @@ sys_symlinkat(struct thread *td, struct symlinkat_args *uap)
 
 	return (kern_symlinkat(td, uap->path1, uap->fd, uap->path2,
 	    UIO_USERSPACE));
-}
-
-int
-kern_symlink(struct thread *td, char *path, char *link, enum uio_seg segflg)
-{
-
-	return (kern_symlinkat(td, path, AT_FDCWD, link, segflg));
 }
 
 int
@@ -1978,7 +1944,7 @@ sys_unlink(td, uap)
 	} */ *uap;
 {
 
-	return (kern_unlink(td, uap->path, UIO_USERSPACE));
+	return (kern_unlinkat(td, AT_FDCWD, uap->path, UIO_USERSPACE, 0));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -2002,13 +1968,6 @@ sys_unlinkat(struct thread *td, struct unlinkat_args *uap)
 		return (kern_rmdirat(td, fd, path, UIO_USERSPACE));
 	else
 		return (kern_unlinkat(td, fd, path, UIO_USERSPACE, 0));
-}
-
-int
-kern_unlink(struct thread *td, char *path, enum uio_seg pathseg)
-{
-
-	return (kern_unlinkat(td, AT_FDCWD, path, pathseg, 0));
 }
 
 int
@@ -2214,7 +2173,8 @@ sys_access(td, uap)
 	} */ *uap;
 {
 
-	return (kern_access(td, uap->path, UIO_USERSPACE, uap->amode));
+	return (kern_accessat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    0, uap->amode));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -2229,17 +2189,8 @@ int
 sys_faccessat(struct thread *td, struct faccessat_args *uap)
 {
 
-	if (uap->flag & ~AT_EACCESS)
-		return (EINVAL);
 	return (kern_accessat(td, uap->fd, uap->path, UIO_USERSPACE, uap->flag,
 	    uap->amode));
-}
-
-int
-kern_access(struct thread *td, char *path, enum uio_seg pathseg, int amode)
-{
-
-	return (kern_accessat(td, AT_FDCWD, path, pathseg, 0, amode));
 }
 
 int
@@ -2252,6 +2203,8 @@ kern_accessat(struct thread *td, int fd, char *path, enum uio_seg pathseg,
 	cap_rights_t rights;
 	int error;
 
+	if (flag & ~AT_EACCESS)
+		return (EINVAL);
 	if (amode != F_OK && (amode & ~(R_OK | W_OK | X_OK)) != 0)
 		return (EINVAL);
 
@@ -2306,14 +2259,8 @@ sys_eaccess(td, uap)
 	} */ *uap;
 {
 
-	return (kern_eaccess(td, uap->path, UIO_USERSPACE, uap->amode));
-}
-
-int
-kern_eaccess(struct thread *td, char *path, enum uio_seg pathseg, int amode)
-{
-
-	return (kern_accessat(td, AT_FDCWD, path, pathseg, AT_EACCESS, amode));
+	return (kern_accessat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    AT_EACCESS, uap->amode));
 }
 
 #if defined(COMPAT_43)
@@ -2338,7 +2285,8 @@ ostat(td, uap)
 	struct ostat osb;
 	int error;
 
-	error = kern_stat(td, uap->path, UIO_USERSPACE, &sb);
+	error = kern_statat(td, 0, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    &sb, NULL);
 	if (error != 0)
 		return (error);
 	cvtstat(&sb, &osb);
@@ -2366,7 +2314,8 @@ olstat(td, uap)
 	struct ostat osb;
 	int error;
 
-	error = kern_lstat(td, uap->path, UIO_USERSPACE, &sb);
+	error = kern_statat(td, AT_SYMLINK_NOFOLLOW, AT_FDCWD, uap->path,
+	    UIO_USERSPACE, &sb, NULL);
 	if (error != 0)
 		return (error);
 	cvtstat(&sb, &osb);
@@ -2441,7 +2390,8 @@ freebsd9_stat(struct thread *td, struct freebsd9_stat_args* uap)
 	struct freebsd9_stat osb;
 	int error;
 
-	error = kern_stat(td, uap->path, UIO_USERSPACE, &sb);
+	error = kern_statat(td, 0, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    &sb, NULL);
 	if (error != 0)
 		return (error);
 	freebsd9_cvtstat(&sb, &osb);
@@ -2462,7 +2412,8 @@ freebsd9_lstat(struct thread *td, register struct freebsd9_lstat_args* uap)
 	struct freebsd9_stat osb;
 	int error;
 
-	error = kern_lstat(td, uap->path, UIO_USERSPACE, &sb);
+	error = kern_statat(td, AT_SYMLINK_NOFOLLOW, AT_FDCWD, uap->path,
+	    UIO_USERSPACE, &sb, NULL);
 	if (error != 0)
 		return (error);
 	freebsd9_cvtstat(&sb, &osb);
@@ -2538,29 +2489,14 @@ sys_fstatat(struct thread *td, struct fstatat_args *uap)
 	int error;
 
 	error = kern_statat(td, uap->flag, uap->fd, uap->path,
-	    UIO_USERSPACE, &sb);
+	    UIO_USERSPACE, &sb, NULL);
 	if (error == 0)
 		error = copyout(&sb, uap->buf, sizeof (sb));
 	return (error);
 }
 
 int
-kern_stat(struct thread *td, char *path, enum uio_seg pathseg, struct stat *sbp)
-{
-
-	return (kern_statat(td, 0, AT_FDCWD, path, pathseg, sbp));
-}
-
-int
 kern_statat(struct thread *td, int flag, int fd, char *path,
-    enum uio_seg pathseg, struct stat *sbp)
-{
-
-	return (kern_statat_vnhook(td, flag, fd, path, pathseg, sbp, NULL));
-}
-
-int
-kern_statat_vnhook(struct thread *td, int flag, int fd, char *path,
     enum uio_seg pathseg, struct stat *sbp,
     void (*hook)(struct vnode *vp, struct stat *sbp))
 {
@@ -2596,14 +2532,6 @@ kern_statat_vnhook(struct thread *td, int flag, int fd, char *path,
 		ktrstat(&sb);
 #endif
 	return (0);
-}
-
-int
-kern_lstat(struct thread *td, char *path, enum uio_seg pathseg, struct stat *sbp)
-{
-
-	return (kern_statat(td, AT_SYMLINK_NOFOLLOW, AT_FDCWD, path, pathseg,
-	    sbp));
 }
 
 #if defined(COMPAT_FREEBSD4) || defined(COMPAT_FREEBSD5) || \
@@ -2655,7 +2583,8 @@ freebsd9_nstat(td, uap)
 	struct nstat nsb;
 	int error;
 
-	error = kern_stat(td, uap->path, UIO_USERSPACE, &sb);
+	error = kern_statat(td, 0, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    &sb, NULL);
 	if (error != 0)
 		return (error);
 	freebsd9_cvtnstat(&sb, &nsb);
@@ -2683,7 +2612,8 @@ freebsd9_nlstat(td, uap)
 	struct nstat nsb;
 	int error;
 
-	error = kern_lstat(td, uap->path, UIO_USERSPACE, &sb);
+	error = kern_statat(td, AT_SYMLINK_NOFOLLOW, AT_FDCWD, uap->path,
+	    UIO_USERSPACE, &sb, NULL);
 	if (error != 0)
 		return (error);
 	freebsd9_cvtnstat(&sb, &nsb);
@@ -2773,8 +2703,8 @@ sys_readlink(td, uap)
 	} */ *uap;
 {
 
-	return (kern_readlink(td, uap->path, UIO_USERSPACE, uap->buf,
-	    UIO_USERSPACE, uap->count));
+	return (kern_readlinkat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    uap->buf, UIO_USERSPACE, uap->count));
 }
 #ifndef _SYS_SYSPROTO_H_
 struct readlinkat_args {
@@ -2790,15 +2720,6 @@ sys_readlinkat(struct thread *td, struct readlinkat_args *uap)
 
 	return (kern_readlinkat(td, uap->fd, uap->path, UIO_USERSPACE,
 	    uap->buf, UIO_USERSPACE, uap->bufsize));
-}
-
-int
-kern_readlink(struct thread *td, char *path, enum uio_seg pathseg, char *buf,
-    enum uio_seg bufseg, size_t count)
-{
-
-	return (kern_readlinkat(td, AT_FDCWD, path, pathseg, buf, bufseg,
-	    count));
 }
 
 int
@@ -2909,7 +2830,8 @@ sys_chflags(td, uap)
 	} */ *uap;
 {
 
-	return (kern_chflags(td, uap->path, UIO_USERSPACE, uap->flags));
+	return (kern_chflagsat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    uap->flags, 0));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -2932,14 +2854,6 @@ sys_chflagsat(struct thread *td, struct chflagsat_args *uap)
 		return (EINVAL);
 
 	return (kern_chflagsat(td, fd, path, UIO_USERSPACE, flags, atflag));
-}
-
-static int
-kern_chflags(struct thread *td, const char *path, enum uio_seg pathseg,
-    u_long flags)
-{
-
-	return (kern_chflagsat(td, AT_FDCWD, path, pathseg, flags, 0));
 }
 
 /*
@@ -3062,7 +2976,8 @@ sys_chmod(td, uap)
 	} */ *uap;
 {
 
-	return (kern_chmod(td, uap->path, UIO_USERSPACE, uap->mode));
+	return (kern_fchmodat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    uap->mode, 0));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -3085,13 +3000,6 @@ sys_fchmodat(struct thread *td, struct fchmodat_args *uap)
 		return (EINVAL);
 
 	return (kern_fchmodat(td, fd, path, UIO_USERSPACE, mode, flag));
-}
-
-int
-kern_chmod(struct thread *td, char *path, enum uio_seg pathseg, int mode)
-{
-
-	return (kern_fchmodat(td, AT_FDCWD, path, pathseg, mode, 0));
 }
 
 /*
@@ -3215,7 +3123,8 @@ sys_chown(td, uap)
 	} */ *uap;
 {
 
-	return (kern_chown(td, uap->path, UIO_USERSPACE, uap->uid, uap->gid));
+	return (kern_fchownat(td, 0, uap->path, UIO_USERSPACE, uap->uid,
+	    uap->gid, 0));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -3238,14 +3147,6 @@ sys_fchownat(struct thread *td, struct fchownat_args *uap)
 
 	return (kern_fchownat(td, uap->fd, uap->path, UIO_USERSPACE, uap->uid,
 	    uap->gid, uap->flag));
-}
-
-int
-kern_chown(struct thread *td, char *path, enum uio_seg pathseg, int uid,
-    int gid)
-{
-
-	return (kern_fchownat(td, AT_FDCWD, path, pathseg, uid, gid, 0));
 }
 
 int
@@ -3289,16 +3190,8 @@ sys_lchown(td, uap)
 	} */ *uap;
 {
 
-	return (kern_lchown(td, uap->path, UIO_USERSPACE, uap->uid, uap->gid));
-}
-
-int
-kern_lchown(struct thread *td, char *path, enum uio_seg pathseg, int uid,
-    int gid)
-{
-
-	return (kern_fchownat(td, AT_FDCWD, path, pathseg, uid, gid,
-	    AT_SYMLINK_NOFOLLOW));
+	return (kern_fchownat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    uap->uid, uap->gid, AT_SYMLINK_NOFOLLOW));
 }
 
 /*
@@ -3428,8 +3321,8 @@ sys_utimes(td, uap)
 	} */ *uap;
 {
 
-	return (kern_utimes(td, uap->path, UIO_USERSPACE, uap->tptr,
-	    UIO_USERSPACE));
+	return (kern_utimesat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    uap->tptr, UIO_USERSPACE));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -3445,14 +3338,6 @@ sys_futimesat(struct thread *td, struct futimesat_args *uap)
 
 	return (kern_utimesat(td, uap->fd, uap->path, UIO_USERSPACE,
 	    uap->times, UIO_USERSPACE));
-}
-
-int
-kern_utimes(struct thread *td, char *path, enum uio_seg pathseg,
-    struct timeval *tptr, enum uio_seg tptrseg)
-{
-
-	return (kern_utimesat(td, AT_FDCWD, path, pathseg, tptr, tptrseg));
 }
 
 int
@@ -3754,7 +3639,8 @@ sys_rename(td, uap)
 	} */ *uap;
 {
 
-	return (kern_rename(td, uap->from, uap->to, UIO_USERSPACE));
+	return (kern_renameat(td, AT_FDCWD, uap->from, AT_FDCWD,
+	    uap->to, UIO_USERSPACE));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -3771,13 +3657,6 @@ sys_renameat(struct thread *td, struct renameat_args *uap)
 
 	return (kern_renameat(td, uap->oldfd, uap->old, uap->newfd, uap->new,
 	    UIO_USERSPACE));
-}
-
-int
-kern_rename(struct thread *td, char *from, char *to, enum uio_seg pathseg)
-{
-
-	return (kern_renameat(td, AT_FDCWD, from, AT_FDCWD, to, pathseg));
 }
 
 int
@@ -3929,7 +3808,8 @@ sys_mkdir(td, uap)
 	} */ *uap;
 {
 
-	return (kern_mkdir(td, uap->path, UIO_USERSPACE, uap->mode));
+	return (kern_mkdirat(td, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    uap->mode));
 }
 
 #ifndef _SYS_SYSPROTO_H_
@@ -3944,13 +3824,6 @@ sys_mkdirat(struct thread *td, struct mkdirat_args *uap)
 {
 
 	return (kern_mkdirat(td, uap->fd, uap->path, UIO_USERSPACE, uap->mode));
-}
-
-int
-kern_mkdir(struct thread *td, char *path, enum uio_seg segflg, int mode)
-{
-
-	return (kern_mkdirat(td, AT_FDCWD, path, segflg, mode));
 }
 
 int
@@ -4031,14 +3904,7 @@ sys_rmdir(td, uap)
 	} */ *uap;
 {
 
-	return (kern_rmdir(td, uap->path, UIO_USERSPACE));
-}
-
-int
-kern_rmdir(struct thread *td, char *path, enum uio_seg pathseg)
-{
-
-	return (kern_rmdirat(td, AT_FDCWD, path, pathseg));
+	return (kern_rmdirat(td, AT_FDCWD, uap->path, UIO_USERSPACE));
 }
 
 int
