@@ -431,7 +431,8 @@ freebsd10_freebsd32_mknod(struct thread *td,
     struct freebsd10_freebsd32_mknod_args *uap)
 {
 
-	return (kern_mknod(td, uap->path, UIO_USERSPACE, uap->mode, uap->dev));
+	return (kern_mknodat(td, AT_FDCWD, uap->path, UIO_USERSPACE, uap->mode,
+	    uap->dev));
 }
 
 int
