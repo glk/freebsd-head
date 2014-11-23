@@ -364,11 +364,11 @@
 186	AUE_NULL	UNIMPL	lfs_segclean
 187	AUE_NULL	UNIMPL	lfs_segwait
 188	AUE_STAT	COMPAT10 { int stat(char *path, \
-				    struct freebsd9_stat *ub); }
+				    struct freebsd10_stat *ub); }
 189	AUE_FSTAT	COMPAT10 { int fstat(int fd, \
-				    struct freebsd9_stat *sb); }
+				    struct freebsd10_stat *sb); }
 190	AUE_LSTAT	COMPAT10 { int lstat(char *path, \
-				    struct freebsd9_stat *ub); }
+				    struct freebsd10_stat *ub); }
 191	AUE_PATHCONF	STD	{ int pathconf(char *path, int name); }
 192	AUE_FPATHCONF	STD	{ int fpathconf(int fd, int name); }
 193	AUE_NULL	UNIMPL	nosys
@@ -538,7 +538,7 @@
 298	AUE_FHOPEN	STD	{ int fhopen(const struct fhandle *u_fhp, \
 				    int flags); }
 299	AUE_FHSTAT	COMPAT10 { int fhstat(const struct fhandle *u_fhp, \
-				    struct freebsd9_stat *sb); }
+				    struct freebsd10_stat *sb); }
 ; syscall numbers for FreeBSD
 300	AUE_NULL	STD	{ int modnext(int modid); }
 301	AUE_NULL	STD	{ int modstat(int modid, \
@@ -709,14 +709,14 @@
 				    off_t *sbytes, int flags); }
 394	AUE_NULL	STD	{ int mac_syscall(const char *policy, \
 				    int call, void *arg); }
-395	AUE_GETFSSTAT	COMPAT10 { int getfsstat(struct freebsd9_statfs *buf, \
+395	AUE_GETFSSTAT	COMPAT10 { int getfsstat(struct freebsd10_statfs *buf, \
 				    long bufsize, int flags); }
 396	AUE_STATFS	COMPAT10 { int statfs(char *path, \
-				    struct freebsd9_statfs *buf); }
+				    struct freebsd10_statfs *buf); }
 397	AUE_FSTATFS	COMPAT10 { int fstatfs(int fd, \
-				    struct freebsd9_statfs *buf); }
+				    struct freebsd10_statfs *buf); }
 398	AUE_FHSTATFS	COMPAT10 { int fhstatfs(const struct fhandle *u_fhp, \
-				    struct freebsd9_statfs *buf); }
+				    struct freebsd10_statfs *buf); }
 399	AUE_NULL	UNIMPL	nosys
 400	AUE_NULL	NOSTD	{ int ksem_close(semid_t id); }
 401	AUE_NULL	NOSTD	{ int ksem_post(semid_t id); }
@@ -887,7 +887,7 @@
 492	AUE_FEXECVE	STD	{ int fexecve(int fd, char **argv, \
 				    char **envv); }
 493	AUE_FSTATAT	COMPAT10 { int fstatat(int fd, char *path, \
-				    struct freebsd9_stat *buf, int flag); }
+				    struct freebsd10_stat *buf, int flag); }
 494	AUE_FUTIMESAT	STD	{ int futimesat(int fd, char *path, \
 				    struct timeval *times); }
 495	AUE_LINKAT	STD	{ int linkat(int fd1, char *path1, int fd2, \
