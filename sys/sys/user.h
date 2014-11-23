@@ -423,16 +423,6 @@ struct kinfo_file {
 	int		_kf_ispare0;		/* Space for more stuff. */
 	cap_rights_t	kf_cap_rights;		/* Capability rights. */
 	uint64_t	_kf_cap_spare;		/* Space for future cap_rights_t. */
-#if 0
-	union {
-		struct {
-			/* Vnode filesystem id. */
-			uint64_t	kf_file_fsid;
-			/* File device. */
-			uint64_t	kf_file_rdev;
-		} kf_file;
-	} kf_un2;
-#endif
 	/* Truncated before copyout in sysctl */
 	char		kf_path[PATH_MAX];	/* Path to file, if any. */
 };
