@@ -1310,7 +1310,7 @@ restart:
 				resid = 0;
 				if (flags & MSG_EOR)
 					top->m_flags |= M_EOR;
-			} else {
+			} else if (resid > 0) {
 				/*
 				 * Copy the data from userland into a mbuf
 				 * chain.  If no data is to be copied in,
@@ -1809,9 +1809,7 @@ dontblock:
 						SOCKBUF_LOCK(&so->so_rcv);
 					}
 				}
-				m->m_data += len;
-				m->m_len -= len;
-				so->so_rcv.sb_cc -= len;
+				sbcut_locked(&so->so_rcv, len);
 			}
 		}
 		SOCKBUF_LOCK_ASSERT(&so->so_rcv);
