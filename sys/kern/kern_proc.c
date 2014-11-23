@@ -2142,6 +2142,7 @@ sysctl_kern_proc_ovmmap(SYSCTL_HANDLER_ARGS)
 				vn_lock(vp, LK_SHARED | LK_RETRY);
 				if (VOP_GETATTR(vp, &va, cred) == 0) {
 					kve->kve_fileid = va.va_fileid;
+					/* truncate */
 					kve->kve_fsid = va.va_fsid;
 				}
 				vput(vp);

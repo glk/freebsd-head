@@ -485,9 +485,8 @@ struct kinfo_ovmentry {
 	void	*_kve_pspare[8];		/* Space for more stuff. */
 	off_t	 kve_offset;			/* Mapping offset in object */
 	uint64_t kve_fileid;			/* inode number if vnode */
-	uint32_t kve_fsid_freebsd9;		/* dev_t of vnode location */
-	uint32_t _kve_pad0;			/* Space for more stuff. */
-	uint64_t kve_fsid;			/* dev_t of vnode location */
+	uint32_t kve_fsid;			/* dev_t of vnode location */
+	int	 _kve_ispare[3];		/* Space for more stuff. */
 };
 
 #if defined(__amd64__) || defined(__i386__)
