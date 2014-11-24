@@ -50,7 +50,7 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <unistd.h>
 #include "gen-compat.h"
-#include "fts-compat9.h"
+#include "fts-compat10.h"
 #include "un-namespace.h"
 
 static FTSENT	*fts_alloc(FTS *, char *, size_t);

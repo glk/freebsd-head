@@ -1,4 +1,4 @@
-/*	$OpenBSD: ftw.c,v 1.4 2004/07/07 16:05:23 millert Exp $	*/
+/*	$OpenBSD: nftw.c,v 1.4 2004/07/07 16:05:23 millert Exp $	*/
 
 /*
  * Copyright (c) 2003, 2004 Todd C. Miller <Todd.Miller@courtesan.com>
@@ -20,6 +20,12 @@
  * Materiel Command, USAF, under agreement number F39502-99-1-0512.
  */
 
+#if 0
+#if defined(LIBC_SCCS) && !defined(lint)
+static const char rcsid[] = "$OpenBSD: nftw.c,v 1.4 2004/07/07 16:05:23 millert Exp $";
+#endif /* LIBC_SCCS and not lint */
+#endif
+
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -29,16 +35,18 @@ __FBSDID("$FreeBSD$");
 #include <ftw.h>
 #include <limits.h>
 
-#include "fts-compat9.h"
+#include "fts-compat10.h"
 
 int
-freebsd9_ftw(const char *path,
-    int (*fn)(const char *, const struct freebsd9_stat *, int), int nfds)
+freebsd9_nftw(const char *path,
+    int (*fn)(const char *, const struct freebsd9_stat *, int, struct FTW *),
+    int nfds, int ftwflags)
 {
 	char * const paths[2] = { (char *)path, NULL };
+	struct FTW ftw;
 	FTSENT *cur;
 	FTS *ftsp;
-	int error = 0, fnflag, sverrno;
+	int error = 0, ftsflags, fnflag, postorder, sverrno;
 
 	/* XXX - nfds is currently unused */
 	if (nfds < 1 || nfds > OPEN_MAX) {
@@ -46,32 +54,47 @@ freebsd9_ftw(const char *path,
 		return (-1);
 	}
 
-	ftsp = freebsd9_fts_open(paths,
-	    FTS_LOGICAL | FTS_COMFOLLOW | FTS_NOCHDIR, NULL);
+	ftsflags = FTS_COMFOLLOW;
+	if (!(ftwflags & FTW_CHDIR))
+		ftsflags |= FTS_NOCHDIR;
+	if (ftwflags & FTW_MOUNT)
+		ftsflags |= FTS_XDEV;
+	if (ftwflags & FTW_PHYS)
+		ftsflags |= FTS_PHYSICAL;
+	else
+		ftsflags |= FTS_LOGICAL;
+	postorder = (ftwflags & FTW_DEPTH) != 0;
+	ftsp = freebsd9_fts_open(paths, ftsflags, NULL);
 	if (ftsp == NULL)
 		return (-1);
 	while ((cur = freebsd9_fts_read(ftsp)) != NULL) {
 		switch (cur->fts_info) {
 		case FTS_D:
+			if (postorder)
+				continue;
 			fnflag = FTW_D;
 			break;
 		case FTS_DNR:
 			fnflag = FTW_DNR;
 			break;
 		case FTS_DP:
-			/* we only visit in preorder */
-			continue;
+			if (!postorder)
+				continue;
+			fnflag = FTW_DP;
+			break;
 		case FTS_F:
 		case FTS_DEFAULT:
 			fnflag = FTW_F;
 			break;
 		case FTS_NS:
 		case FTS_NSOK:
-		case FTS_SLNONE:
 			fnflag = FTW_NS;
 			break;
 		case FTS_SL:
 			fnflag = FTW_SL;
+			break;
+		case FTS_SLNONE:
+			fnflag = FTW_SLN;
 			break;
 		case FTS_DC:
 			errno = ELOOP;
@@ -80,7 +103,9 @@ freebsd9_ftw(const char *path,
 			error = -1;
 			goto done;
 		}
-		error = fn(cur->fts_path, cur->fts_statp, fnflag);
+		ftw.base = cur->fts_pathlen - cur->fts_namelen;
+		ftw.level = cur->fts_level;
+		error = fn(cur->fts_path, cur->fts_statp, fnflag, &ftw);
 		if (error != 0)
 			break;
 	}
@@ -93,4 +118,4 @@ done:
 	return (error);
 }
 
-__sym_compat(ftw, freebsd9_ftw, FBSD_1.0);
+__sym_compat(nftw, freebsd9_nftw, FBSD_1.0);

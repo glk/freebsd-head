@@ -85,7 +85,7 @@ __FBSDID("$FreeBSD$");
 
 #include "collate.h"
 #include "gen-compat.h"
-#include "glob-compat9.h"
+#include "glob-compat10.h"
 
 #define	DOLLAR		'$'
 #define	DOT		'.'
