@@ -381,23 +381,23 @@ FBSD_1.3 {
 	posix_fadvise;
 	procctl;
 	wait6;
+};
+
+FBSD_1.4 {
 	fhstat;
 	fhstatfs;
 	fstat;
-	fstatfs;
 	fstatat;
+	fstatfs;
 	getdents;
 	getdirentries;
 	getfsstat;
 	lstat;
 	mknod;
 	mknodat;
+	ppoll;
 	stat;
 	statfs;
-};
-
-FBSD_1.4 {
-	ppoll;
 };
 
 FBSDprivate_1.0 {
