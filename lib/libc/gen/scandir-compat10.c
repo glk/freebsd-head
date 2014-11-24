@@ -27,8 +27,18 @@
  * SUCH DAMAGE.
  */
 
+#if defined(LIBC_SCCS) && !defined(lint)
+static char sccsid[] = "@(#)scandir.c	8.3 (Berkeley) 1/2/94";
+#endif /* LIBC_SCCS and not lint */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
+
+/*
+ * Scan the directory dirname calling select to make a list of selected
+ * directory entries then sort using qsort and compare routine dcomp.
+ * Returns the number of entries and a pointer to a list of pointers to
+ * struct dirent (through namelist). Returns -1 if there were any errors.
+ */
 
 #include "namespace.h"
 #include <dirent.h>
@@ -37,6 +47,8 @@ __FBSDID("$FreeBSD$");
 #include "un-namespace.h"
 
 #include "gen-compat.h"
+
+#define	SELECT(x)	select(x)
 
 static int freebsd10_alphasort_thunk(void *thunk, const void *p1,
     const void *p2);
@@ -62,7 +74,7 @@ freebsd10_scandir(const char *dirname, struct freebsd10_dirent ***namelist,
 		goto fail;
 
 	while ((d = freebsd10_readdir(dirp)) != NULL) {
-		if (select != NULL && !(*select)(d))
+		if (select != NULL && !SELECT(d))
 			continue;	/* just selected names */
 		/*
 		 * Make a minimum size copy of the data
@@ -124,10 +136,12 @@ freebsd10_alphasort(const struct freebsd10_dirent **d1,
 static int
 freebsd10_alphasort_thunk(void *thunk, const void *p1, const void *p2)
 {
-	int (*dc)(const struct dirent **, const struct dirent **);
+	int (*dc)(const struct freebsd10_dirent **, const struct freebsd10_dirent **);
 
-	dc = *(int (**)(const struct dirent **, const struct dirent **))thunk;
-	return (dc((const struct dirent **)p1, (const struct dirent **)p2));
+	dc = *(int (**)(const struct freebsd10_dirent **,
+	    const struct freebsd10_dirent **))thunk;
+	return (dc((const struct freebsd10_dirent **)p1,
+	    (const struct freebsd10_dirent **)p2));
 }
 
 __sym_compat(alphasort, freebsd10_alphasort, FBSD_1.0);
