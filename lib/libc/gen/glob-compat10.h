@@ -33,8 +33,8 @@
  * $FreeBSD$
  */
 
-#ifndef _GLOB_H_
-#define	_GLOB_H_
+#ifndef _GLOB_COMPAT10_H_
+#define	_GLOB_COMPAT10_H_
 
 #include <sys/cdefs.h>
 #include <sys/_types.h>
@@ -98,8 +98,9 @@ typedef struct {
 #endif /* __BSD_VISIBLE */
 
 __BEGIN_DECLS
-int	freebsd10_glob(const char *, int, int (*)(const char *, int), glob_t *);
+int	freebsd10_glob(const char * __restrict, int,
+	int (*)(const char *, int), glob_t * __restrict);
 void	freebsd10_globfree(glob_t *);
 __END_DECLS
 
-#endif /* !_GLOB_H_ */
+#endif /* !_GLOB_COMPAT10_H_ */
