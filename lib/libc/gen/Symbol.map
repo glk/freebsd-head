@@ -362,24 +362,12 @@ FBSD_1.2 {
 };
 
 FBSD_1.3 {
-	alphasort;
-	devname;
-	devname_r;
 	clock_getcpuclockid;
 	dirfd;
 	dup3;
 	fdclosedir;
 	fdlopen;
 	__FreeBSD_libc_enter_restricted_mode;
-	fts_children;
-	fts_close;
-	fts_get_clientptr;
-	fts_get_stream;
-	fts_open;
-	fts_read;
-	fts_set;
-	fts_set_clientptr;
-	ftw;
 	getcontextx;
 	gid_from_group;
 	nvis;
@@ -400,6 +388,21 @@ FBSD_1.3 {
 	uid_from_user;
 	unvis;
 	waitid;
+};
+
+FBSD_1.4 {
+	alphasort;
+	devname;
+	devname_r;
+	fts_children;
+	fts_close;
+	fts_get_clientptr;
+	fts_get_stream;
+	fts_open;
+	fts_read;
+	fts_set;
+	fts_set_clientptr;
+	ftw;
 	getmntinfo;
 	glob;
 	globfree;
@@ -407,9 +410,6 @@ FBSD_1.3 {
 	readdir;
 	readdir_r;
 	scandir;
-};
-
-FBSD_1.4 {
 	scandir_b;
 };
 
