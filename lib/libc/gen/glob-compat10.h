@@ -44,7 +44,7 @@ typedef	__size_t	size_t;
 #define	_SIZE_T_DECLARED
 #endif
 
-struct freebsd9_stat;
+struct freebsd10_stat;
 typedef struct {
 	size_t gl_pathc;	/* Count of total paths so far. */
 	size_t gl_matchc;	/* Count of paths matching pattern. */
@@ -60,10 +60,10 @@ typedef struct {
 	 * and lstat(2).
 	 */
 	void (*gl_closedir)(void *);
-	struct freebsd9_dirent *(*gl_readdir)(void *);
+	struct freebsd10_dirent *(*gl_readdir)(void *);
 	void *(*gl_opendir)(const char *);
-	int (*gl_lstat)(const char *, struct freebsd9_stat *);
-	int (*gl_stat)(const char *, struct freebsd9_stat *);
+	int (*gl_lstat)(const char *, struct freebsd10_stat *);
+	int (*gl_stat)(const char *, struct freebsd10_stat *);
 } glob_t;
 
 #if __POSIX_VISIBLE >= 199209
@@ -98,8 +98,8 @@ typedef struct {
 #endif /* __BSD_VISIBLE */
 
 __BEGIN_DECLS
-int	freebsd9_glob(const char *, int, int (*)(const char *, int), glob_t *);
-void	freebsd9_globfree(glob_t *);
+int	freebsd10_glob(const char *, int, int (*)(const char *, int), glob_t *);
+void	freebsd10_globfree(glob_t *);
 __END_DECLS
 
 #endif /* !_GLOB_H_ */

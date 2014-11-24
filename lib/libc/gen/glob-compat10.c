@@ -139,13 +139,13 @@ typedef char Char;
 
 static int	 compare(const void *, const void *);
 static int	 g_Ctoc(const Char *, char *, size_t);
-static int	 g_lstat(Char *, struct freebsd9_stat *, glob_t *);
+static int	 g_lstat(Char *, struct freebsd10_stat *, glob_t *);
 static DIR	*g_opendir(Char *, glob_t *);
 static const Char *g_strchr(const Char *, wchar_t);
 #ifdef notdef
 static Char	*g_strcat(Char *, const Char *);
 #endif
-static int	 g_stat(Char *, struct freebsd9_stat *, glob_t *);
+static int	 g_stat(Char *, struct freebsd10_stat *, glob_t *);
 static int	 glob0(const Char *, glob_t *, size_t *);
 static int	 glob1(Char *, glob_t *, size_t *);
 static int	 glob2(Char *, Char *, Char *, Char *, glob_t *, size_t *);
@@ -161,7 +161,7 @@ static void	 qprintf(const char *, Char *);
 #endif
 
 int
-freebsd9_glob(const char *pattern, int flags, int (*errfunc)(const char *, int), glob_t *pglob)
+freebsd10_glob(const char *pattern, int flags, int (*errfunc)(const char *, int), glob_t *pglob)
 {
 	const char *patnext;
 	size_t limit;
@@ -541,7 +541,7 @@ static int
 glob2(Char *pathbuf, Char *pathend, Char *pathend_last, Char *pattern,
       glob_t *pglob, size_t *limit)
 {
-	struct freebsd9_stat sb;
+	struct freebsd10_stat sb;
 	Char *p, *q;
 	int anymeta;
 
@@ -600,7 +600,7 @@ glob3(Char *pathbuf, Char *pathend, Char *pathend_last,
       Char *pattern, Char *restpattern,
       glob_t *pglob, size_t *limit)
 {
-	struct freebsd9_dirent *dp;
+	struct freebsd10_dirent *dp;
 	DIR *dirp;
 	int err;
 	char buf[MAXPATHLEN];
@@ -611,7 +611,7 @@ glob3(Char *pathbuf, Char *pathend, Char *pathend_last,
 	 * and dirent.h as taking pointers to differently typed opaque
 	 * structures.
 	 */
-	struct freebsd9_dirent *(*readdirfunc)();
+	struct freebsd10_dirent *(*readdirfunc)();
 
 	if (pathend > pathend_last)
 		return (GLOB_ABORTED);
@@ -636,7 +636,7 @@ glob3(Char *pathbuf, Char *pathend, Char *pathend_last,
 	if (pglob->gl_flags & GLOB_ALTDIRFUNC)
 		readdirfunc = pglob->gl_readdir;
 	else
-		readdirfunc = freebsd9_readdir;
+		readdirfunc = freebsd10_readdir;
 	while ((dp = (*readdirfunc)(dirp))) {
 		char *sc;
 		Char *dc;
@@ -796,7 +796,7 @@ match(Char *name, Char *pat, Char *patend)
 
 /* Free allocated data belonging to a glob_t structure. */
 void
-freebsd9_globfree(glob_t *pglob)
+freebsd10_globfree(glob_t *pglob)
 {
 	size_t i;
 	char **pp;
@@ -830,7 +830,7 @@ g_opendir(Char *str, glob_t *pglob)
 }
 
 static int
-g_lstat(Char *fn, struct freebsd9_stat *sb, glob_t *pglob)
+g_lstat(Char *fn, struct freebsd10_stat *sb, glob_t *pglob)
 {
 	char buf[MAXPATHLEN];
 
@@ -840,11 +840,11 @@ g_lstat(Char *fn, struct freebsd9_stat *sb, glob_t *pglob)
 	}
 	if (pglob->gl_flags & GLOB_ALTDIRFUNC)
 		return((*pglob->gl_lstat)(buf, sb));
-	return(freebsd9_lstat(buf, sb));
+	return(freebsd10_lstat(buf, sb));
 }
 
 static int
-g_stat(Char *fn, struct freebsd9_stat *sb, glob_t *pglob)
+g_stat(Char *fn, struct freebsd10_stat *sb, glob_t *pglob)
 {
 	char buf[MAXPATHLEN];
 
@@ -854,7 +854,7 @@ g_stat(Char *fn, struct freebsd9_stat *sb, glob_t *pglob)
 	}
 	if (pglob->gl_flags & GLOB_ALTDIRFUNC)
 		return((*pglob->gl_stat)(buf, sb));
-	return(freebsd9_stat(buf, sb));
+	return(freebsd10_stat(buf, sb));
 }
 
 static const Char *
@@ -907,5 +907,5 @@ qprintf(const char *str, Char *s)
 }
 #endif
 
-__sym_compat(glob, freebsd9_glob, FBSD_1.0);
-__sym_compat(globfree, freebsd9_globfree, FBSD_1.0);
+__sym_compat(glob, freebsd10_glob, FBSD_1.0);
+__sym_compat(globfree, freebsd10_globfree, FBSD_1.0);

@@ -32,23 +32,23 @@
 
 #include <dirent.h>
 
-#define FREEBSD9_DIRSIZ(dp)						\
-	(sizeof(struct freebsd9_dirent) - sizeof((dp)->d_name) +	\
+#define FREEBSD10_DIRSIZ(dp)						\
+	(sizeof(struct freebsd10_dirent) - sizeof((dp)->d_name) +	\
 	    (((dp)->d_namlen + 1 + 3) &~ 3))
 
-struct freebsd9_dirent;
-struct freebsd9_stat;
-struct freebsd9_statfs;
+struct freebsd10_dirent;
+struct freebsd10_stat;
+struct freebsd10_statfs;
 
-struct freebsd9_dirent *freebsd9_readdir(DIR *);
-int	freebsd9_readdir_r(DIR *, struct freebsd9_dirent *,
-	    struct freebsd9_dirent **);
-int	freebsd9_stat(const char *, struct freebsd9_stat *);
-int	freebsd9_lstat(const char *, struct freebsd9_stat *);
-int	freebsd9_fstat(int, struct freebsd9_stat *);
+struct freebsd10_dirent *freebsd10_readdir(DIR *);
+int	freebsd10_readdir_r(DIR *, struct freebsd10_dirent *,
+	    struct freebsd10_dirent **);
+int	freebsd10_stat(const char *, struct freebsd10_stat *);
+int	freebsd10_lstat(const char *, struct freebsd10_stat *);
+int	freebsd10_fstat(int, struct freebsd10_stat *);
 
-int	freebsd9_statfs(const char *, struct freebsd9_statfs *);
-int	freebsd9_getfsstat(struct freebsd9_statfs *, long, int);
-int	freebsd9_getmntinfo(struct freebsd9_statfs **, int);
+int	freebsd10_statfs(const char *, struct freebsd10_statfs *);
+int	freebsd10_getfsstat(struct freebsd10_statfs *, long, int);
+int	freebsd10_getmntinfo(struct freebsd10_statfs **, int);
 
 #endif /* _GEN_COMPAT_H_ */

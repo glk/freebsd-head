@@ -117,7 +117,7 @@ typedef struct _ftsent {
 #define	FTS_SKIP	 4		/* discard node */
 	u_short fts_instr;		/* fts_set() instructions */
 
-	struct freebsd9_stat *fts_statp; /* stat(2) information */
+	struct freebsd10_stat *fts_statp; /* stat(2) information */
 	char *fts_name;			/* file name */
 	FTS *fts_fts;			/* back pointer to main FTS */
 } FTSENT;

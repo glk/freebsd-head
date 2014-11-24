@@ -31,22 +31,22 @@ __FBSDID("$FreeBSD$");
 #include <sys/stat.h>
 #include <stdlib.h>
 
-char *freebsd9_devname(uint32_t dev, mode_t type);
-char *freebsd9_devname_r(uint32_t dev, mode_t type, char *buf, int len);
+char *freebsd10_devname(uint32_t dev, mode_t type);
+char *freebsd10_devname_r(uint32_t dev, mode_t type, char *buf, int len);
 
 char *
-freebsd9_devname(uint32_t dev, mode_t type)
+freebsd10_devname(uint32_t dev, mode_t type)
 {
 
 	return (devname(dev, type));
 }
 
 char *
-freebsd9_devname_r(uint32_t dev, mode_t type, char *buf, int len)
+freebsd10_devname_r(uint32_t dev, mode_t type, char *buf, int len)
 {
 
 	return (devname_r(dev, type, buf, len));
 }
 
-__sym_compat(devname, freebsd9_devname, FBSD_1.0);
-__sym_compat(devname_r, freebsd9_devname_r, FBSD_1.0);
+__sym_compat(devname, freebsd10_devname, FBSD_1.0);
+__sym_compat(devname_r, freebsd10_devname_r, FBSD_1.0);

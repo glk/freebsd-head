@@ -110,21 +110,21 @@ typedef struct _ftsent {
 #define	FTS_SKIP	 4		/* discard node */
 	int fts_instr;			/* fts_set() instructions */
 
-	struct freebsd9_stat *fts_statp; /* stat(2) information */
+	struct freebsd10_stat *fts_statp; /* stat(2) information */
 	char *fts_name;			/* file name */
 	FTS *fts_fts;			/* back pointer to main FTS */
 } FTSENT;
 
-FTSENT	*freebsd9_fts_children(FTS *, int);
-int	 freebsd9_fts_close(FTS *);
-void	*freebsd9_fts_get_clientptr(FTS *);
-#define	 freebsd9_fts_get_clientptr(fts)	((fts)->fts_clientptr)
-FTS	*freebsd9_fts_get_stream(FTSENT *);
-#define	 freebsd9_fts_get_stream(ftsent)	((ftsent)->fts_fts)
-FTS	*freebsd9_fts_open(char * const *, int,
+FTSENT	*freebsd10_fts_children(FTS *, int);
+int	 freebsd10_fts_close(FTS *);
+void	*freebsd10_fts_get_clientptr(FTS *);
+#define	 freebsd10_fts_get_clientptr(fts)	((fts)->fts_clientptr)
+FTS	*freebsd10_fts_get_stream(FTSENT *);
+#define	 freebsd10_fts_get_stream(ftsent)	((ftsent)->fts_fts)
+FTS	*freebsd10_fts_open(char * const *, int,
 	    int (*)(const FTSENT * const *, const FTSENT * const *));
-FTSENT	*freebsd9_fts_read(FTS *);
-int	 freebsd9_fts_set(FTS *, FTSENT *, int);
-void	 freebsd9_fts_set_clientptr(FTS *, void *);
+FTSENT	*freebsd10_fts_read(FTS *);
+int	 freebsd10_fts_set(FTS *, FTSENT *, int);
+void	 freebsd10_fts_set_clientptr(FTS *, void *);
 
 #endif /* !_FTS_H_ */

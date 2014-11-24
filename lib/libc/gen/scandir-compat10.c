@@ -38,16 +38,16 @@ __FBSDID("$FreeBSD$");
 
 #include "gen-compat.h"
 
-static int freebsd9_alphasort_thunk(void *thunk, const void *p1,
+static int freebsd10_alphasort_thunk(void *thunk, const void *p1,
     const void *p2);
 
 int
-freebsd9_scandir(const char *dirname, struct freebsd9_dirent ***namelist,
-    int (*select)(const struct freebsd9_dirent *),
-    int (*dcomp)(const struct freebsd9_dirent **,
-	const struct freebsd9_dirent **))
+freebsd10_scandir(const char *dirname, struct freebsd10_dirent ***namelist,
+    int (*select)(const struct freebsd10_dirent *),
+    int (*dcomp)(const struct freebsd10_dirent **,
+	const struct freebsd10_dirent **))
 {
-	struct freebsd9_dirent *d, *p, **names = NULL;
+	struct freebsd10_dirent *d, *p, **names = NULL;
 	size_t nitems = 0;
 	long arraysz;
 	DIR *dirp;
@@ -56,18 +56,18 @@ freebsd9_scandir(const char *dirname, struct freebsd9_dirent ***namelist,
 		return(-1);
 
 	arraysz = 32;	/* initial estimate of the array size */
-	names = (struct freebsd9_dirent **)malloc(
-	    arraysz * sizeof(struct freebsd9_dirent *));
+	names = (struct freebsd10_dirent **)malloc(
+	    arraysz * sizeof(struct freebsd10_dirent *));
 	if (names == NULL)
 		goto fail;
 
-	while ((d = freebsd9_readdir(dirp)) != NULL) {
+	while ((d = freebsd10_readdir(dirp)) != NULL) {
 		if (select != NULL && !(*select)(d))
 			continue;	/* just selected names */
 		/*
 		 * Make a minimum size copy of the data
 		 */
-		p = (struct freebsd9_dirent *)malloc(FREEBSD9_DIRSIZ(d));
+		p = (struct freebsd10_dirent *)malloc(FREEBSD10_DIRSIZ(d));
 		if (p == NULL)
 			goto fail;
 		p->d_fileno = d->d_fileno;
@@ -80,11 +80,11 @@ freebsd9_scandir(const char *dirname, struct freebsd9_dirent ***namelist,
 		 * realloc the maximum size.
 		 */
 		if (nitems >= arraysz) {
-			struct freebsd9_dirent **names2;
+			struct freebsd10_dirent **names2;
 
-			names2 = (struct freebsd9_dirent **)realloc(
+			names2 = (struct freebsd10_dirent **)realloc(
 			    (char *)names,
-			    (arraysz * 2) * sizeof(struct freebsd9_dirent *));
+			    (arraysz * 2) * sizeof(struct freebsd10_dirent *));
 			if (names2 == NULL) {
 				free(p);
 				goto fail;
@@ -96,8 +96,8 @@ freebsd9_scandir(const char *dirname, struct freebsd9_dirent ***namelist,
 	}
 	closedir(dirp);
 	if (nitems && dcomp != NULL)
-		qsort_r(names, nitems, sizeof(struct freebsd9_dirent *),
-		    &dcomp, freebsd9_alphasort_thunk);
+		qsort_r(names, nitems, sizeof(struct freebsd10_dirent *),
+		    &dcomp, freebsd10_alphasort_thunk);
 	*namelist = names;
 	return (nitems);
 
@@ -114,15 +114,15 @@ fail:
  * POSIX 2008 requires that alphasort() uses strcoll().
  */
 int
-freebsd9_alphasort(const struct freebsd9_dirent **d1,
-    const struct freebsd9_dirent **d2)
+freebsd10_alphasort(const struct freebsd10_dirent **d1,
+    const struct freebsd10_dirent **d2)
 {
 
 	return (strcoll((*d1)->d_name, (*d2)->d_name));
 }
 
 static int
-freebsd9_alphasort_thunk(void *thunk, const void *p1, const void *p2)
+freebsd10_alphasort_thunk(void *thunk, const void *p1, const void *p2)
 {
 	int (*dc)(const struct dirent **, const struct dirent **);
 
@@ -130,5 +130,5 @@ freebsd9_alphasort_thunk(void *thunk, const void *p1, const void *p2)
 	return (dc((const struct dirent **)p1, (const struct dirent **)p2));
 }
 
-__sym_compat(alphasort, freebsd9_alphasort, FBSD_1.0);
-__sym_compat(scandir, freebsd9_scandir, FBSD_1.0);
+__sym_compat(alphasort, freebsd10_alphasort, FBSD_1.0);
+__sym_compat(scandir, freebsd10_scandir, FBSD_1.0);

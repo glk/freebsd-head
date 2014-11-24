@@ -47,26 +47,26 @@ __FBSDID("$FreeBSD$");
 #include "gen-compat.h"
 
 static int
-freebsd9_cvtdirent(struct freebsd9_dirent *dstdp, struct dirent *srcdp)
+freebsd10_cvtdirent(struct freebsd10_dirent *dstdp, struct dirent *srcdp)
 {
 	if (srcdp->d_namlen > sizeof(dstdp->d_name) - 1)
 		return (ENAMETOOLONG);
 	dstdp->d_type = srcdp->d_type;
 	dstdp->d_namlen = srcdp->d_namlen;
 	dstdp->d_fileno = srcdp->d_fileno;		/* truncate */
-	dstdp->d_reclen = FREEBSD9_DIRSIZ(dstdp);
+	dstdp->d_reclen = FREEBSD10_DIRSIZ(dstdp);
 	bcopy(srcdp->d_name, dstdp->d_name, dstdp->d_namlen);
 	bzero(dstdp->d_name + dstdp->d_namlen,
-	    dstdp->d_reclen - offsetof(struct freebsd9_dirent, d_name) -
+	    dstdp->d_reclen - offsetof(struct freebsd10_dirent, d_name) -
 	    dstdp->d_namlen);
 	return (0);
 }
 
-struct freebsd9_dirent *
-freebsd9_readdir(DIR *dirp)
+struct freebsd10_dirent *
+freebsd10_readdir(DIR *dirp)
 {
-	static struct freebsd9_dirent *compatbuf;
-	struct freebsd9_dirent *dstdp;
+	static struct freebsd10_dirent *compatbuf;
+	struct freebsd10_dirent *dstdp;
 	struct dirent *dp;
 
 	if (__isthreaded)
@@ -75,8 +75,8 @@ again:
 	dp = _readdir_unlocked(dirp, 1);
 	if (dp != NULL) {
 		if (compatbuf == NULL)
-			compatbuf = malloc(sizeof(struct freebsd9_dirent));
-		if (freebsd9_cvtdirent(compatbuf, dp) != 0)
+			compatbuf = malloc(sizeof(struct freebsd10_dirent));
+		if (freebsd10_cvtdirent(compatbuf, dp) != 0)
 			goto again;
 		dstdp = compatbuf;
 	} else
@@ -88,8 +88,8 @@ again:
 }
 
 int
-freebsd9_readdir_r(DIR *dirp, struct freebsd9_dirent *entry,
-    struct freebsd9_dirent **result)
+freebsd10_readdir_r(DIR *dirp, struct freebsd10_dirent *entry,
+    struct freebsd10_dirent **result)
 {
 	struct dirent xentry;
 	struct dirent *xresult;
@@ -101,7 +101,7 @@ again:
 	if (error != 0)
 		return (error);
 	if (xresult != NULL) {
-		if (freebsd9_cvtdirent(entry, &xentry) != 0)
+		if (freebsd10_cvtdirent(entry, &xentry) != 0)
 			goto again;
 		*result = entry;
 	} else
@@ -109,5 +109,5 @@ again:
 	return (0);
 }
 
-__sym_compat(readdir, freebsd9_readdir, FBSD_1.0);
-__sym_compat(readdir_r, freebsd9_readdir_r, FBSD_1.0);
+__sym_compat(readdir, freebsd10_readdir, FBSD_1.0);
+__sym_compat(readdir_r, freebsd10_readdir_r, FBSD_1.0);

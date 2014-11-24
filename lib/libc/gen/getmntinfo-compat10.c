@@ -38,29 +38,29 @@
  * Return information about mounted filesystems.
  */
 int
-freebsd9_getmntinfo(struct freebsd9_statfs **mntbufp, int flags)
+freebsd10_getmntinfo(struct freebsd10_statfs **mntbufp, int flags)
 {
-	static struct freebsd9_statfs *mntbuf;
+	static struct freebsd10_statfs *mntbuf;
 	static int mntsize;
 	static long bufsize;
 
 	if (mntsize <= 0 &&
-	    (mntsize = freebsd9_getfsstat(0, 0, MNT_NOWAIT)) < 0)
+	    (mntsize = freebsd10_getfsstat(0, 0, MNT_NOWAIT)) < 0)
 		return (0);
 	if (bufsize > 0 &&
-	    (mntsize = freebsd9_getfsstat(mntbuf, bufsize, flags)) < 0)
+	    (mntsize = freebsd10_getfsstat(mntbuf, bufsize, flags)) < 0)
 		return (0);
-	while (bufsize <= mntsize * sizeof(struct freebsd9_statfs)) {
+	while (bufsize <= mntsize * sizeof(struct freebsd10_statfs)) {
 		if (mntbuf)
 			free(mntbuf);
-		bufsize = (mntsize + 1) * sizeof(struct freebsd9_statfs);
-		if ((mntbuf = (struct freebsd9_statfs *)malloc(bufsize)) == 0)
+		bufsize = (mntsize + 1) * sizeof(struct freebsd10_statfs);
+		if ((mntbuf = (struct freebsd10_statfs *)malloc(bufsize)) == 0)
 			return (0);
-		if ((mntsize = freebsd9_getfsstat(mntbuf, bufsize, flags)) < 0)
+		if ((mntsize = freebsd10_getfsstat(mntbuf, bufsize, flags)) < 0)
 			return (0);
 	}
 	*mntbufp = mntbuf;
 	return (mntsize);
 }
 
-__sym_compat(getmntinfo, freebsd9_getmntinfo, FBSD_1.0);
+__sym_compat(getmntinfo, freebsd10_getmntinfo, FBSD_1.0);
