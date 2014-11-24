@@ -1,4 +1,4 @@
-/*	$OpenBSD: nftw.c,v 1.4 2004/07/07 16:05:23 millert Exp $	*/
+/*	$OpenBSD: nftw.c,v 1.7 2006/03/31 19:41:44 millert Exp $	*/
 
 /*
  * Copyright (c) 2003, 2004 Todd C. Miller <Todd.Miller@courtesan.com>
@@ -20,12 +20,6 @@
  * Materiel Command, USAF, under agreement number F39502-99-1-0512.
  */
 
-#if 0
-#if defined(LIBC_SCCS) && !defined(lint)
-static const char rcsid[] = "$OpenBSD: nftw.c,v 1.4 2004/07/07 16:05:23 millert Exp $";
-#endif /* LIBC_SCCS and not lint */
-#endif
-
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -33,7 +27,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/stat.h>
 #include <errno.h>
 #include <ftw.h>
-#include <limits.h>
 
 #include "fts-compat10.h"
 
@@ -49,7 +42,7 @@ freebsd10_nftw(const char *path,
 	int error = 0, ftsflags, fnflag, postorder, sverrno;
 
 	/* XXX - nfds is currently unused */
-	if (nfds < 1 || nfds > OPEN_MAX) {
+	if (nfds < 1) {
 		errno = EINVAL;
 		return (-1);
 	}
@@ -74,6 +67,8 @@ freebsd10_nftw(const char *path,
 				continue;
 			fnflag = FTW_D;
 			break;
+		case FTS_DC:
+			continue;
 		case FTS_DNR:
 			fnflag = FTW_DNR;
 			break;
@@ -96,9 +91,6 @@ freebsd10_nftw(const char *path,
 		case FTS_SLNONE:
 			fnflag = FTW_SLN;
 			break;
-		case FTS_DC:
-			errno = ELOOP;
-			/* FALLTHROUGH */
 		default:
 			error = -1;
 			goto done;

@@ -1,4 +1,4 @@
-/*	$OpenBSD: ftw.c,v 1.4 2004/07/07 16:05:23 millert Exp $	*/
+/*	$OpenBSD: ftw.c,v 1.5 2005/08/08 08:05:34 espie Exp $	*/
 
 /*
  * Copyright (c) 2003, 2004 Todd C. Miller <Todd.Miller@courtesan.com>
@@ -27,7 +27,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/stat.h>
 #include <errno.h>
 #include <ftw.h>
-#include <limits.h>
 
 #include "fts-compat10.h"
 
@@ -41,7 +40,7 @@ freebsd10_ftw(const char *path,
 	int error = 0, fnflag, sverrno;
 
 	/* XXX - nfds is currently unused */
-	if (nfds < 1 || nfds > OPEN_MAX) {
+	if (nfds < 1) {
 		errno = EINVAL;
 		return (-1);
 	}
