@@ -30,8 +30,8 @@
  * $FreeBSD$
  */
 
-#ifndef	_FTS_H_
-#define	_FTS_H_
+#ifndef	_FTS_COPMAT10_H_
+#define	_FTS_COPMAT10_H_
 
 typedef struct {
 	struct _ftsent *fts_cur;	/* current node */
@@ -40,8 +40,8 @@ typedef struct {
 	uint32_t fts_dev;		/* starting device # */
 	char *fts_path;			/* path for this descent */
 	int fts_rfd;			/* fd for root */
-	size_t fts_pathlen;		/* sizeof(path) */
-	size_t fts_nitems;		/* elements in the sort array */
+	__size_t fts_pathlen;		/* sizeof(path) */
+	__size_t fts_nitems;		/* elements in the sort array */
 	int (*fts_compar)		/* compare function */
 	    (const struct _ftsent * const *, const struct _ftsent * const *);
 
@@ -72,8 +72,8 @@ typedef struct _ftsent {
 	char *fts_path;			/* root path */
 	int fts_errno;			/* errno for this node */
 	int fts_symfd;			/* fd for symlink */
-	size_t fts_pathlen;		/* strlen(fts_path) */
-	size_t fts_namelen;		/* strlen(fts_name) */
+	__size_t fts_pathlen;		/* strlen(fts_path) */
+	__size_t fts_namelen;		/* strlen(fts_name) */
 
 	uint32_t fts_ino;		/* inode */
 	uint32_t fts_dev;		/* device */
@@ -127,4 +127,4 @@ FTSENT	*freebsd10_fts_read(FTS *);
 int	 freebsd10_fts_set(FTS *, FTSENT *, int);
 void	 freebsd10_fts_set_clientptr(FTS *, void *);
 
-#endif /* !_FTS_H_ */
+#endif /* !_FTS_COMPAT10_H_ */
