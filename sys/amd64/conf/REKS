@@ -38,6 +38,7 @@ options         UDF_ICONV
 options 	GEOM_ELI
 options 	GEOM_LABEL
 # options 	GEOM_VINUM
+options 	GEOM_PART_GPT
 
 options 	COMPAT_FREEBSD32	# Compatible with i386 binaries
 options 	COMPAT_FREEBSD4		# Compatible with FreeBSD4
