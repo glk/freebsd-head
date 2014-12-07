@@ -96,6 +96,8 @@ __FBSDID("$FreeBSD$");
 #include <ddb/ddb.h>
 #endif
 
+CTASSERT(sizeof(struct vattr) % sizeof(quad_t) == 0);
+
 static void	delmntque(struct vnode *vp);
 static int	flushbuflist(struct bufv *bufv, int flags, struct bufobj *bo,
 		    int slpflag, int slptimeo);
