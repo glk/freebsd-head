@@ -2,9 +2,6 @@
  * Copyright (c) 1983, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
- * Copyright (c) 2000
- * 	Daniel Eischen.  All rights reserved.
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -13,7 +10,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
+ * 4. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -28,41 +25,31 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $FreeBSD$
  */
 
-#ifndef _TELLDIR_H_
-#define	_TELLDIR_H_
+#ifndef	_GEN_COMPAT_H_
+#define	_GEN_COMPAT_H_
 
-#include <sys/queue.h>
-#include <stdbool.h>
+#include <dirent.h>
 
-/*
- * One of these structures is malloced to describe the current directory
- * position each time telldir is called. It records the current magic
- * cookie returned by getdirentries and the offset within the buffer
- * associated with that return value.
- */
-struct ddloc {
-	LIST_ENTRY(ddloc) loc_lqe; /* entry in list */
-	long	loc_index;	/* key associated with structure */
-	off_t	loc_seek;	/* magic cookie returned by getdirentries */
-	long	loc_loc;	/* offset of entry in buffer */
-};
+#define FREEBSD10_DIRSIZ(dp)						\
+	(sizeof(struct freebsd10_dirent) - sizeof((dp)->d_name) +	\
+	    (((dp)->d_namlen + 1 + 3) &~ 3))
 
-/*
- * One of these structures is malloced for each DIR to record telldir
- * positions.
- */
-struct _telldir {
-	LIST_HEAD(, ddloc) td_locq; /* list of locations */
-	long	td_loccnt;	/* index of entry for sequential readdir's */
-};
+struct freebsd10_dirent;
+struct freebsd10_stat;
+struct freebsd10_statfs;
 
-bool		_filldir(DIR *, bool);
-struct dirent	*_readdir_unlocked(DIR *, int);
-void 		_reclaim_telldir(DIR *);
-void 		_seekdir(DIR *, long);
+struct freebsd10_dirent *freebsd10_readdir(DIR *);
+int	freebsd10_readdir_r(DIR *, struct freebsd10_dirent *,
+	    struct freebsd10_dirent **);
+int	freebsd10_stat(const char *, struct freebsd10_stat *);
+int	freebsd10_lstat(const char *, struct freebsd10_stat *);
+int	freebsd10_fstat(int, struct freebsd10_stat *);
+int	freebsd10_fstatat(int, const char *, struct freebsd10_stat *, int);
 
-#endif
+int	freebsd10_statfs(const char *, struct freebsd10_statfs *);
+int	freebsd10_getfsstat(struct freebsd10_statfs *, long, int);
+int	freebsd10_getmntinfo(struct freebsd10_statfs **, int);
+
+#endif /* _GEN_COMPAT_H_ */

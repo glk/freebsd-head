@@ -1,9 +1,6 @@
 /*
- * Copyright (c) 1983, 1993
+ * Copyright (c) 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
- *
- * Copyright (c) 2000
- * 	Daniel Eischen.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -13,7 +10,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
+ * 4. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -28,41 +25,42 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $FreeBSD$
  */
 
-#ifndef _TELLDIR_H_
-#define	_TELLDIR_H_
+#include <sys/param.h>
+#include <sys/ucred.h>
+#include <sys/mount.h>
+#include <stdlib.h>
 
-#include <sys/queue.h>
-#include <stdbool.h>
+#include "gen-compat.h"
 
 /*
- * One of these structures is malloced to describe the current directory
- * position each time telldir is called. It records the current magic
- * cookie returned by getdirentries and the offset within the buffer
- * associated with that return value.
+ * Return information about mounted filesystems.
  */
-struct ddloc {
-	LIST_ENTRY(ddloc) loc_lqe; /* entry in list */
-	long	loc_index;	/* key associated with structure */
-	off_t	loc_seek;	/* magic cookie returned by getdirentries */
-	long	loc_loc;	/* offset of entry in buffer */
-};
+int
+freebsd10_getmntinfo(struct freebsd10_statfs **mntbufp, int flags)
+{
+	static struct freebsd10_statfs *mntbuf;
+	static int mntsize;
+	static long bufsize;
 
-/*
- * One of these structures is malloced for each DIR to record telldir
- * positions.
- */
-struct _telldir {
-	LIST_HEAD(, ddloc) td_locq; /* list of locations */
-	long	td_loccnt;	/* index of entry for sequential readdir's */
-};
+	if (mntsize <= 0 &&
+	    (mntsize = freebsd10_getfsstat(0, 0, MNT_NOWAIT)) < 0)
+		return (0);
+	if (bufsize > 0 &&
+	    (mntsize = freebsd10_getfsstat(mntbuf, bufsize, flags)) < 0)
+		return (0);
+	while (bufsize <= mntsize * sizeof(struct freebsd10_statfs)) {
+		if (mntbuf)
+			free(mntbuf);
+		bufsize = (mntsize + 1) * sizeof(struct freebsd10_statfs);
+		if ((mntbuf = (struct freebsd10_statfs *)malloc(bufsize)) == 0)
+			return (0);
+		if ((mntsize = freebsd10_getfsstat(mntbuf, bufsize, flags)) < 0)
+			return (0);
+	}
+	*mntbufp = mntbuf;
+	return (mntsize);
+}
 
-bool		_filldir(DIR *, bool);
-struct dirent	*_readdir_unlocked(DIR *, int);
-void 		_reclaim_telldir(DIR *);
-void 		_seekdir(DIR *, long);
-
-#endif
+__sym_compat(getmntinfo, freebsd10_getmntinfo, FBSD_1.0);

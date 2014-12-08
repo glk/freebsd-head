@@ -50,30 +50,20 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <unistd.h>
 #include "gen-compat.h"
-#include "fts-compat.h"
+#include "fts-compat10.h"
 #include "un-namespace.h"
 
 #include "gen-private.h"
 
-FTSENT	*__fts_children_44bsd(FTS *, int);
-int	 __fts_close_44bsd(FTS *);
-void	*__fts_get_clientptr_44bsd(FTS *);
-FTS	*__fts_get_stream_44bsd(FTSENT *);
-FTS	*__fts_open_44bsd(char * const *, int,
-	    int (*)(const FTSENT * const *, const FTSENT * const *));
-FTSENT	*__fts_read_44bsd(FTS *);
-int	 __fts_set_44bsd(FTS *, FTSENT *, int);
-void	 __fts_set_clientptr_44bsd(FTS *, void *);
-
-static FTSENT	*fts_alloc(FTS *, char *, int);
+static FTSENT	*fts_alloc(FTS *, char *, size_t);
 static FTSENT	*fts_build(FTS *, int);
 static void	 fts_lfree(FTSENT *);
 static void	 fts_load(FTS *, FTSENT *);
 static size_t	 fts_maxarglen(char * const *);
 static void	 fts_padjust(FTS *, FTSENT *);
 static int	 fts_palloc(FTS *, size_t);
-static FTSENT	*fts_sort(FTS *, FTSENT *, int);
-static u_short	 fts_stat(FTS *, FTSENT *, int);
+static FTSENT	*fts_sort(FTS *, FTSENT *, size_t);
+static int	 fts_stat(FTS *, FTSENT *, int, int);
 static int	 fts_safe_changedir(FTS *, FTSENT *, int, char *);
 static int	 fts_ufslinks(FTS *, const FTSENT *);
 
@@ -121,7 +111,7 @@ static const char *ufslike_filesystems[] = {
 };
 
 FTS *
-__fts_open_44bsd(argv, options, compar)
+freebsd10_fts_open(argv, options, compar)
 	char * const *argv;
 	int options;
 	int (*compar)(const FTSENT * const *, const FTSENT * const *);
@@ -129,9 +119,8 @@ __fts_open_44bsd(argv, options, compar)
 	struct _fts_private *priv;
 	FTS *sp;
 	FTSENT *p, *root;
-	int nitems;
 	FTSENT *parent, *tmp;
-	int len;
+	size_t len, nitems;
 
 	/* Options check. */
 	if (options & ~FTS_OPTIONMASK) {
@@ -139,10 +128,15 @@ __fts_open_44bsd(argv, options, compar)
 		return (NULL);
 	}
 
-	/* Allocate/initialize the stream. */
-	if ((priv = malloc(sizeof(*priv))) == NULL)
+	/* fts_open() requires at least one path */
+	if (*argv == NULL) {
+		errno = EINVAL;
 		return (NULL);
-	memset(priv, 0, sizeof(*priv));
+	}
+
+	/* Allocate/initialize the stream. */
+	if ((priv = calloc(1, sizeof(*priv))) == NULL)
+		return (NULL);
 	sp = &priv->ftsp_fts;
 	sp->fts_compar = compar;
 	sp->fts_options = options;
@@ -168,17 +162,13 @@ __fts_open_44bsd(argv, options, compar)
 
 	/* Allocate/initialize root(s). */
 	for (root = NULL, nitems = 0; *argv != NULL; ++argv, ++nitems) {
-		/* Don't allow zero-length paths. */
-		if ((len = strlen(*argv)) == 0) {
-			errno = ENOENT;
-			goto mem3;
-		}
+		len = strlen(*argv);
 
 		p = fts_alloc(sp, *argv, len);
 		p->fts_level = FTS_ROOTLEVEL;
 		p->fts_parent = parent;
 		p->fts_accpath = p->fts_name;
-		p->fts_info = fts_stat(sp, p, ISSET(FTS_COMFOLLOW));
+		p->fts_info = fts_stat(sp, p, ISSET(FTS_COMFOLLOW), -1);
 
 		/* Command-line "." and ".." are real directories. */
 		if (p->fts_info == FTS_DOT)
@@ -235,11 +225,9 @@ mem1:	free(sp);
 }
 
 static void
-fts_load(sp, p)
-	FTS *sp;
-	FTSENT *p;
+fts_load(FTS *sp, FTSENT *p)
 {
-	int len;
+	size_t len;
 	char *cp;
 
 	/*
@@ -261,8 +249,7 @@ fts_load(sp, p)
 }
 
 int
-__fts_close_44bsd(sp)
-	FTS *sp;
+freebsd10_fts_close(FTS *sp)
 {
 	FTSENT *freep, *p;
 	int saved_errno;
@@ -316,8 +303,7 @@ __fts_close_44bsd(sp)
 	    ? p->fts_pathlen - 1 : p->fts_pathlen)
 
 FTSENT *
-__fts_read_44bsd(sp)
-	FTS *sp;
+freebsd10_fts_read(FTS *sp)
 {
 	FTSENT *p, *tmp;
 	int instr;
@@ -337,7 +323,7 @@ __fts_read_44bsd(sp)
 
 	/* Any type of file may be re-visited; re-stat and re-turn. */
 	if (instr == FTS_AGAIN) {
-		p->fts_info = fts_stat(sp, p, 0);
+		p->fts_info = fts_stat(sp, p, 0, -1);
 		return (p);
 	}
 
@@ -349,7 +335,7 @@ __fts_read_44bsd(sp)
 	 */
 	if (instr == FTS_FOLLOW &&
 	    (p->fts_info == FTS_SL || p->fts_info == FTS_SLNONE)) {
-		p->fts_info = fts_stat(sp, p, 1);
+		p->fts_info = fts_stat(sp, p, 1, -1);
 		if (p->fts_info == FTS_D && !ISSET(FTS_NOCHDIR)) {
 			if ((p->fts_symfd = _open(".", O_RDONLY | O_CLOEXEC,
 			    0)) < 0) {
@@ -417,8 +403,6 @@ __fts_read_44bsd(sp)
 	/* Move to the next node on this level. */
 next:	tmp = p;
 	if ((p = p->fts_link) != NULL) {
-		free(tmp);
-
 		/*
 		 * If reached the top, return to the original directory (or
 		 * the root of the tree), and load the paths for the next root.
@@ -428,6 +412,7 @@ next:	tmp = p;
 				SET(FTS_STOP);
 				return (NULL);
 			}
+			free(tmp);
 			fts_load(sp, p);
 			return (sp->fts_cur = p);
 		}
@@ -437,10 +422,12 @@ next:	tmp = p;
 		 * ignore.  If followed, get a file descriptor so we can
 		 * get back if necessary.
 		 */
-		if (p->fts_instr == FTS_SKIP)
+		if (p->fts_instr == FTS_SKIP) {
+			free(tmp);
 			goto next;
+		}
 		if (p->fts_instr == FTS_FOLLOW) {
-			p->fts_info = fts_stat(sp, p, 1);
+			p->fts_info = fts_stat(sp, p, 1, -1);
 			if (p->fts_info == FTS_D && !ISSET(FTS_NOCHDIR)) {
 				if ((p->fts_symfd =
 				    _open(".", O_RDONLY | O_CLOEXEC, 0)) < 0) {
@@ -452,6 +439,8 @@ next:	tmp = p;
 			p->fts_instr = FTS_NOINSTR;
 		}
 
+		free(tmp);
+
 name:		t = sp->fts_path + NAPPEND(p->fts_parent);
 		*t++ = '/';
 		memmove(t, p->fts_name, p->fts_namelen + 1);
@@ -460,13 +449,13 @@ name:		t = sp->fts_path + NAPPEND(p->fts_parent);
 
 	/* Move up to the parent node. */
 	p = tmp->fts_parent;
-	free(tmp);
 
 	if (p->fts_level == FTS_ROOTPARENTLEVEL) {
 		/*
 		 * Done; free everything up and set errno to 0 so the user
 		 * can distinguish between error and EOF.
 		 */
+		free(tmp);
 		free(p);
 		errno = 0;
 		return (sp->fts_cur = NULL);
@@ -499,6 +488,7 @@ name:		t = sp->fts_path + NAPPEND(p->fts_parent);
 		SET(FTS_STOP);
 		return (NULL);
 	}
+	free(tmp);
 	p->fts_info = p->fts_errno ? FTS_ERR : FTS_DP;
 	return (sp->fts_cur = p);
 }
@@ -511,10 +501,7 @@ name:		t = sp->fts_path + NAPPEND(p->fts_parent);
  */
 /* ARGSUSED */
 int
-__fts_set_44bsd(sp, p, instr)
-	FTS *sp;
-	FTSENT *p;
-	int instr;
+freebsd10_fts_set(FTS *sp, FTSENT *p, int instr)
 {
 	if (instr != 0 && instr != FTS_AGAIN && instr != FTS_FOLLOW &&
 	    instr != FTS_NOINSTR && instr != FTS_SKIP) {
@@ -526,9 +513,7 @@ __fts_set_44bsd(sp, p, instr)
 }
 
 FTSENT *
-__fts_children_44bsd(sp, instr)
-	FTS *sp;
-	int instr;
+freebsd10_fts_children(FTS *sp, int instr)
 {
 	FTSENT *p;
 	int fd;
@@ -587,35 +572,37 @@ __fts_children_44bsd(sp, instr)
 	if ((fd = _open(".", O_RDONLY | O_CLOEXEC, 0)) < 0)
 		return (NULL);
 	sp->fts_child = fts_build(sp, instr);
-	if (fchdir(fd))
+	if (fchdir(fd)) {
+		(void)_close(fd);
 		return (NULL);
+	}
 	(void)_close(fd);
 	return (sp->fts_child);
 }
 
-#ifndef fts_get_clientptr
-#error "fts_get_clientptr not defined"
+#ifndef freebsd10_fts_get_clientptr
+#error "freebsd10_fts_get_clientptr not defined"
 #endif
 
 void *
-(__fts_get_clientptr_44bsd)(FTS *sp)
+(freebsd10_fts_get_clientptr)(FTS *sp)
 {
 
-	return (fts_get_clientptr(sp));
+	return (freebsd10_fts_get_clientptr(sp));
 }
 
-#ifndef fts_get_stream
-#error "fts_get_stream not defined"
+#ifndef freebsd10_fts_get_stream
+#error "freebsd10_fts_get_stream not defined"
 #endif
 
 FTS *
-(__fts_get_stream_44bsd)(FTSENT *p)
+(freebsd10_fts_get_stream)(FTSENT *p)
 {
-	return (fts_get_stream(p));
+	return (freebsd10_fts_get_stream(p));
 }
 
 void
-__fts_set_clientptr_44bsd(FTS *sp, void *clientptr)
+freebsd10_fts_set_clientptr(FTS *sp, void *clientptr)
 {
 
 	sp->fts_clientptr = clientptr;
@@ -636,20 +623,18 @@ __fts_set_clientptr_44bsd(FTS *sp, void *clientptr)
  * been found, cutting the stat calls by about 2/3.
  */
 static FTSENT *
-fts_build(sp, type)
-	FTS *sp;
-	int type;
+fts_build(FTS *sp, int type)
 {
 	struct freebsd10_dirent *dp;
 	FTSENT *p, *head;
-	int nitems;
 	FTSENT *cur, *tail;
 	DIR *dirp;
 	void *oldaddr;
-	size_t dnamlen;
-	int cderrno, descend, len, level, maxlen, nlinks, oflag, saved_errno,
-	    nostat, doadjust;
 	char *cp;
+	int cderrno, descend, oflag, saved_errno, nostat, doadjust;
+	long level;
+	long nlinks;	/* has to be signed because -1 is a magic value */
+	size_t dnamlen, len, maxlen, nitems;
 
 	/* Set current node pointer. */
 	cur = sp->fts_cur;
@@ -758,7 +743,7 @@ fts_build(sp, type)
 		if (!ISSET(FTS_SEEDOT) && ISDOT(dp->d_name))
 			continue;
 
-		if ((p = fts_alloc(sp, dp->d_name, (int)dnamlen)) == NULL)
+		if ((p = fts_alloc(sp, dp->d_name, dnamlen)) == NULL)
 			goto mem1;
 		if (dnamlen >= maxlen) {	/* include space for NUL */
 			oldaddr = sp->fts_path;
@@ -787,21 +772,6 @@ mem1:				saved_errno = errno;
 			maxlen = sp->fts_pathlen - len;
 		}
 
-		if (len + dnamlen >= USHRT_MAX) {
-			/*
-			 * In an FTSENT, fts_pathlen is a u_short so it is
-			 * possible to wraparound here.  If we do, free up
-			 * the current structure and the structures already
-			 * allocated, then error out with ENAMETOOLONG.
-			 */
-			free(p);
-			fts_lfree(head);
-			(void)closedir(dirp);
-			cur->fts_info = FTS_ERR;
-			SET(FTS_STOP);
-			errno = ENAMETOOLONG;
-			return (NULL);
-		}
 		p->fts_level = level;
 		p->fts_parent = sp->fts_cur;
 		p->fts_pathlen = len + dnamlen;
@@ -832,10 +802,11 @@ mem1:				saved_errno = errno;
 			if (ISSET(FTS_NOCHDIR)) {
 				p->fts_accpath = p->fts_path;
 				memmove(cp, p->fts_name, p->fts_namelen + 1);
-			} else
+				p->fts_info = fts_stat(sp, p, 0, _dirfd(dirp));
+			} else {
 				p->fts_accpath = p->fts_name;
-			/* Stat it. */
-			p->fts_info = fts_stat(sp, p, 0);
+				p->fts_info = fts_stat(sp, p, 0, -1);
+			}
 
 			/* Decrement link count if applicable. */
 			if (nlinks > 0 && (p->fts_info == FTS_D ||
@@ -867,11 +838,8 @@ mem1:				saved_errno = errno;
 	 * If not changing directories, reset the path back to original
 	 * state.
 	 */
-	if (ISSET(FTS_NOCHDIR)) {
-		if (len == sp->fts_pathlen || nitems == 0)
-			--cp;
-		*cp = '\0';
-	}
+	if (ISSET(FTS_NOCHDIR))
+		sp->fts_path[cur->fts_pathlen] = '\0';
 
 	/*
 	 * If descended after called from fts_children or after called from
@@ -902,17 +870,20 @@ mem1:				saved_errno = errno;
 	return (head);
 }
 
-static u_short
-fts_stat(sp, p, follow)
-	FTS *sp;
-	FTSENT *p;
-	int follow;
+static int
+fts_stat(FTS *sp, FTSENT *p, int follow, int dfd)
 {
 	FTSENT *t;
 	uint32_t dev;
 	uint32_t ino;
 	struct freebsd10_stat *sbp, sb;
 	int saved_errno;
+	const char *path;
+
+	if (dfd == -1)
+		path = p->fts_accpath, dfd = AT_FDCWD;
+	else
+		path = p->fts_name;
 
 	/* If user needs stat info, stat buffer already allocated. */
 	sbp = ISSET(FTS_NOSTAT) ? &sb : p->fts_statp;
@@ -934,16 +905,16 @@ fts_stat(sp, p, follow)
 	 * fail, set the errno from the stat call.
 	 */
 	if (ISSET(FTS_LOGICAL) || follow) {
-		if (freebsd10_stat(p->fts_accpath, sbp)) {
+		if (freebsd10_fstatat(dfd, path, sbp, 0)) {
 			saved_errno = errno;
-			if (!freebsd10_lstat(p->fts_accpath, sbp)) {
+			if (!freebsd10_fstatat(dfd, path, sbp, AT_SYMLINK_NOFOLLOW)) {
 				errno = 0;
 				return (FTS_SLNONE);
 			}
 			p->fts_errno = saved_errno;
 			goto err;
 		}
-	} else if (freebsd10_lstat(p->fts_accpath, sbp)) {
+	} else if (freebsd10_fstatat(dfd, path, sbp, AT_SYMLINK_NOFOLLOW)) {
 		p->fts_errno = errno;
 err:		memset(sbp, 0, sizeof(struct stat));
 		return (FTS_NS);
@@ -1001,10 +972,7 @@ fts_compar(const void *a, const void *b)
 }
 
 static FTSENT *
-fts_sort(sp, head, nitems)
-	FTS *sp;
-	FTSENT *head;
-	int nitems;
+fts_sort(FTS *sp, FTSENT *head, size_t nitems)
 {
 	FTSENT **ap, *p;
 
@@ -1033,10 +1001,7 @@ fts_sort(sp, head, nitems)
 }
 
 static FTSENT *
-fts_alloc(sp, name, namelen)
-	FTS *sp;
-	char *name;
-	int namelen;
+fts_alloc(FTS *sp, char *name, size_t namelen)
 {
 	FTSENT *p;
 	size_t len;
@@ -1083,8 +1048,7 @@ fts_alloc(sp, name, namelen)
 }
 
 static void
-fts_lfree(head)
-	FTSENT *head;
+fts_lfree(FTSENT *head)
 {
 	FTSENT *p;
 
@@ -1102,24 +1066,10 @@ fts_lfree(head)
  * plus 256 bytes so don't realloc the path 2 bytes at a time.
  */
 static int
-fts_palloc(sp, more)
-	FTS *sp;
-	size_t more;
+fts_palloc(FTS *sp, size_t more)
 {
 
 	sp->fts_pathlen += more + 256;
-	/*
-	 * Check for possible wraparound.  In an FTS, fts_pathlen is
-	 * a signed int but in an FTSENT it is an unsigned short.
-	 * We limit fts_pathlen to USHRT_MAX to be safe in both cases.
-	 */
-	if (sp->fts_pathlen < 0 || sp->fts_pathlen >= USHRT_MAX) {
-		if (sp->fts_path)
-			free(sp->fts_path);
-		sp->fts_path = NULL;
-		errno = ENAMETOOLONG;
-		return (1);
-	}
 	sp->fts_path = reallocf(sp->fts_path, sp->fts_pathlen);
 	return (sp->fts_path == NULL);
 }
@@ -1129,9 +1079,7 @@ fts_palloc(sp, more)
  * already returned.
  */
 static void
-fts_padjust(sp, head)
-	FTS *sp;
-	FTSENT *head;
+fts_padjust(FTS *sp, FTSENT *head)
 {
 	FTSENT *p;
 	char *addr = sp->fts_path;
@@ -1172,11 +1120,7 @@ fts_maxarglen(argv)
  * Assumes p->fts_dev and p->fts_ino are filled in.
  */
 static int
-fts_safe_changedir(sp, p, fd, path)
-	FTS *sp;
-	FTSENT *p;
-	int fd;
-	char *path;
+fts_safe_changedir(FTS *sp, FTSENT *p, int fd, char *path)
 {
 	int ret, oerrno, newfd;
 	struct freebsd10_stat sb;
@@ -1184,7 +1128,8 @@ fts_safe_changedir(sp, p, fd, path)
 	newfd = fd;
 	if (ISSET(FTS_NOCHDIR))
 		return (0);
-	if (fd < 0 && (newfd = _open(path, O_RDONLY | O_CLOEXEC, 0)) < 0)
+	if (fd < 0 && (newfd = _open(path, O_RDONLY | O_DIRECTORY |
+	    O_CLOEXEC, 0)) < 0)
 		return (-1);
 	if (freebsd10_fstat(newfd, &sb)) {
 		ret = -1;
@@ -1238,11 +1183,11 @@ fts_ufslinks(FTS *sp, const FTSENT *ent)
 	return (priv->ftsp_linksreliable);
 }
 
-__sym_compat(fts_open, __fts_open_44bsd, FBSD_1.0);
-__sym_compat(fts_close, __fts_close_44bsd, FBSD_1.0);
-__sym_compat(fts_read, __fts_read_44bsd, FBSD_1.0);
-__sym_compat(fts_set, __fts_set_44bsd, FBSD_1.0);
-__sym_compat(fts_children, __fts_children_44bsd, FBSD_1.0);
-__sym_compat(fts_get_clientptr, __fts_get_clientptr_44bsd, FBSD_1.0);
-__sym_compat(fts_get_stream, __fts_get_stream_44bsd, FBSD_1.0);
-__sym_compat(fts_set_clientptr, __fts_set_clientptr_44bsd, FBSD_1.0);
+__sym_compat(fts_open, freebsd10_fts_open, FBSD_1.1);
+__sym_compat(fts_close, freebsd10_fts_close, FBSD_1.1);
+__sym_compat(fts_read, freebsd10_fts_read, FBSD_1.1);
+__sym_compat(fts_set, freebsd10_fts_set, FBSD_1.1);
+__sym_compat(fts_children, freebsd10_fts_children, FBSD_1.1);
+__sym_compat(fts_get_clientptr, freebsd10_fts_get_clientptr, FBSD_1.1);
+__sym_compat(fts_get_stream, freebsd10_fts_get_stream, FBSD_1.1);
+__sym_compat(fts_set_clientptr, freebsd10_fts_set_clientptr, FBSD_1.1);
