@@ -104,18 +104,6 @@ SYSCTL_INT(_net_inet_ip, IPCTL_SENDREDIRECTS, redirect, CTLFLAG_VNET | CTLFLAG_R
     &VNET_NAME(ipsendredirects), 0,
     "Enable sending IP redirects");
 
-static VNET_DEFINE(int, ip_keepfaith);
-#define	V_ip_keepfaith		VNET(ip_keepfaith)
-SYSCTL_INT(_net_inet_ip, IPCTL_KEEPFAITH, keepfaith, CTLFLAG_VNET | CTLFLAG_RW,
-    &VNET_NAME(ip_keepfaith), 0,
-    "Enable packet capture for FAITH IPv4->IPv6 translater daemon");
-
-static VNET_DEFINE(int, ip_sendsourcequench);
-#define	V_ip_sendsourcequench	VNET(ip_sendsourcequench)
-SYSCTL_INT(_net_inet_ip, OID_AUTO, sendsourcequench, CTLFLAG_VNET | CTLFLAG_RW,
-    &VNET_NAME(ip_sendsourcequench), 0,
-    "Enable the transmission of source quench packets");
-
 VNET_DEFINE(int, ip_do_randomid);
 SYSCTL_INT(_net_inet_ip, OID_AUTO, random_id, CTLFLAG_VNET | CTLFLAG_RW,
     &VNET_NAME(ip_do_randomid), 0,
@@ -753,28 +741,12 @@ passin:
 		goto ours;
 
 	/*
-	 * FAITH(Firewall Aided Internet Translator)
-	 */
-	if (ifp && ifp->if_type == IFT_FAITH) {
-		if (V_ip_keepfaith) {
-			if (ip->ip_p == IPPROTO_TCP || ip->ip_p == IPPROTO_ICMP) 
-				goto ours;
-		}
-		m_freem(m);
-		return;
-	}
-
-	/*
 	 * Not for us; forward if possible and desirable.
 	 */
 	if (V_ipforwarding == 0) {
 		IPSTAT_INC(ips_cantforward);
 		m_freem(m);
 	} else {
-#ifdef IPSEC
-		if (ip_ipsec_fwd(m))
-			goto bad;
-#endif /* IPSEC */
 		ip_forward(m, dchg);
 	}
 	return;
@@ -809,7 +781,7 @@ ours:
 	 * note that we do not visit this with protocols with pcb layer
 	 * code - like udp/tcp/raw ip.
 	 */
-	if (ip_ipsec_input(m))
+	if (ip_ipsec_input(m, ip->ip_p) != 0)
 		goto bad;
 #endif /* IPSEC */
 
@@ -1220,7 +1192,6 @@ found:
 	if (rss_mbuf_software_hash_v4(m, 0, &rss_hash, &rss_type) == 0) {
 		m->m_pkthdr.flowid = rss_hash;
 		M_HASHTYPE_SET(m, rss_type);
-		m->m_flags |= M_FLOWID;
 	}
 
 	/*
@@ -1354,7 +1325,6 @@ ip_drain(void)
 	}
 	IPQ_UNLOCK();
 	VNET_LIST_RUNLOCK_NOSLEEP();
-	in_rtqdrain();
 }
 
 /*
@@ -1478,6 +1448,13 @@ ip_forward(struct mbuf *m, int srcrt)
 		m_freem(m);
 		return;
 	}
+#ifdef IPSEC
+	if (ip_ipsec_fwd(m) != 0) {
+		IPSTAT_INC(ips_cantforward);
+		m_freem(m);
+		return;
+	}
+#endif /* IPSEC */
 #ifdef IPSTEALTH
 	if (!V_ipstealth) {
 #endif
@@ -1665,25 +1642,6 @@ ip_forward(struct mbuf *m, int srcrt)
 		break;
 
 	case ENOBUFS:
-		/*
-		 * A router should not generate ICMP_SOURCEQUENCH as
-		 * required in RFC1812 Requirements for IP Version 4 Routers.
-		 * Source quench could be a big problem under DoS attacks,
-		 * or if the underlying interface is rate-limited.
-		 * Those who need source quench packets may re-enable them
-		 * via the net.inet.ip.sendsourcequench sysctl.
-		 */
-		if (V_ip_sendsourcequench == 0) {
-			m_freem(mcopy);
-			if (ia != NULL)
-				ifa_free(&ia->ia_ifa);
-			return;
-		} else {
-			type = ICMP_SOURCEQUENCH;
-			code = 0;
-		}
-		break;
-
 	case EACCES:			/* ipfw denied packet */
 		m_freem(mcopy);
 		if (ia != NULL)

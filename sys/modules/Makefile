@@ -90,7 +90,6 @@ SUBDIR=	\
 	cuse \
 	${_cxgb} \
 	${_cxgbe} \
-	${_cyclic} \
 	dc \
 	dcons \
 	dcons_crom \
@@ -145,7 +144,6 @@ SUBDIR=	\
 	if_disc \
 	if_edsc \
 	if_epair \
-	if_faith \
 	${_if_gif} \
 	${_if_gre} \
 	${_if_me} \
@@ -478,9 +476,6 @@ _cardbus=	cardbus
 _cbb=		cbb
 _cpuctl=	cpuctl
 _cpufreq=	cpufreq
-.if ${MK_CDDL} != "no" || defined(ALL_MODULES)
-_cyclic=	cyclic
-.endif
 _dpms=		dpms
 _drm=		drm
 _drm2=		drm2
@@ -689,9 +684,6 @@ _cardbus=	cardbus
 _cbb=		cbb
 _cfi=		cfi
 _cpufreq=	cpufreq
-.if ${MK_CDDL} != "no" || defined(ALL_MODULES)
-_cyclic=	cyclic
-.endif
 _drm=		drm
 .if ${MK_CDDL} != "no" || defined(ALL_MODULES)
 _dtrace=	dtrace
