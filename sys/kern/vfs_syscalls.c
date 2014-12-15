@@ -743,13 +743,13 @@ freebsd10_statfs(td, uap)
 	struct statfs *sfp;
 	int error;
 
-	sfp = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
+	sfp = malloc(sizeof(struct statfs), M_STATFS, M_WAITOK);
 	error = kern_statfs(td, uap->path, UIO_USERSPACE, sfp);
 	if (error == 0) {
 		freebsd10_cvtstatfs(sfp, &osb);
 		error = copyout(&osb, uap->buf, sizeof(osb));
 	}
-	free(sfp, M_TEMP);
+	free(sfp, M_STATFS);
 	return (error);
 }
 
@@ -774,13 +774,13 @@ freebsd10_fstatfs(td, uap)
 	struct statfs *sfp;
 	int error;
 
-	sfp = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
+	sfp = malloc(sizeof(struct statfs), M_STATFS, M_WAITOK);
 	error = kern_fstatfs(td, uap->fd, sfp);
 	if (error == 0) {
 		freebsd10_cvtstatfs(sfp, &osb);
 		error = copyout(&osb, uap->buf, sizeof(osb));
 	}
-	free(sfp, M_TEMP);
+	free(sfp, M_STATFS);
 	return (error);
 }
 
@@ -821,7 +821,7 @@ freebsd10_getfsstat(td, uap)
 			uap->buf++;
 			count--;
 		}
-		free(buf, M_TEMP);
+		free(buf, M_STATFS);
 	}
 	return (error);
 }
@@ -851,13 +851,13 @@ freebsd10_fhstatfs(td, uap)
 	error = copyin(uap->u_fhp, &fh, sizeof(fhandle_t));
 	if (error)
 		return (error);
-	sfp = malloc(sizeof(struct statfs), M_TEMP, M_WAITOK);
+	sfp = malloc(sizeof(struct statfs), M_STATFS, M_WAITOK);
 	error = kern_fhstatfs(td, fh, sfp);
 	if (error == 0) {
 		freebsd10_cvtstatfs(sfp, &osb);
 		error = copyout(&osb, uap->buf, sizeof(osb));
 	}
-	free(sfp, M_TEMP);
+	free(sfp, M_STATFS);
 	return (error);
 }
 
