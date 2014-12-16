@@ -66,7 +66,7 @@ struct fid {
  */
 #define	MFSNAMELEN	16		/* length of type name including null */
 #define	MNAMELEN	1024		/* size of on/from name bufs */
-#define	STATFS_VERSION	0x20110618	/* current version number */
+#define	STATFS_VERSION	0x20141215	/* current version number */
 struct statfs {
 	uint32_t f_version;		/* structure version number */
 	uint32_t f_type;		/* type of filesystem */
