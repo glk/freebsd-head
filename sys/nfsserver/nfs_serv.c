@@ -75,11 +75,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/namei.h>
 #include <sys/unistd.h>
 #include <sys/vnode.h>
-#include <sys/mount.h>
 #include <sys/socket.h>
 #include <sys/socketvar.h>
 #include <sys/malloc.h>
 #include <sys/mbuf.h>
+#include <sys/mount.h>
 #include <sys/priv.h>
 #include <sys/dirent.h>
 #include <sys/stat.h>
