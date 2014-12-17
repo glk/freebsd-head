@@ -1290,12 +1290,6 @@ ofstat(struct thread *td, struct ofstat_args *uap)
 #endif /* COMPAT_43 */
 
 #if defined(COMPAT_FREEBSD10)
-#ifndef _SYS_SYSPROTO_H_
-struct freebsd10_fstat_args {
-	int	fd;
-	struct	freebsd10_stat *sb;
-};
-#endif
 int
 freebsd10_fstat(struct thread *td, struct freebsd10_fstat_args *uap)
 {
