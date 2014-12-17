@@ -725,19 +725,8 @@ freebsd4_cvtstatfs(nsp, osp)
  */
 static void freebsd10_cvtstatfs(struct statfs *, struct freebsd10_statfs *);
 
-#ifndef _SYS_SYSPROTO_H_
-struct freebsd10_statfs_args {
-	char *path;
-	struct freebsd10_statfs *buf;
-};
-#endif
 int
-freebsd10_statfs(td, uap)
-	struct thread *td;
-	struct freebsd10_statfs_args /* {
-		char *path;
-		struct freebsd10_statfs *buf;
-	} */ *uap;
+freebsd10_statfs(struct thread *td, struct freebsd10_statfs_args *uap)
 {
 	struct freebsd10_statfs osb;
 	struct statfs *sfp;
@@ -756,19 +745,8 @@ freebsd10_statfs(td, uap)
 /*
  * Get filesystem statistics.
  */
-#ifndef _SYS_SYSPROTO_H_
-struct freebsd10_fstatfs_args {
-	int fd;
-	struct freebsd10_statfs *buf;
-};
-#endif
 int
-freebsd10_fstatfs(td, uap)
-	struct thread *td;
-	struct freebsd10_fstatfs_args /* {
-		int fd;
-		struct freebsd10_statfs *buf;
-	} */ *uap;
+freebsd10_fstatfs(struct thread *td, struct freebsd10_fstatfs_args *uap)
 {
 	struct freebsd10_statfs osb;
 	struct statfs *sfp;
@@ -787,21 +765,8 @@ freebsd10_fstatfs(td, uap)
 /*
  * Get statistics on all filesystems.
  */
-#ifndef _SYS_SYSPROTO_H_
-struct freebsd10_getfsstat_args {
-	struct freebsd10_statfs *buf;
-	long bufsize;
-	int flags;
-};
-#endif
 int
-freebsd10_getfsstat(td, uap)
-	struct thread *td;
-	register struct freebsd10_getfsstat_args /* {
-		struct freebsd10_statfs *buf;
-		long bufsize;
-		int flags;
-	} */ *uap;
+freebsd10_getfsstat(struct thread *td, struct freebsd10_getfsstat_args *uap)
 {
 	struct freebsd10_statfs osb;
 	struct statfs *buf, *sp;
@@ -829,19 +794,8 @@ freebsd10_getfsstat(td, uap)
 /*
  * Implement fstatfs() for (NFS) file handles.
  */
-#ifndef _SYS_SYSPROTO_H_
-struct freebsd10_fhstatfs_args {
-	struct fhandle *u_fhp;
-	struct freebsd10_statfs *buf;
-};
-#endif
 int
-freebsd10_fhstatfs(td, uap)
-	struct thread *td;
-	struct freebsd10_fhstatfs_args /* {
-		struct fhandle *u_fhp;
-		struct freebsd10_statfs *buf;
-	} */ *uap;
+freebsd10_fhstatfs(struct thread *td, struct freebsd10_fhstatfs_args *uap)
 {
 	struct freebsd10_statfs osb;
 	struct statfs *sfp;
@@ -2370,12 +2324,6 @@ freebsd10_cvtstat(struct stat *st, struct freebsd10_stat *ost)
 	ost->st_birthtim = st->st_birthtim;
 }
 
-#ifndef _SYS_SYSPROTO_H_
-struct freebsd10_stat_args {
-	char	*path;
-	struct freebsd10_stat *ub;
-};
-#endif
 int
 freebsd10_stat(struct thread *td, struct freebsd10_stat_args* uap)
 {
@@ -2392,14 +2340,8 @@ freebsd10_stat(struct thread *td, struct freebsd10_stat_args* uap)
 	return (error);
 }
 
-#ifndef _SYS_SYSPROTO_H_
-struct freebsd10_lstat_args {
-	char	*path;
-	struct freebsd10_stat *ub;
-};
-#endif
 int
-freebsd10_lstat(struct thread *td, register struct freebsd10_lstat_args* uap)
+freebsd10_lstat(struct thread *td, struct freebsd10_lstat_args* uap)
 {
 	struct stat sb;
 	struct freebsd10_stat osb;
@@ -2414,12 +2356,6 @@ freebsd10_lstat(struct thread *td, register struct freebsd10_lstat_args* uap)
 	return (error);
 }
 
-#ifndef _SYS_SYSPROTO_H_
-struct freebsd10_fhstat_args {
-	struct fhandle *u_fhp;
-	struct freebsd10_stat *sb;
-};
-#endif
 int
 freebsd10_fhstat(struct thread *td, struct freebsd10_fhstat_args* uap)
 {
@@ -2439,14 +2375,6 @@ freebsd10_fhstat(struct thread *td, struct freebsd10_fhstat_args* uap)
 	return (error);
 }
 
-#ifndef _SYS_SYSPROTO_H_
-struct freebsd10_fstatat_args {
-	int	fd;
-	char	*path;
-	struct freebsd10_stat *buf;
-	int	flag;
-};
-#endif
 int
 freebsd10_fstatat(struct thread *td, struct freebsd10_fstatat_args* uap)
 {
@@ -4110,13 +4038,6 @@ freebsd10_getdirentries(struct thread *td,
 	return (error);
 }
 
-#ifndef _SYS_SYSPROTO_H_
-struct freebsd10_getdents_args {
-	int fd;
-	char *buf;
-	size_t count;
-};
-#endif
 int
 freebsd10_getdents(struct thread *td, struct freebsd10_getdents_args *uap)
 {
