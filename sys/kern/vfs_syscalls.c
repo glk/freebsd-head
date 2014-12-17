@@ -3890,7 +3890,7 @@ out:
 	return (error);
 }
 
-#if defined(COMPAT_FREEBSD10)
+#if defined(COMPAT_43) || defined(COMPAT_FREEBSD10)
 int
 freebsd10_kern_getdirentries(struct thread *td, int fd, char *ubuf, u_int count,
     long *basep, void (*func)(struct freebsd10_dirent *))
